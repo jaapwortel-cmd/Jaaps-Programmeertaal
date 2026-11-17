@@ -270,7 +270,7 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Overig**: extensies en drivers ("motorschrijver"), je bestaande programma's nabouwen, alles wat Rust kan.
 
-**Over de installatie**: ondertekenen kan met een eigen certificaat, maar een gekocht certificaat (zonder waarschuwing op andere computers) kan nog niet. Een eigen pictogram (icoon) kan nog niet.
+**Over de installatie**: een eigen pictogram (icoon) kan nog niet. (Een gekocht certificaat komt er niet: Jaap kiest voor zijn eigen certificaat.)
 
 ## 12. Wat ik heb gebouwd
 

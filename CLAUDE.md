@@ -55,3 +55,4 @@ Programmeertaal in gewone Nederlandse zinnen, gemaakt voor Jaap Wortel. Rust, zo
   (%APPDATA%\Jaaps Programmeertaal\Mijn eigen woorden.txt, "laat zien = toon"); na "Ja" op een tikfout: vragen of het
   onthouden mag.
 - "Motorschrijver": nog steeds eerst drie voorbeelden aan Jaap vragen.
+- Geen gekocht certificaat (Jaap, 17 nov 2026): alleen het eigen certificaat. Niet meer op de lijst zetten.
