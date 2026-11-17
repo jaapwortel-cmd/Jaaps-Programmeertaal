@@ -1,0 +1,175 @@
+# Bouwt Jaap's Programmeertaal op Windows, test alles, zet de Rust-compiler erbij
+# en maakt een installatieprogramma. Het installatieprogramma komt bij de GitHub-uitgave "proef"
+# (te groot voor de tak exe-builds: GitHub staat daar maximaal 100 MB per bestand toe).
+name: Jaap's Programmeertaal bouwen
+
+on:
+  push:
+    branches-ignore:
+      - exe-builds
+    paths:
+      - 'motor/**'
+      - 'editor/**'
+      - 'docs/Handleiding.txt'
+      - 'voorbeelden/**'
+      - 'installer/**'
+      - 'tools/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/bouwen.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bouwen-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSIE: '1.97.0'
+  CARGO_TERM_COLOR: never
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust klaarzetten (vaste versie)
+        shell: powershell
+        run: |
+          rustup toolchain install $env:RUST_VERSIE --profile minimal
+          rustup default $env:RUST_VERSIE
+          rustc --version
+
+      - name: Alle tests (motor, zinnen, foutmeldingen, geen AI)
+        shell: powershell
+        run: |
+          cargo test --workspace 2>&1 | Tee-Object -FilePath tests.txt
+          if ($LASTEXITCODE) { throw 'Tests mislukt.' }
+          "## Tests" | Add-Content $env:GITHUB_STEP_SUMMARY
+          Select-String -Path tests.txt -Pattern '^test result' | ForEach-Object { '- ' + $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Editor en jaaptaal bouwen (release)
+        shell: powershell
+        run: |
+          cargo build --release -p editor -p motor
+          if ($LASTEXITCODE) { throw 'Bouwen mislukt.' }
+
+      - name: Rust-compiler voor in het programma klaarmaken
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install "$env:RUST_VERSIE-x86_64-pc-windows-gnu" --profile minimal --force-non-host
+          $bron = Join-Path (rustup show home) "toolchains\$env:RUST_VERSIE-x86_64-pc-windows-gnu"
+          $app = New-Item -ItemType Directory -Path 'installatiemap' -Force
+          $rust = Join-Path $app.FullName 'rust'
+          New-Item -ItemType Directory -Path $rust -Force | Out-Null
+          Copy-Item -Recurse (Join-Path $bron 'bin') $rust
+          Copy-Item -Recurse (Join-Path $bron 'lib') $rust
+          # Alleen wat nodig is om te bouwen. Weg: cargo, rustdoc, debuggers, lld, wasm.
+          foreach ($f in @('bin\cargo.exe', 'bin\rustdoc.exe', 'bin\rust-gdb', 'bin\rust-gdbgui', 'bin\rust-lldb',
+                           'lib\rustlib\x86_64-pc-windows-gnu\bin\rust-lld.exe', 'lib\rustlib\x86_64-pc-windows-gnu\bin\rust-objcopy.exe',
+                           'lib\rustlib\x86_64-pc-windows-gnu\bin\wasm-component-ld.exe', 'lib\rustlib\x86_64-pc-windows-gnu\bin\gcc-ld')) {
+            $p = Join-Path $rust $f
+            if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+          }
+          Copy-Item 'target\release\JaapsProgrammeertaal.exe', 'target\release\jaaptaal.exe' $app.FullName
+          Copy-Item 'docs\Handleiding.txt', 'Wijzigingen.txt' $app.FullName
+          Copy-Item 'README.md' (Join-Path $app.FullName 'LEES MIJ.txt')
+          Copy-Item -Recurse 'voorbeelden' $app.FullName
+
+      - name: Proef met de ingebouwde Rust-compiler (zonder de Rust van deze computer)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch 'cargo|rustup|mingw|Strawberry' }) -join ';'
+          $j = '.\installatiemap\jaaptaal.exe'
+          $uit = & $j proef 'voorbeelden\Begroeting.txt' --druk Welkom
+          $uit | Write-Host
+          if (($uit -join "`n") -notmatch 'Hallo') { throw 'Het voorbeeld zegt geen Hallo.' }
+          foreach ($v in Get-ChildItem 'voorbeelden\*.txt') {
+            & $j controleer $v.FullName | Write-Host
+            if ($LASTEXITCODE) { throw ("Voorbeeld klopt niet: " + $v.Name) }
+          }
+          $tijd = Measure-Command { & $j bouw 'voorbeelden\Begroeting.txt' 'Begroeting.exe' | Write-Host }
+          if (-not (Test-Path 'Begroeting.exe')) { throw 'Begroeting.exe is niet gemaakt.' }
+          $p = Start-Process -FilePath '.\Begroeting.exe' -ArgumentList '--tekst', '--druk', 'Welkom' -RedirectStandardOutput 'begroeting-uit.txt' -PassThru -Wait
+          Get-Content 'begroeting-uit.txt' | Write-Host
+          if (-not (Select-String -Path 'begroeting-uit.txt' -Pattern 'Hallo' -Quiet)) { throw 'Begroeting.exe zegt geen Hallo.' }
+          "BOUWTIJD=$([math]::Round($tijd.TotalSeconds, 1))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Proefstart van de editor (moet opstarten en netjes afsluiten)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = Start-Process -FilePath 'installatiemap\JaapsProgrammeertaal.exe' -ArgumentList 'voorbeelden\Begroeting.txt' -PassThru
+          Start-Sleep -Seconds 6
+          if ($p.HasExited) { throw ('De editor stopte meteen, code ' + $p.ExitCode) }
+          [void]$p.CloseMainWindow()
+          if (-not $p.WaitForExit(10000)) { $p.Kill(); throw 'De editor sloot niet af.' }
+          Write-Host 'Opstarten en afsluiten: goed.'
+
+      - name: Toegankelijkheid (namen, Tab-volgorde en menu's voor de schermlezer)
+        continue-on-error: true
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\Toegankelijkheid.ps1 -Exe 'installatiemap\JaapsProgrammeertaal.exe'
+
+      - name: Groottes meten
+        shell: powershell
+        run: |
+          function MB($b) { [math]::Round($b / 1MB, 2) }
+          $editor = (Get-Item 'installatiemap\JaapsProgrammeertaal.exe').Length
+          $jt = (Get-Item 'installatiemap\jaaptaal.exe').Length
+          $rust = (Get-ChildItem -Recurse -File 'installatiemap\rust' | Measure-Object Length -Sum).Sum
+          $prog = (Get-Item 'Begroeting.exe').Length
+          $regels = @(
+            '## Groottes (vaste bouwmethode: cargo --release, opt-level z, lto, strip)',
+            "- Editor JaapsProgrammeertaal.exe: $editor bytes ($(MB $editor) MB)",
+            "- jaaptaal.exe (opdrachtregel): $jt bytes ($(MB $jt) MB)",
+            "- Map rust (de ingebouwde Rust-compiler): $rust bytes ($(MB $rust) MB)",
+            "- Gebouwd voorbeeld Begroeting.exe (opt-level s): $prog bytes ($(MB $prog) MB)",
+            "- Bouwtijd van Begroeting.exe op deze computer: $env:BOUWTIJD seconden"
+          )
+          $regels | Write-Host
+          $regels | Add-Content $env:GITHUB_STEP_SUMMARY
+          $regels | Set-Content 'groottes.txt' -Encoding UTF8
+
+      - name: Installatieprogramma maken en testen
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $versie = (Select-String -Path 'Cargo.toml' -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          "VERSIE=$versie" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc "/DVersie=$versie" 'installer\JaapsProgrammeertaal.iss'
+          if ($LASTEXITCODE) { throw 'Installatieprogramma maken mislukt.' }
+          $setup = "Jaaps Programmeertaal $versie installatie.exe"
+          $grootte = (Get-Item $setup).Length
+          "- Installatieprogramma: $grootte bytes ($([math]::Round($grootte / 1MB, 1)) MB)" | Tee-Object -Append -FilePath 'groottes.txt' | Add-Content $env:GITHUB_STEP_SUMMARY
+          # Stil installeren zonder beheerdersrechten, kijken of alles er staat, en weer verwijderen.
+          $proef = Join-Path $env:RUNNER_TEMP 'jaaptaal-proef'
+          $p = Start-Process -FilePath ".\$setup" -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$proef`"") -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw ('Installeren mislukt, code ' + $p.ExitCode) }
+          foreach ($f in @('JaapsProgrammeertaal.exe', 'jaaptaal.exe', 'Handleiding.txt', 'rust\bin\rustc.exe')) {
+            if (-not (Test-Path (Join-Path $proef $f))) { throw "Na installeren staat $f er niet." }
+          }
+          $uit = & (Join-Path $proef 'jaaptaal.exe') proef 'voorbeelden\Begroeting.txt' --druk Welkom
+          if (($uit -join "`n") -notmatch 'Hallo') { throw 'Na installeren werkt bouwen niet.' }
+          $p = Start-Process -FilePath (Join-Path $proef 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path (Join-Path $proef 'JaapsProgrammeertaal.exe')) { throw 'Na verwijderen staat het programma er nog.' }
+          Write-Host 'Installeren, bouwen na installeren en verwijderen: goed.'
+
+      - name: Installatieprogramma bij de uitgave "proef" zetten
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = "Jaaps Programmeertaal $env:VERSIE installatie.exe"
+          $notities = "Proefversie $env:VERSIE, gebouwd van $env:GITHUB_SHA.`n`n" + ((Get-Content 'groottes.txt') -join "`n")
+          gh release delete proef --yes --cleanup-tag 2>$null
+          gh release create proef $setup 'groottes.txt' --prerelease --title "Proefversie $env:VERSIE" --notes $notities --target $env:GITHUB_SHA
+          if ($LASTEXITCODE) { throw 'Uitgave maken mislukt.' }

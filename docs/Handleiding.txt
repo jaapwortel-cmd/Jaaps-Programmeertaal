@@ -1,1 +1,268 @@
-Handleiding volgt.
+Handleiding van Jaap's Programmeertaal
+======================================
+
+Met Jaap's Programmeertaal maak je zelf een computerprogramma.
+Je schrijft gewone Nederlandse zinnen. Eén opdracht per regel.
+Je mag de zinnen typen of dicteren.
+
+Het programma gebruikt geen AI. Het kent alleen de zinnen die in deze handleiding staan.
+Kent het een zin niet, dan gokt het niet. Het zegt wat het niet begrijpt en stelt je een vraag.
+
+Deze handleiding sluit je met Escape.
+
+
+1. Zo begin je
+--------------
+
+1. Schrijf je zinnen in het vak Opdrachten.
+2. Druk op F7. Het programma controleert je zinnen.
+3. Druk op F5. Het programma bouwt je programma en start het.
+4. Is alles goed? Druk op F8. Dan maak je een .exe-bestand dat je kunt bewaren of weggeven.
+
+Een eerste voorbeeld. Schrijf deze vijf regels:
+
+Maak een venster met als titel Begroeting
+Maak een knop met als naam Welkom
+Als ik op de knop Welkom druk
+Toon de tekst Hallo
+Einde van de knop
+
+Druk op F5. Er komt een venster met de titel Begroeting.
+De knop Welkom heeft meteen de focus. Druk op Enter of op de spatiebalk.
+Dan hoor je: Hallo. Druk op Escape om het venster te sluiten.
+
+
+2. Alle toetsen
+---------------
+
+Ctrl+N          Nieuw programma
+Ctrl+O          Een programma openen (een TXT-bestand)
+Ctrl+S          Opslaan
+Ctrl+Shift+S    Opslaan als
+F7              Controleren (testen)
+F5              Uitvoeren: bouwen en starten
+F9              Alleen deze regel proberen (of de regels die je hebt geselecteerd)
+F6              Laat zien wat ik van je zinnen maak, in gewone taal
+Shift+F6        Laat de Rust-code zien die van je zinnen is gemaakt
+F8              Bouw een .exe-bestand
+Ctrl+L          Op welke regel sta ik? Het programma zegt het regelnummer en wat er op die regel staat.
+F4              Naar het vak Meldingen
+Tab             Wisselen tussen het vak Opdrachten en het vak Meldingen
+Escape          In het vak Meldingen: terug naar het vak Opdrachten
+F1              Deze handleiding
+Alt+F4          Afsluiten
+
+Alle opdrachten staan ook in de menubalk. Druk op Alt om de menubalk te openen.
+
+
+3. Wat er gebeurt als iets niet klopt
+-------------------------------------
+
+Bij elke melding staat het regelnummer. De cursor springt naar die regel.
+Alle meldingen staan ook in het vak Meldingen (F4).
+
+Er zijn drie soorten:
+
+- Een fout. Iets klopt niet en je moet het zelf aanpassen.
+  Voorbeeld: Regel 4: Delen door nul kan niet.
+
+- Een vraag. Het programma weet niet wat je bedoelt en gokt niet.
+  Voorbeeld: Regel 2: Deze zin ken ik niet: "Spring hoog". Welke zin bedoel je?
+  Pas de regel aan met een zin uit deze handleiding.
+
+- Een voorstel. Je hoort een vraag die je met Ja of Nee beantwoordt.
+  Voorbeeld: Regel 1: Deze zin ken ik niet: "Mak een venster". Bedoel je: Maak een venster?
+  Zeg je Ja, dan verandert de regel. Zeg je Nee, dan verandert er niets.
+  Met Ctrl+Z maak je een verandering weer ongedaan.
+
+Het programma stopt ook als twee zinnen elkaar tegenspreken, of als ze niet op elkaar aansluiten.
+Bijvoorbeeld:
+- je beschrijft twee keer wat dezelfde knop doet;
+- je maakt een knop, maar er is nog geen venster;
+- iets is eerst een getal en later tekst;
+- je gebruikt een naam die je nog niet hebt onthouden.
+
+
+4. De zinnen die werken
+-----------------------
+
+Hoofdletters maken niet uit. Een punt aan het eind mag. De woorden "de", "het" en "een" voor een naam mogen.
+
+4.1 Opmerkingen (doen niets)
+
+Opmerking: hier begint het rekenen
+Commentaar dit is alleen voor mij
+// dit doet ook niets
+
+4.2 Vensters en knoppen
+
+Maak een venster met als titel Begroeting
+Maak een venster met de titel Begroeting
+Maak een knop met als naam Welkom
+Maak een knop met de naam Welkom
+
+Een knop komt altijd in het laatste venster dat je hebt gemaakt.
+Elke knop moet een eigen naam hebben.
+
+Wat een knop doet, schrijf je zo:
+
+Als ik op de knop Welkom druk
+(hier de opdrachten)
+Einde van de knop
+
+Ook goed: Als ik op de knop Welkom klik. En: Einde knop.
+In zo'n blok mag je ook een nieuw venster maken. Zo kun je meerdere vensters hebben.
+
+4.3 Tekst tonen
+
+Toon de tekst Hallo
+Toon teller
+Toon de waarde van teller
+Toon de uitkomst van 3 plus 4
+Toon "Je bent" en dan leeftijd en dan "jaar"
+
+Heeft je programma een venster? Dan komt de tekst in een meldingsvenster dat de schermlezer voorleest.
+Heeft je programma geen venster? Dan komt alle tekst samen in één venster als het programma klaar is.
+
+4.4 Iets onthouden en veranderen
+
+Onthoud teller is 0
+Onthoud dat teller 0 is
+Onthoud mijn naam is "Jaap"
+Onthoud klaar is waar
+Onthoud klaar is niet waar
+
+Verander teller in 5
+Verander teller naar 5
+Zet teller op 5
+
+Tel 1 op bij teller
+Verhoog teller met 1
+Trek 2 af van teller
+Verlaag teller met 2
+
+Een naam mag uit meer woorden bestaan, zoals "mijn naam". Gebruik geen woorden die het programma zelf
+gebruikt, zoals plus, min, is, als of dan.
+
+4.5 Rekenen
+
+Het programma rekent voor je. Je hoeft zelf niet te rekenen.
+
+plus            3 plus 4
+min             10 min 2
+keer            3 keer 4   (ook: maal)
+gedeeld door    10 gedeeld door 4
+
+Keer en gedeeld door gaan eerst, net als op school: 2 plus 3 keer 4 is 14.
+Een getal mag in cijfers (42, 3,5) of in woorden (tien, eenentwintig, honderd).
+Een min-getal: min 5.
+
+4.6 Kiezen
+
+Als teller is groter dan 5
+Toon de tekst groot
+Anders
+Toon de tekst klein
+Einde als
+
+Anders mag je weglaten. Deze vergelijkingen werken:
+
+is groter dan            (ook: groter is dan, is meer dan)
+is kleiner dan           (ook: kleiner is dan, is minder dan)
+is gelijk aan            (ook: is)
+is niet gelijk aan       (ook: is niet)
+is minstens              (groter dan of gelijk aan)
+is hoogstens             (kleiner dan of gelijk aan)
+
+Tekst vergelijken mag ook: Als mijn naam is "Jaap". Hoofdletters tellen dan niet mee.
+Iets dat waar of niet waar is mag ook zonder vergelijking: Als klaar.
+
+4.7 Herhalen
+
+Herhaal 10 keer
+(hier de opdrachten)
+Einde herhaal
+
+Herhaal zolang teller is kleiner dan 10, hoogstens 100 keer
+(hier de opdrachten)
+Einde herhaal
+
+Een herhaling heeft altijd een grens. Zo kan je programma nooit vastlopen.
+Hoogstens een miljoen keer. Stopt een herhaling bij de grens, dan hoor je dat.
+
+4.8 Blokken sluiten
+
+Einde als                 sluit een keuze
+Einde herhaal             sluit een herhaling
+Einde van de knop         sluit wat een knop doet
+Einde                     sluit het laatste blok, wat het ook is
+
+
+5. Leestekens dicteren
+----------------------
+
+Tekst tussen aanhalingstekens blijft precies zoals je hem schrijft.
+Je kunt aanhalingstekens typen, of dicteren:
+
+Toon de tekst aanhalingsteken openen Hallo daar aanhalingsteken sluiten
+
+Dat wordt: Toon de tekst "Hallo daar".
+Ook goed: open aanhalingsteken, sluit aanhalingsteken.
+
+Een punt aan het eind van een regel valt weg. Wil je toch een punt laten zien?
+Zet de tekst dan tussen aanhalingstekens: Toon "Klaar."
+
+
+6. Een losse regel proberen
+---------------------------
+
+Zet de cursor op een regel en druk op F9. Je hoort de uitkomst.
+Bijvoorbeeld: Toon 12 keer 12 geeft 144.
+Gebruikt de regel een naam van eerder, zoals teller? Dan neemt het programma de Onthoud-regels
+van daarvoor mee.
+Je kunt ook een paar regels selecteren en dan op F9 drukken.
+
+
+7. Zien wat het programma van je zinnen maakt
+---------------------------------------------
+
+F6 laat in gewone taal zien wat het programma van elke regel heeft gemaakt.
+Shift+F6 laat de Rust-code zien. Bij elke regel Rust-code staat jouw eigen zin erboven.
+
+
+8. Een .exe-bestand maken
+-------------------------
+
+Druk op F8. Kies waar het bestand moet komen en hoe het heet. Druk op Enter.
+Het programma controleert eerst je zinnen. Daarna bouwt het de .exe met de Rust-compiler
+die in het programma zit. Je hoeft niets apart te installeren.
+Als het klaar is, hoor je waar het bestand staat en hoe groot het is.
+
+Het .exe-bestand werkt zonder Jaap's Programmeertaal. Je kunt het aan anderen geven.
+Het werkt op Windows 10 en Windows 11, 64-bits.
+
+
+9. Bestanden
+------------
+
+Je programma is een gewoon tekstbestand (TXT). Je kunt het ook in Kladblok schrijven
+en dan openen met Ctrl+O. Opslaan gebeurt veilig: eerst in een tijdelijk bestand,
+pas daarna wordt het echte bestand vervangen.
+
+
+10. Wat nog niet kan
+--------------------
+
+Dit staat op de wensenlijst, maar zit nog niet in deze versie:
+- tekstvakken, lijsten, selectievakjes, tabellen, menu's en werkbalken in je eigen programma;
+- kleuren en lay-out kiezen;
+- geluid, muziek, opnemen;
+- afbeeldingen, QR-codes en streepjescodes;
+- bestanden en mappen lezen en schrijven vanuit je programma;
+- internet en netwerk;
+- eigen stukjes met een naam (functies) en lijsten met waarden;
+- twee voorwaarden in één keer met "en" of "of";
+- Engelse opdrachten en vertalen;
+- onthouden van jouw eigen formuleringen (zelflerend).
+
+Als je zo'n zin schrijft, zegt het programma eerlijk dat het dat nog niet kan.
