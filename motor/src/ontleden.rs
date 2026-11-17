@@ -69,7 +69,7 @@ const WOORDENLIJST: &[&str] = &[
     "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
     "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum", "speel", "piep",
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
-    "privacyverklaring", "onderteken", "certificaat",
+    "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
@@ -1068,6 +1068,26 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::SpeelGeluid { pad: pad(&s[g + 1..eind]).map_err(fout)?, wachten }))
         }
         "stop" if zoek(&s, &["geluid"], 1).is_some() => Ok(Vorm::Los(Soort::StopGeluid)),
+        "pak" if zoek(&s, &["zipbestand"], 1).is_some() => {
+            let voorbeeld = "Schrijf het zo: Pak de map Foto's in tot het zipbestand Foto's.zip. Of: Pak het zipbestand Foto's.zip uit in de map Foto's.";
+            let z = zoek(&s, &["zipbestand"], 1).unwrap();
+            let m = zoek(&s, &["map"], 1).ok_or_else(|| fout(voorbeeld))?;
+            if m < z {
+                // Pak de map X in tot het zipbestand Y
+                let i = (m + 1..z).find(|&i| klein(&s, i) == "in").ok_or_else(|| fout(voorbeeld))?;
+                if i == m + 1 || z + 1 >= s.len() {
+                    return Err(fout(voorbeeld));
+                }
+                Ok(Vorm::Los(Soort::Zip { inpakken: true, map: pad(&s[m + 1..i]).map_err(fout)?, zip: pad(&s[z + 1..]).map_err(fout)? }))
+            } else {
+                // Pak het zipbestand Y uit in de map X
+                let u = (z + 1..m).find(|&i| klein(&s, i) == "uit").ok_or_else(|| fout(voorbeeld))?;
+                if u == z + 1 || m + 1 >= s.len() {
+                    return Err(fout(voorbeeld));
+                }
+                Ok(Vorm::Los(Soort::Zip { inpakken: false, map: pad(&s[m + 1..]).map_err(fout)?, zip: pad(&s[z + 1..u]).map_err(fout)? }))
+            }
+        }
         "geef" if zoek(&s, &["sneltoets"], 2).is_some() => {
             let k = zoek(&s, &["knop"], 1).ok_or_else(|| fout("Schrijf het zo: Geef de knop Welkom de sneltoets Ctrl+W."))?;
             let t = zoek(&s, &["sneltoets"], k).unwrap();

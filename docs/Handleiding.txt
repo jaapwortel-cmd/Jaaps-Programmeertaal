@@ -341,7 +341,11 @@ Stop het geluid
 Het geluid zoekt het programma eerst naast je programma, en dan in Documenten.
 Voeg het geluid toe aan je installatie, dan staat het naast het programma:
 Voeg het bestand deurbel.wav toe aan de installatie
-Op dit moment kan het programma alleen WAV-bestanden afspelen.
+Het programma speelt WAV, MP3, WMA, M4A, AAC en MIDI af, met de geluidsonderdelen van Windows zelf.
+
+Zipbestanden (met Windows zelf):
+Pak de map Foto's in tot het zipbestand Foto's.zip
+Pak het zipbestand Foto's.zip uit in de map Foto's terug
 
 4.7g Sneltoetsen, kleuren en een handleiding voor je eigen programma
 

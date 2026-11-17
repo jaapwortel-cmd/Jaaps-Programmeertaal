@@ -127,7 +127,9 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 
 **Tijd, datum en toeval**: `de tijd`, `de datum`, `een willekeurig getal van 1 tot 6`
 
-**Geluid**: `Piep`, `Speel een piep van 440 hertz en 300 milliseconden`, `Speel het geluid deurbel.wav` (ook: `af en wacht`), `Stop het geluid` (alleen WAV)
+**Geluid**: `Piep`, `Speel een piep van 440 hertz en 300 milliseconden`, `Speel het geluid deurbel.wav` (ook: `af en wacht`), `Stop het geluid` (WAV, MP3, WMA, M4A, AAC, MIDI)
+
+**ZIP**: `Pak de map Foto's in tot het zipbestand Foto's.zip`, `Pak het zipbestand Foto's.zip uit in de map Foto's`
 
 **Sneltoetsen, kleuren en handleiding (F1) in je eigen programma**
 - `Geef de knop Welkom de sneltoets Ctrl+W`
@@ -256,11 +258,11 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
 
-**Geluid**: MP3 en andere soorten dan WAV, volume, mono/stereo/3D, opnemen, muziekspelers, audio-editor. (Wel gebouwd: piep en WAV afspelen.)
+**Geluid**: OGG en FLAC, volume, mono/stereo/3D, opnemen, muziekspelers, audio-editor. (Wel gebouwd: piep, WAV en MP3 afspelen.)
 
 **Beeld**: afbeeldingen met beschrijving, 3D, QR-codes en streepjescodes.
 
-**Bestanden**: bestanden en mappen verwijderen of verplaatsen, DOCX en PDF, ZIP (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
+**Bestanden**: bestanden en mappen verwijderen of verplaatsen, DOCX en PDF (ZIP inpakken en uitpakken werkt wel) (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
 
 **Netwerk**: verbinding met een andere computer, internet, PHP en CSS, updates via Dropbox of pCloud.
 

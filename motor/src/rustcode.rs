@@ -229,6 +229,12 @@ impl<'a> Maker<'a> {
                     let p = self.uitdrukking(pad, r);
                     self.regel(diepte, &format!("{{ let p = {}; s.speel(p, {}, {})?; }}", p, wachten, r));
                 }
+                Soort::Zip { inpakken, map, zip } => {
+                    self.opmerking(diepte, r);
+                    let m = self.uitdrukking(map, r);
+                    let z = self.uitdrukking(zip, r);
+                    self.regel(diepte, &format!("{{ let m = {}; let z = {}; zip({}, m, z, {})?; }}", m, z, inpakken, r));
+                }
                 Soort::StopGeluid => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, "s.stop_geluid();");

@@ -460,11 +460,24 @@ impl<'a> Controle<'a> {
                     pad.namen(&mut namen);
                     self.controleer_namen(r, namen, in_knop, None);
                     if let Uitdrukking::Vast(Waarde::Tekst(t)) = pad {
-                        if !t.to_lowercase().ends_with(".wav") {
+                        let laag = t.to_lowercase();
+                        if ![".wav", ".mp3", ".wma", ".m4a", ".aac", ".mid", ".midi"].iter().any(|e| laag.ends_with(e)) {
                             self.meld(Melding::fout(
                                 r,
-                                format!("Ik kan nu alleen WAV-bestanden afspelen. {} is geen WAV-bestand. MP3 en andere soorten komen later.", t),
+                                format!("Ik kan WAV, MP3, WMA, M4A, AAC en MIDI afspelen. {} is een ander soort bestand.", t),
                             ));
+                        }
+                    }
+                }
+                Soort::Zip { map, zip, .. } => {
+                    for u in [map, zip] {
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                    }
+                    if let Uitdrukking::Vast(Waarde::Tekst(t)) = zip {
+                        if !t.to_lowercase().ends_with(".zip") {
+                            self.meld(Melding::fout(r, format!("Een zipbestand eindigt op .zip, maar hier staat {}. Bedoel je {}.zip?", t, t)));
                         }
                     }
                 }

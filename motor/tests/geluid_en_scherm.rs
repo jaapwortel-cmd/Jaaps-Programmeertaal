@@ -30,8 +30,8 @@ fn piep_in_tekststand() {
 
 #[test]
 fn alleen_wav() {
-    let u = lees("Speel het geluid liedje.mp3\n");
-    assert!(u.meldingen[0].tekst.contains("WAV"));
+    let u = lees("Speel het geluid liedje.ogg\n");
+    assert!(u.meldingen[0].tekst.contains("MP3"));
 }
 
 #[test]
@@ -99,4 +99,27 @@ fn scherm_beschrijving_en_tips() {
     let slecht = "Maak een venster met als titel X\nMaak een knop met als naam Ok\nMaak een tekstvak met als naam Naam\n";
     let b = motor::scherm::beschrijf_scherm(&lees(slecht).programma);
     assert!(b.contains("Zet de knop dan onder de vakken"), "{}", b);
+}
+
+#[test]
+fn mp3_en_zip_zinnen() {
+    let bron = "Speel het geluid liedje.mp3\nPak de map Foto's in tot het zipbestand Foto's.zip\nPak het zipbestand Foto's.zip uit in de map Terug\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    assert!(!lees("Speel het geluid liedje.ogg\n").is_goed());
+    assert!(!lees("Pak de map A in tot het zipbestand A.rar\n").is_goed());
+}
+
+#[cfg(windows)]
+#[test]
+fn zip_inpakken_en_uitpakken() {
+    let werk = std::env::temp_dir().join(format!("jaaptaal-zip-{}", std::process::id()));
+    std::fs::create_dir_all(werk.join("Bron")).unwrap();
+    std::fs::write(werk.join("Bron").join("a.txt"), "hallo").unwrap();
+    let code = motor::rust_code("Pak de map Bron in tot het zipbestand pak.zip\nPak het zipbestand pak.zip uit in de map Terug\nToon de inhoud van het bestand Terug/a.txt\n").unwrap();
+    let rustc = motor::bouwen::zoek_rustc(None).unwrap();
+    let exe = werk.join("z.exe");
+    motor::bouwen::bouw(&code, &exe, &rustc, motor::bouwen::Stand::Snel, &werk.join("w")).unwrap();
+    let uit = Command::new(&exe).arg("--tekst").env("JAAPTAAL_MAP", &werk).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&uit.stdout).trim(), "hallo");
+    let _ = std::fs::remove_dir_all(&werk);
 }

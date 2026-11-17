@@ -258,6 +258,8 @@ pub enum Soort {
     SpeelGeluid { pad: Uitdrukking, wachten: bool },
     /// Het geluid stoppen.
     StopGeluid,
+    /// Een map inpakken in een zipbestand, of een zipbestand uitpakken in een map.
+    Zip { inpakken: bool, map: Uitdrukking, zip: Uitdrukking },
     /// Een sneltoets voor een knop, zoals Ctrl+W.
     Sneltoets { knop: String, toets: Toets },
     /// Een kleur voor het laatste venster: de achtergrond of de tekst.
@@ -399,6 +401,7 @@ impl Soort {
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
+            Soort::Zip { map, zip, .. } => vec![map, zip],
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }
@@ -427,6 +430,7 @@ impl Soort {
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
+            Soort::Zip { map, zip, .. } => vec![map, zip],
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }

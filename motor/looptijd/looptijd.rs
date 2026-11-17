@@ -372,6 +372,38 @@ fn privacy_tekst() -> String {
     lees_tekstbestand(&pad).unwrap_or_default()
 }
 
+/// Een map inpakken in een zipbestand, of uitpakken. Met Windows zelf (Compress-Archive en Expand-Archive).
+fn zip(inpakken: bool, map: W, z: W, r: usize) -> R<()> {
+    let (m, z) = (volledig_pad(&map), volledig_pad(&z));
+    if !cfg!(windows) {
+        return fout(r, "Zipbestanden maken en uitpakken kan alleen op Windows.".to_string());
+    }
+    let q = |p: &std::path::Path| format!("'{}'", p.display().to_string().replace('\'', "''"));
+    let opdracht = if inpakken {
+        if !m.is_dir() {
+            return fout(r, format!("De map {} bestaat niet.", m.display()));
+        }
+        format!("Compress-Archive -Path (Join-Path {} '*') -DestinationPath {} -Force", q(&m), q(&z))
+    } else {
+        if !z.is_file() {
+            return fout(r, format!("Het zipbestand {} bestaat niet.", z.display()));
+        }
+        format!("Expand-Archive -LiteralPath {} -DestinationPath {} -Force", q(&z), q(&m))
+    };
+    let mut cmd = std::process::Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &format!("$ErrorActionPreference='Stop'; {}", opdracht)]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    match cmd.output() {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => fout(r, format!("Het zipbestand is niet gelukt: {}", String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("").trim())),
+        Err(e) => fout(r, format!("Het zipbestand is niet gelukt: {}", e)),
+    }
+}
+
 fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
     match w {
         Some(w) => Ok(w),
@@ -610,8 +642,10 @@ impl Staat {
         }
         #[cfg(windows)]
         {
-            if !win::speel(&pad, wachten) {
-                return fout(r, format!("Het geluid {} kan ik niet afspelen. Is het een gewoon WAV-bestand?", p.tekst()));
+            let laag = pad.to_string_lossy().to_lowercase();
+            let gelukt = if laag.ends_with(".wav") { win::speel(&pad, wachten) } else { win::speel_mci(&pad, wachten) };
+            if !gelukt {
+                return fout(r, format!("Het geluid {} kan ik niet afspelen. Is het een gewoon WAV- of MP3-bestand?", p.tekst()));
             }
         }
         Ok(())
@@ -1102,6 +1136,7 @@ mod win {
     #[link(name = "winmm")]
     extern "system" {
         fn PlaySoundW(pad: *const u16, module: HANDLE, vlaggen: u32) -> i32;
+        fn mciSendStringW(opdracht: *const u16, antwoord: *mut u16, lengte: u32, venster: HWND) -> u32;
     }
 
     #[link(name = "kernel32")]
@@ -1124,6 +1159,20 @@ mod win {
     pub(super) fn stop_geluid() {
         unsafe {
             PlaySoundW(null(), null_mut(), 0);
+            mciSendStringW(w("close jaapgeluid").as_ptr(), null_mut(), 0, null_mut());
+        }
+    }
+
+    /// MP3 en andere soorten, via de geluidsonderdelen van Windows zelf (MCI).
+    pub(super) fn speel_mci(pad: &std::path::Path, wachten: bool) -> bool {
+        unsafe {
+            mciSendStringW(w("close jaapgeluid").as_ptr(), null_mut(), 0, null_mut());
+            let open = format!("open \"{}\" type mpegvideo alias jaapgeluid", pad.display());
+            if mciSendStringW(w(&open).as_ptr(), null_mut(), 0, null_mut()) != 0 {
+                return false;
+            }
+            let speel = if wachten { "play jaapgeluid wait" } else { "play jaapgeluid" };
+            mciSendStringW(w(speel).as_ptr(), null_mut(), 0, null_mut()) == 0
         }
     }
 
