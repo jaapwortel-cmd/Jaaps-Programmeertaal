@@ -28,6 +28,8 @@ pub struct Installatie {
     pub privacy_bestand: Option<String>,
     /// Ondertekenen met een eigen certificaat op deze naam.
     pub onderteken: Option<String>,
+    /// Waar het versiebestand voor updates staat.
+    pub update_adres: Option<String>,
 }
 
 /// Haalt de beschrijving van de installatie uit het programma. `None` als er geen naam is.
@@ -45,6 +47,7 @@ pub fn uit_programma(p: &Programma) -> Option<Installatie> {
         privacy_regels: Vec::new(),
         privacy_bestand: None,
         onderteken: None,
+        update_adres: None,
     };
     for o in &p.opdrachten {
         if let Soort::Installatie(z) = &o.soort {
@@ -61,6 +64,7 @@ pub fn uit_programma(p: &Programma) -> Option<Installatie> {
                 InstallatieZin::PrivacyRegel(t) => i.privacy_regels.push(t.clone()),
                 InstallatieZin::PrivacyBestand(b) => i.privacy_bestand = Some(b.clone()),
                 InstallatieZin::Onderteken(n) => i.onderteken = Some(n.clone()),
+                InstallatieZin::UpdateAdres(a) => i.update_adres = Some(a.clone()),
             }
         }
     }
@@ -224,6 +228,18 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
     let installcode = maak_code(&inst, &exe, &extra, &licentie, &privacy);
     let installmap = werkmap.join("installatie");
     let v = bouwen::bouw(&installcode, uit, rustc, Stand::Klein, &installmap)?;
+    if inst.update_adres.is_some() {
+        // Een voorbeeld van het versiebestand, naast het installatiebestand. Zet dit op het update-adres.
+        let map = if uit.is_absolute() { uit.parent().map(|m| m.to_path_buf()) } else { std::env::current_dir().ok() };
+        if let Some(map) = map {
+            let tekst = format!(
+                "versie {}\nPLAK HIER DE LINK NAAR HET INSTALLATIEBESTAND (bij Dropbox: de deellink van {}.exe)\n",
+                if inst.versie.is_empty() { "1.0" } else { &inst.versie },
+                uit.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+            );
+            let _ = crate::bestand::schrijf_txt(&map.join(format!("{} versie.txt", bestandsnaam(&inst.naam))), &tekst);
+        }
+    }
     if let Some(naam) = &inst.onderteken {
         let volledig = if uit.is_absolute() { uit.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(uit) };
         crate::ondertekenen::onderteken(&volledig, naam)?;

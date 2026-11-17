@@ -82,7 +82,11 @@ impl<'a> Maker<'a> {
             Uitdrukking::LegeLijst => "W::L(Vec::new())".into(),
             Uitdrukking::Ingebouwd { wat, invoer } => {
                 let args: Vec<String> = invoer.iter().map(|i| self.uitdrukking(i, r)).collect();
-                format!("ingebouwd({}, vec![{}], {})?", wat.nummer(), args.join(", "), r)
+                if wat.nummer() >= 9 {
+                    format!("{{ let invoer = vec![{}]; s.tabel_waarde({}, invoer, {})? }}", args.join(", "), wat.nummer(), r)
+                } else {
+                    format!("ingebouwd({}, vec![{}], {})?", wat.nummer(), args.join(", "), r)
+                }
             }
             Uitdrukking::Aantal(a) => {
                 let a = self.uitdrukking(a, r);
@@ -315,6 +319,51 @@ impl<'a> Maker<'a> {
                     self.regel(diepte, &format!("s.kleur({}, ({}, {}, {}), {});", achtergrond, rgb.0, rgb.1, rgb.2, rust_tekst(kleur)));
                 }
                 Soort::Handleiding { .. } => self.opmerking(diepte, r),
+                Soort::Document { soort, waarde, pad } => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(waarde, r);
+                    let p = self.uitdrukking(pad, r);
+                    self.regel(diepte, &format!("{{ let w = {}; let p = {}; schrijf_document({}, p, w, {})?; }}", w, p, soort, r));
+                }
+                Soort::Verstuur { waarde, adres } => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(waarde, r);
+                    let a = self.uitdrukking(adres, r);
+                    self.regel(diepte, &format!("{{ let w = {}; let a = {}; verstuur(a, w, {})?; }}", w, a, r));
+                }
+                Soort::Download { adres, pad } => {
+                    self.opmerking(diepte, r);
+                    let a = self.uitdrukking(adres, r);
+                    let p = self.uitdrukking(pad, r);
+                    self.regel(diepte, &format!("{{ let a = {}; let p = {}; download(a, p, {})?; }}", a, p, r));
+                }
+                Soort::Tabel { tabel, actie } => {
+                    self.opmerking(diepte, r);
+                    let t = rust_tekst(tabel);
+                    let regel = match actie {
+                        TabelActie::Kolom(k) => format!("s.tabel_kolom({}, {}, {})?;", t, rust_tekst(k), r),
+                        TabelActie::Rij(w) => {
+                            let a: Vec<String> = w.iter().map(|u| self.uitdrukking(u, r)).collect();
+                            format!("{{ let rij = vec![{}]; s.tabel_rij({}, rij, {})?; }}", a.join(", "), t, r)
+                        }
+                        TabelActie::HaalGekozenWeg => format!("s.tabel_haal_weg({}, {})?;", t, r),
+                        TabelActie::Leeg => format!("s.tabel_leeg({}, {})?;", t, r),
+                        TabelActie::Sorteer(k) => format!("s.tabel_sorteer({}, {}, {})?;", t, rust_tekst(k), r),
+                        TabelActie::Opslaan(p) => {
+                            let p = self.uitdrukking(p, r);
+                            format!("{{ let p = {}; s.tabel_csv({}, p, true, {})?; }}", p, t, r)
+                        }
+                        TabelActie::Inlezen(p) => {
+                            let p = self.uitdrukking(p, r);
+                            format!("{{ let p = {}; s.tabel_csv({}, p, false, {})?; }}", p, t, r)
+                        }
+                    };
+                    self.regel(diepte, &regel);
+                }
+                Soort::ZoekUpdates => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.zoek_updates({})?;", r));
+                }
                 Soort::MaakMap(p) => {
                     self.opmerking(diepte, r);
                     let p = self.uitdrukking(p, r);
@@ -507,6 +556,20 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
         .collect();
     m.uit.push_str(&format!("const PRIVACY: &str = {};\n", rust_tekst(&privacy.join("\n"))));
     m.uit.push_str("const PICTOGRAM: &[u8] = &[];\n");
+    let mut versie = String::new();
+    let mut update_adres = String::new();
+    let mut programmanaam = String::new();
+    for o in &p.opdrachten {
+        match &o.soort {
+            Soort::Installatie(InstallatieZin::Versie(v)) => versie = v.clone(),
+            Soort::Installatie(InstallatieZin::UpdateAdres(a)) => update_adres = a.clone(),
+            Soort::Installatie(InstallatieZin::Naam(n)) => programmanaam = n.clone(),
+            _ => {}
+        }
+    }
+    m.uit.push_str(&format!("const VERSIE: &str = {};\n", rust_tekst(&versie)));
+    m.uit.push_str(&format!("const UPDATE_ADRES: &str = {};\n", rust_tekst(&update_adres)));
+    m.uit.push_str(&format!("const PROGRAMMANAAM: &str = {};\n", rust_tekst(&programmanaam)));
 
     let namen: Vec<String> = m.namenlijst.iter().map(|n| rust_tekst(n)).collect();
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();

@@ -24,6 +24,11 @@ fn uitdrukking(u: &Uitdrukking) -> String {
                 Ingebouwd::Willekeurig => format!("een willekeurig getal van {} tot en met {}", a(0), a(1)),
                 Ingebouwd::Tijd => "de tijd van dit moment".into(),
                 Ingebouwd::Datum => "de datum van vandaag".into(),
+                Ingebouwd::Webpagina => format!("wat er op de webpagina {} staat", a(0)),
+                Ingebouwd::WebTekst => format!("de leesbare tekst van de webpagina {}", a(0)),
+                Ingebouwd::GekozenRij => format!("de gekozen rij van de tabel {} (als lijst)", a(0)),
+                Ingebouwd::AantalRijen => format!("het aantal rijen in de tabel {}", a(0)),
+                Ingebouwd::RijNummer => format!("rij nummer {} van de tabel {} (als lijst)", a(1), a(0)),
             }
         }
         Uitdrukking::Aantal(a) => format!("het aantal dingen in {}", uitdrukking(a)),
@@ -67,6 +72,28 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 if *toevoegen { "als nieuwe regel toe aan" } else { "in (wat er stond, verdwijnt)" },
                 uitdrukking(pad)
             ),
+            Soort::Document { soort, waarde, pad } => format!(
+                "schrijf {} in het {}-bestand {} (een nieuw bestand; wat er stond, verdwijnt).",
+                uitdrukking(waarde),
+                if *soort == 0 { "Word" } else { "PDF" },
+                uitdrukking(pad)
+            ),
+            Soort::Verstuur { waarde, adres } => format!("verstuur {} naar het internetadres {}.", uitdrukking(waarde), uitdrukking(adres)),
+            Soort::Download { adres, pad } => format!("download het bestand van {} en bewaar het als {}.", uitdrukking(adres), uitdrukking(pad)),
+            Soort::Tabel { tabel, actie } => match actie {
+                TabelActie::Kolom(k) => format!("voeg de kolom {} toe aan de tabel {}.", k, tabel),
+                TabelActie::Rij(w) => format!(
+                    "voeg een rij toe aan de tabel {}, met: {}.",
+                    tabel,
+                    w.iter().map(uitdrukking).collect::<Vec<_>>().join(", ")
+                ),
+                TabelActie::HaalGekozenWeg => format!("haal de gekozen rij weg uit de tabel {}.", tabel),
+                TabelActie::Leeg => format!("maak de tabel {} leeg (de kolommen blijven).", tabel),
+                TabelActie::Sorteer(k) => format!("sorteer de tabel {} op de kolom {}.", tabel, k),
+                TabelActie::Opslaan(p) => format!("sla de tabel {} op als CSV-bestand {} (Excel kan dat openen).", tabel, uitdrukking(p)),
+                TabelActie::Inlezen(p) => format!("lees de tabel {} in uit het CSV-bestand {}.", tabel, uitdrukking(p)),
+            },
+            Soort::ZoekUpdates => "kijk op internet of er een nieuwe versie is, en vraag of die geïnstalleerd mag worden.".into(),
             Soort::MaakMap(p) => format!("maak de map {}.", uitdrukking(p)),
             Soort::Piep { hoogte, duur } => format!("laat een piep horen van {} hertz, {} milliseconden lang.", uitdrukking(hoogte), uitdrukking(duur)),
             Soort::SpeelGeluid { pad, wachten } => format!(
@@ -142,6 +169,7 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 InstallatieZin::LicentieBestand(b) => format!("de licentie staat in het bestand {}.", b),
                 InstallatieZin::PrivacyRegel(t) => format!("in de privacyverklaring staat: {}", t),
                 InstallatieZin::PrivacyBestand(b) => format!("de privacyverklaring staat in het bestand {}.", b),
+                InstallatieZin::UpdateAdres(a) => format!("de updates staan op het adres {}.", a),
                 InstallatieZin::Onderteken(n) => format!("onderteken het programma met een eigen certificaat op naam van {}.", n),
             },
             Soort::MaakVenster { titel } => format!("maak een venster. De titel is: {}.", titel),

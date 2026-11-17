@@ -51,6 +51,7 @@ fn vast_getal(u: &Uitdrukking) -> Option<f64> {
 
 struct Controle<'a> {
     regels: &'a [&'a str],
+    programma: &'a Programma,
     meldingen: Vec<Melding>,
     types: HashMap<String, (Type, usize)>,
     /// (naam, regel, staat los in het programma)
@@ -116,8 +117,11 @@ impl<'a> Controle<'a> {
                     self.type_van(i)?;
                 }
                 Ok(match wat {
-                    Ingebouwd::Inhoud | Ingebouwd::LogboekPlek | Ingebouwd::Tijd | Ingebouwd::Datum => Type::Tekst,
-                    Ingebouwd::Regels => Type::Lijst,
+                    Ingebouwd::Inhoud | Ingebouwd::LogboekPlek | Ingebouwd::Tijd | Ingebouwd::Datum | Ingebouwd::Webpagina | Ingebouwd::WebTekst => {
+                        Type::Tekst
+                    }
+                    Ingebouwd::Regels | Ingebouwd::GekozenRij | Ingebouwd::RijNummer => Type::Lijst,
+                    Ingebouwd::AantalRijen => Type::Getal,
                     Ingebouwd::Bestaat => Type::Waarheid,
                     Ingebouwd::Willekeurig => {
                         for i in invoer {
@@ -421,7 +425,13 @@ impl<'a> Controle<'a> {
                     self.controleer_lijst(blok, in_knop);
                 }
                 Soort::Stukje { blok, .. } => self.controleer_lijst(blok, true),
-                Soort::SchrijfBestand { waarde, pad, .. } => {
+                Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => {
+                    if let (Soort::Document { soort, .. }, Uitdrukking::Vast(Waarde::Tekst(t))) = (&o.soort, pad) {
+                        let eind = if *soort == 0 { ".docx" } else { ".pdf" };
+                        if !t.to_lowercase().ends_with(eind) {
+                            self.meld(Melding::fout(r, format!("Dit bestand moet eindigen op {}, maar hier staat {}. Bedoel je {}{}?", eind, t, t, eind)));
+                        }
+                    }
                     for u in [waarde, pad] {
                         let mut od = Vec::new();
                         onderdelen_in(u, &mut od);
@@ -432,6 +442,49 @@ impl<'a> Controle<'a> {
                         if let Err(t) = self.type_van(u) {
                             self.meld(Melding::fout(r, t));
                         }
+                    }
+                }
+                Soort::Verstuur { waarde: a, adres: b } | Soort::Download { adres: a, pad: b } => {
+                    for u in [a, b] {
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                        if let Err(t) = self.type_van(u) {
+                            self.meld(Melding::fout(r, t));
+                        }
+                    }
+                    let adres = if let Soort::Verstuur { adres, .. } = &o.soort { adres } else { a };
+                    if let Uitdrukking::Vast(Waarde::Tekst(t)) = adres {
+                        if !t.starts_with("http://") && !t.starts_with("https://") {
+                            self.meld(Melding::fout(r, format!("Een internetadres begint met https:// of http://, maar hier staat {}.", t)));
+                        }
+                    }
+                }
+                Soort::Tabel { tabel, actie } => {
+                    self.controleer_onderdeel(r, tabel, &[OnderdeelSoort::Tabel], "Dit kan alleen bij een tabel.");
+                    let mut uitdr: Vec<&Uitdrukking> = Vec::new();
+                    match actie {
+                        TabelActie::Rij(w) => uitdr.extend(w.iter()),
+                        TabelActie::Opslaan(p) | TabelActie::Inlezen(p) => uitdr.push(p),
+                        _ => {}
+                    }
+                    for u in uitdr {
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                        if let Err(t) = self.type_van(u) {
+                            self.meld(Melding::fout(r, t));
+                        }
+                    }
+                }
+                Soort::ZoekUpdates => {
+                    let inst = crate::installatie::uit_programma(self.programma);
+                    let heeft_adres = self.programma.opdrachten.iter().any(|o| matches!(o.soort, Soort::Installatie(InstallatieZin::UpdateAdres(_))));
+                    if !heeft_adres || inst.as_ref().map_or(true, |i| i.versie.is_empty()) {
+                        self.meld(Melding::vraag(
+                            r,
+                            "Om updates te zoeken heb ik twee regels nodig: De versie is ... en De updates staan op het adres ... . Welke versie en welk adres bedoel je?",
+                        ));
                     }
                 }
                 Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => {
@@ -699,6 +752,7 @@ fn vervang_naam(regel: &str, oud: &str, nieuw: &str) -> Option<String> {
 pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
     let mut c = Controle {
         regels,
+        programma: p,
         meldingen: Vec::new(),
         types: HashMap::new(),
         onthoud: Vec::new(),

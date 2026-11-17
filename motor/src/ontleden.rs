@@ -70,12 +70,13 @@ const WOORDENLIJST: &[&str] = &[
     "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum", "speel", "piep",
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
     "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
-    "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga",
+    "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga", "verstuur", "download", "adres", "webpagina",
+    "updates", "zoek", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "tabel", "werkbalk",
+    "werkbalk",
     "afbeelding", "plaatje", "foto", "tekstverwerker", "qr-code", "streepjescode",
 ];
 
@@ -150,7 +151,7 @@ pub(crate) fn naam(s: &[Stuk]) -> Result<String, String> {
 }
 
 pub(crate) fn is_onderdeelwoord(w: &str) -> bool {
-    matches!(w, "tekstvak" | "invulvak" | "label" | "selectievakje" | "vinkje" | "keuzevakje" | "keuzelijst" | "uitklaplijst" | "combobox" | "keuzemenu")
+    matches!(w, "tabel" | "tekstvak" | "invulvak" | "label" | "selectievakje" | "vinkje" | "keuzevakje" | "keuzelijst" | "uitklaplijst" | "combobox" | "keuzemenu")
 }
 
 /// "de tekst in het tekstvak Naam", "het getal in het tekstvak Leeftijd", "het selectievakje Geluid", ...
@@ -245,6 +246,37 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
             return ib(wat, vec![pad(&s[voor.len()..])?]);
         }
     }
+    for (voor, wat) in [
+        (&["de", "inhoud", "van", "de", "webpagina"][..], Ingebouwd::Webpagina),
+        (&["de", "tekst", "van", "de", "webpagina"][..], Ingebouwd::WebTekst),
+    ] {
+        if begint(s, voor) {
+            return ib(wat, vec![pad(&s[voor.len()..])?]);
+        }
+    }
+    // Tabellen: de gekozen rij, het aantal rijen, rij nummer 2.
+    let tabelnaam = |s: &[Stuk], vanaf: usize| -> Option<Uitdrukking> {
+        let t = zoek(s, &["tabel"], vanaf)?;
+        (t + 1 < s.len()).then(|| Uitdrukking::Vast(Waarde::Tekst(rest_tekst(&s[t + 1..]))))
+    };
+    if begint(s, &["de", "gekozen", "rij"]) {
+        if let Some(t) = tabelnaam(s, 3) {
+            return ib(Ingebouwd::GekozenRij, vec![t]);
+        }
+    }
+    if begint(s, &["het", "aantal", "rijen"]) {
+        if let Some(t) = tabelnaam(s, 3) {
+            return ib(Ingebouwd::AantalRijen, vec![t]);
+        }
+    }
+    if begint(s, &["rij", "nummer"]) || begint(s, &["de", "rij", "nummer"]) {
+        let b = if klein(s, 0) == "de" { 3 } else { 2 };
+        if let Some(v) = (b + 1..s.len()).find(|&i| matches!(klein(s, i).as_str(), "van" | "uit")) {
+            if let Some(t) = tabelnaam(s, v) {
+                return ib(Ingebouwd::RijNummer, vec![t, operand(&s[b..v], false)?]);
+            }
+        }
+    }
     if begint(s, &["de", "plek", "van", "het", "logboek"]) && s.len() == 5 {
         return ib(Ingebouwd::LogboekPlek, vec![]);
     }
@@ -270,6 +302,10 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
         return ib(Ingebouwd::Willekeurig, vec![operand(&s[v + 1..t], false)?, operand(&s[na..], false)?]);
     }
     Ok(None)
+}
+
+fn is_documentwoord(w: &str) -> bool {
+    matches!(w, "word-bestand" | "wordbestand" | "worddocument" | "word-document" | "pdf-bestand" | "pdfbestand" | "pdf-document")
 }
 
 /// Wat de schermlezer moet zeggen of de stem moet voorlezen: letterlijke tekst, of een waarde.
@@ -796,6 +832,76 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     let n = |r: &[Stuk]| naam(r).map_err(fout);
 
     match w0.as_str() {
+        "maak" if begint(&s, &["maak", "de", "tabel"]) && klein(&s, s.len() - 1) == "leeg" && s.len() >= 5 => {
+            Ok(Vorm::Los(Soort::Tabel { tabel: rest_tekst(&s[3..s.len() - 1]), actie: TabelActie::Leeg }))
+        }
+        "voeg" if zoek(&s, &["toe", "aan", "de", "tabel"], 1).is_some() => {
+            let t = zoek(&s, &["toe", "aan", "de", "tabel"], 1).unwrap();
+            if t + 4 >= s.len() {
+                return Err(fout("Aan welke tabel? Schrijf bijvoorbeeld: ... toe aan de tabel Uitgaven."));
+            }
+            let tabel = rest_tekst(&s[t + 4..]);
+            if begint(&s, &["voeg", "de", "kolom"]) || begint(&s, &["voeg", "een", "kolom"]) {
+                if t <= 3 {
+                    return Err(fout("Welke kolom? Schrijf bijvoorbeeld: Voeg de kolom Bedrag toe aan de tabel Uitgaven."));
+                }
+                return Ok(Vorm::Los(Soort::Tabel { tabel, actie: TabelActie::Kolom(rest_tekst(&s[3..t])) }));
+            }
+            let mut b = 1;
+            while b < t && matches!(klein(&s, b).as_str(), "de" | "een" | "rij") {
+                b += 1;
+            }
+            if b >= t {
+                return Err(fout("Wat moet er in de rij? Schrijf bijvoorbeeld: Voeg de rij \"Brood\" en 2,50 toe aan de tabel Uitgaven."));
+            }
+            let r = &s[b..t];
+            let mut waarden = Vec::new();
+            let mut begin = 0;
+            for i in 0..=r.len() {
+                if i == r.len() || (klein(r, i) == "en" && klein(r, i + 1) != "dan") {
+                    if i == begin {
+                        return Err(fout("Rond \"en\" mis ik een waarde voor de rij."));
+                    }
+                    waarden.push(u(&r[begin..i])?);
+                    begin = i + 1;
+                }
+            }
+            Ok(Vorm::Los(Soort::Tabel { tabel, actie: TabelActie::Rij(waarden) }))
+        }
+        "haal" if zoek(&s, &["tabel"], 1).is_some() => {
+            let t = zoek(&s, &["tabel"], 1).unwrap();
+            if t + 1 >= s.len() || zoek(&s, &["gekozen"], 1).is_none() {
+                return Err(fout("Schrijf het zo: Haal de gekozen rij weg uit de tabel Uitgaven."));
+            }
+            Ok(Vorm::Los(Soort::Tabel { tabel: rest_tekst(&s[t + 1..]), actie: TabelActie::HaalGekozenWeg }))
+        }
+        "sorteer" => {
+            let (Some(t), Some(k)) = (zoek(&s, &["tabel"], 1), zoek(&s, &["kolom"], 2)) else {
+                return Err(fout("Schrijf het zo: Sorteer de tabel Uitgaven op de kolom Bedrag."));
+            };
+            let mut eind_t = k;
+            while eind_t > t + 1 && matches!(klein(&s, eind_t - 1).as_str(), "op" | "de") {
+                eind_t -= 1;
+            }
+            if eind_t <= t + 1 || k + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Sorteer de tabel Uitgaven op de kolom Bedrag."));
+            }
+            Ok(Vorm::Los(Soort::Tabel { tabel: rest_tekst(&s[t + 1..eind_t]), actie: TabelActie::Sorteer(rest_tekst(&s[k + 1..])) }))
+        }
+        "sla" | "lees" if zoek(&s, &["tabel"], 1).is_some() && zoek(&s, &["bestand"], 2).is_some() => {
+            let t = zoek(&s, &["tabel"], 1).unwrap();
+            let b = zoek(&s, &["bestand"], t).unwrap();
+            let mut eind_t = b;
+            while eind_t > t + 1 && matches!(klein(&s, eind_t - 1).as_str(), "op" | "in" | "het" | "uit" | "naar") {
+                eind_t -= 1;
+            }
+            if eind_t <= t + 1 || b + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Sla de tabel Uitgaven op in het bestand uitgaven.csv. Of: Lees de tabel Uitgaven uit het bestand uitgaven.csv."));
+            }
+            let p = pad(&s[b + 1..]).map_err(fout)?;
+            let actie = if w0 == "sla" { TabelActie::Opslaan(p) } else { TabelActie::Inlezen(p) };
+            Ok(Vorm::Los(Soort::Tabel { tabel: rest_tekst(&s[t + 1..eind_t]), actie }))
+        }
         "maak" if begint(&s, &["maak", "de", "lijst"]) && klein(&s, s.len() - 1) == "leeg" && s.len() >= 5 => {
             Ok(Vorm::Los(Soort::Verander { naam: n(&s[3..s.len() - 1])?, waarde: Uitdrukking::LegeLijst }))
         }
@@ -892,6 +998,10 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 "keuzelijst" => Ok(Vorm::Los(Soort::MaakOnderdeel {
                     soort: OnderdeelSoort::Keuzelijst,
                     naam: met_als_titel(&s, i + 1, &["naam", "titel"], "de keuzelijst", "Maak een keuzelijst met als naam Kleur")?,
+                })),
+                "tabel" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::Tabel,
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel"], "de tabel", "Maak een tabel met als naam Uitgaven")?,
                 })),
                 "uitklaplijst" | "combobox" | "keuzemenu" => Ok(Vorm::Los(Soort::MaakOnderdeel {
                     soort: OnderdeelSoort::Uitklaplijst,
@@ -1002,7 +1112,7 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             if r.is_empty() {
                 return Err(fout("Wat moet ik tonen? Schrijf bijvoorbeeld: Toon de tekst Hallo."));
             }
-            if onderdeel_operand(r).is_some() {
+            if onderdeel_operand(r).is_some() || matches!(ingebouwd(r), Ok(Some(_))) {
                 return Ok(Vorm::Los(Soort::Toon(u(r)?)));
             }
             let tekst_na = if begint(r, &["de", "tekst"]) {
@@ -1143,6 +1253,18 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             }
             Ok(Vorm::Los(Soort::HaalUitLijst { waarde: u(&s[1..w])?, lijst: n(&s[l + 1..])? }))
         }
+        "schrijf" if (1..s.len()).any(|i| is_documentwoord(&klein(&s, i))) => {
+            let d = (1..s.len()).find(|&i| is_documentwoord(&klein(&s, i))).unwrap();
+            let soort = if klein(&s, d).starts_with("pdf") { 1 } else { 0 };
+            let mut tot = d;
+            while tot > 1 && matches!(klein(&s, tot - 1).as_str(), "het" | "in" | "naar" | "een") {
+                tot -= 1;
+            }
+            if tot <= 1 || d + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Schrijf \"Beste Piet\" in het Word-bestand brief.docx. Of: ... in het PDF-bestand brief.pdf."));
+            }
+            Ok(Vorm::Los(Soort::Document { soort, waarde: u(&s[1..tot])?, pad: pad(&s[d + 1..]).map_err(fout)? }))
+        }
         "schrijf" => {
             if let Some(l) = zoek(&s, &["logboek"], 1) {
                 // "Schrijf in het logboek X" of "Schrijf X in het logboek"
@@ -1257,6 +1379,38 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 return Err(fout(format!("De kleur \"{}\" ken ik niet. Deze kleuren ken ik: {}.", naam, lijst.join(", "))));
             };
             Ok(Vorm::Los(Soort::Kleur { achtergrond, kleur: kleur.to_string(), rgb: *rgb }))
+        }
+        "verstuur" | "stuur" => {
+            let Some(a) = zoek(&s, &["adres"], 2) else {
+                return Err(fout("Schrijf het zo: Verstuur \"Hallo\" naar het adres https://voorbeeld.nl/ontvang."));
+            };
+            let mut tot = a;
+            while tot > 1 && matches!(klein(&s, tot - 1).as_str(), "het" | "naar" | "internetadres") {
+                tot -= 1;
+            }
+            if tot <= 1 || a + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Verstuur \"Hallo\" naar het adres https://voorbeeld.nl/ontvang."));
+            }
+            Ok(Vorm::Los(Soort::Verstuur { waarde: u(&s[1..tot])?, adres: pad(&s[a + 1..]).map_err(fout)? }))
+        }
+        "download" => {
+            let (Some(a), Some(n)) = (zoek(&s, &["adres"], 1), (2..s.len()).rev().find(|&i| klein(&s, i) == "naar")) else {
+                return Err(fout("Schrijf het zo: Download het bestand van het adres https://voorbeeld.nl/a.mp3 naar muziek.mp3."));
+            };
+            if n <= a + 1 || n + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Download het bestand van het adres https://voorbeeld.nl/a.mp3 naar muziek.mp3."));
+            }
+            Ok(Vorm::Los(Soort::Download { adres: pad(&s[a + 1..n]).map_err(fout)?, pad: pad(&s[n + 1..]).map_err(fout)? }))
+        }
+        "zoek" if zoek(&s, &["updates"], 1).is_some() || zoek(&s, &["update"], 1).is_some() => Ok(Vorm::Los(Soort::ZoekUpdates)),
+        "de" if begint(&s, &["de", "updates", "staan", "op"]) => {
+            let Some(a) = zoek(&s, &["adres"], 4) else {
+                return Err(fout("Schrijf het zo: De updates staan op het adres https://www.dropbox.com/... (het adres van je versiebestand)."));
+            };
+            if a + 1 >= s.len() {
+                return Err(fout("Welk adres? Schrijf bijvoorbeeld: De updates staan op het adres https://www.dropbox.com/..."));
+            }
+            Ok(Vorm::Los(Soort::Installatie(InstallatieZin::UpdateAdres(rest_tekst(&s[a + 1..])))))
         }
         "doe" => {
             if s.len() < 2 {

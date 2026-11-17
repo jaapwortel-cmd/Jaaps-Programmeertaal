@@ -162,7 +162,7 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
         let beschrijf_lijst = |lijst: &[(String, String)], uit: &mut Vec<String>| {
             for (j, (soort, naam)) in lijst.iter().enumerate() {
                 let extra = match soort.as_str() {
-                    "tekstvak" | "groot tekstvak" | "keuzelijst" | "uitklaplijst" => format!(", met erboven de tekst \"{}:\"", naam),
+                    "tekstvak" | "groot tekstvak" | "keuzelijst" | "uitklaplijst" | "tabel" => format!(", met erboven de tekst \"{}:\"", naam),
                     _ => String::new(),
                 };
                 let toets = if soort == "knop" { toets_van(naam).map(|t| format!(", sneltoets {}", t)).unwrap_or_default() } else { String::new() };
@@ -203,7 +203,7 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
             uit.push("Van boven naar beneden staat erin:".into());
             for (j, (soort, naam)) in v.onderdelen.iter().enumerate() {
                 let extra = match soort.as_str() {
-                    "tekstvak" | "groot tekstvak" | "keuzelijst" | "uitklaplijst" => format!(", met erboven de tekst \"{}:\"", naam),
+                    "tekstvak" | "groot tekstvak" | "keuzelijst" | "uitklaplijst" | "tabel" => format!(", met erboven de tekst \"{}:\"", naam),
                     _ => String::new(),
                 };
                 let toets = v
@@ -240,7 +240,7 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
 
 fn lidwoord(soort: &str) -> String {
     match soort {
-        "knop" | "keuzelijst" | "uitklaplijst" => format!("de {}", soort),
+        "knop" | "keuzelijst" | "uitklaplijst" | "tabel" => format!("de {}", soort),
         _ => format!("het {}", soort),
     }
 }
@@ -253,6 +253,7 @@ fn hoogte_van(soort: &str) -> i32 {
         "label" => 46,
         "selectievakje" => 48,
         "keuzelijst" => 214,
+        "tabel" => 274,
         _ => 94,
     }
 }

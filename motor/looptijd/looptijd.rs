@@ -329,11 +329,99 @@ fn ingebouwd(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
             let (_, _, _, u, m, _) = nu();
             Ok(W::T(format!("{:02}:{:02}", u, m)))
         }
-        _ => {
+        6 => {
             let (j, m, d, _, _, _) = nu();
             Ok(W::T(format!("{:02}-{:02}-{:04}", d, m, j)))
         }
+        _ => {
+            let adres = invoer[0].tekst();
+            let data = internet("GET", &adres, None).or_else(|e| fout(r, e))?;
+            let tekst = String::from_utf8_lossy(&data).to_string();
+            Ok(W::T(if wat == 7 { tekst } else { leesbare_tekst(&tekst) }))
+        }
     }
+}
+
+/// HTML zonder opmaak: alleen de leesbare tekst, met een nieuwe regel na kopjes en alinea's.
+fn leesbare_tekst(html: &str) -> String {
+    let mut uit = String::new();
+    let mut in_tag = false;
+    let mut tag = String::new();
+    let mut overslaan = false;
+    for c in html.chars() {
+        if in_tag {
+            if c == '>' {
+                in_tag = false;
+                let t = tag.to_lowercase();
+                let naam = t.trim_start_matches('/').split(|x: char| x.is_whitespace() || x == '/').next().unwrap_or("").to_string();
+                if naam == "script" || naam == "style" {
+                    overslaan = !t.starts_with('/');
+                }
+                if matches!(naam.as_str(), "p" | "br" | "div" | "li" | "tr" | "h1" | "h2" | "h3" | "h4" | "title") {
+                    uit.push('\n');
+                }
+                tag.clear();
+            } else {
+                tag.push(c);
+            }
+        } else if c == '<' {
+            in_tag = true;
+        } else if !overslaan {
+            uit.push(c);
+        }
+    }
+    let uit = uit.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'");
+    uit.lines().map(|l| l.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
+}
+
+/// Een Dropbox-link wordt een directe download (dl=1).
+fn directe_link(adres: &str) -> String {
+    let a = adres.trim().to_string();
+    if a.contains("dropbox.com") {
+        if a.contains("dl=0") {
+            return a.replace("dl=0", "dl=1");
+        }
+        if !a.contains("dl=1") && !a.contains("raw=1") {
+            return format!("{}{}dl=1", a, if a.contains('?') { "&" } else { "?" });
+        }
+    }
+    a
+}
+
+/// Ophalen (GET) of versturen (POST) via internet. Met Windows zelf (WinHTTP).
+fn internet(methode: &str, adres: &str, inhoud: Option<&[u8]>) -> Result<Vec<u8>, String> {
+    let adres = directe_link(adres);
+    #[cfg(windows)]
+    {
+        return win::internet(methode, &adres, inhoud);
+    }
+    Err("Internet werkt alleen op Windows.".to_string())
+}
+
+fn verstuur(a: W, w: W, r: usize) -> R<()> {
+    internet("POST", &a.tekst(), Some(w.tekst().as_bytes())).map(|_| ()).or_else(|e| fout(r, e))
+}
+
+fn download(a: W, p: W, r: usize) -> R<()> {
+    let data = internet("GET", &a.tekst(), None).or_else(|e| fout(r, e))?;
+    let pad = volledig_pad(&p);
+    if let Some(m) = pad.parent() {
+        let _ = std::fs::create_dir_all(m);
+    }
+    std::fs::write(&pad, data).or_else(|e| fout(r, format!("Ik kan {} niet bewaren: {}", pad.display(), e)))
+}
+
+/// Versies vergelijken: 1.10 is nieuwer dan 1.9.
+fn is_nieuwer(nieuw: &str, oud: &str) -> bool {
+    let delen = |v: &str| -> Vec<u64> { v.split(|c: char| !c.is_ascii_digit()).filter(|x| !x.is_empty()).map(|x| x.parse().unwrap_or(0)).collect() };
+    let (a, b) = (delen(nieuw), delen(oud));
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x > y;
+        }
+    }
+    false
 }
 
 /// Een geluid zoeken: eerst naast het programma, dan in Documenten.
@@ -463,6 +551,167 @@ fn bestand_actie(soort: u8, van: W, naar: Option<W>, r: usize) -> R<()> {
     uitkomst.or_else(|e| {
         fout(r, format!("{} van {} naar {} is niet gelukt: {}", if soort == 0 { "Kopiëren" } else { "Verplaatsen" }, v.display(), n.display(), e))
     })
+}
+
+// ---------------------------------------------------------------------
+// Word (DOCX) en PDF maken, zonder extra programma's.
+// ---------------------------------------------------------------------
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &b in data {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+        }
+    }
+    !crc
+}
+
+/// Een zipbestand zonder compressie (zo bestaat een .docx uit losse onderdelen).
+fn maak_zip(bestanden: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    let mut uit = Vec::new();
+    let mut lijst = Vec::new();
+    for (naam, data) in bestanden {
+        let plek = uit.len() as u32;
+        let crc = crc32(data);
+        let n = naam.as_bytes();
+        uit.extend_from_slice(&[0x50, 0x4B, 3, 4, 20, 0, 0, 0, 0, 0, 0, 0, 0x21, 0]);
+        uit.extend_from_slice(&crc.to_le_bytes());
+        uit.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        uit.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        uit.extend_from_slice(&(n.len() as u16).to_le_bytes());
+        uit.extend_from_slice(&[0, 0]);
+        uit.extend_from_slice(n);
+        uit.extend_from_slice(data);
+        lijst.push((n, crc, data.len() as u32, plek));
+    }
+    let begin = uit.len() as u32;
+    for (n, crc, lengte, plek) in &lijst {
+        uit.extend_from_slice(&[0x50, 0x4B, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0x21, 0]);
+        uit.extend_from_slice(&crc.to_le_bytes());
+        uit.extend_from_slice(&lengte.to_le_bytes());
+        uit.extend_from_slice(&lengte.to_le_bytes());
+        uit.extend_from_slice(&(n.len() as u16).to_le_bytes());
+        uit.extend_from_slice(&[0; 12]);
+        uit.extend_from_slice(&plek.to_le_bytes());
+        uit.extend_from_slice(n);
+    }
+    let grootte = uit.len() as u32 - begin;
+    uit.extend_from_slice(&[0x50, 0x4B, 5, 6, 0, 0, 0, 0]);
+    uit.extend_from_slice(&(lijst.len() as u16).to_le_bytes());
+    uit.extend_from_slice(&(lijst.len() as u16).to_le_bytes());
+    uit.extend_from_slice(&grootte.to_le_bytes());
+    uit.extend_from_slice(&begin.to_le_bytes());
+    uit.extend_from_slice(&[0, 0]);
+    uit
+}
+
+fn xml(t: &str) -> String {
+    t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+fn maak_docx(tekst: &str) -> Vec<u8> {
+    let mut alineas = String::new();
+    for regel in tekst.lines() {
+        alineas.push_str(&format!("<w:p><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>", xml(regel)));
+    }
+    if alineas.is_empty() {
+        alineas.push_str("<w:p/>");
+    }
+    let document = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{}<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/></w:sectPr></w:body></w:document>",
+        alineas
+    );
+    let types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>";
+    let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>";
+    maak_zip(&[
+        ("[Content_Types].xml", types.as_bytes().to_vec()),
+        ("_rels/.rels", rels.as_bytes().to_vec()),
+        ("word/document.xml", document.into_bytes()),
+    ])
+}
+
+/// Tekst naar Windows-1252 (de tekens die een standaard-PDF-letter kent), met \ ( ) veilig gemaakt.
+fn pdf_tekst(t: &str) -> String {
+    let mut uit = String::new();
+    for c in t.chars() {
+        let b: u32 = match c {
+            '€' => 0x80, '‚' => 0x82, '„' => 0x84, '…' => 0x85, '‘' => 0x91, '’' => 0x92, '“' => 0x93, '”' => 0x94,
+            '–' => 0x96, '—' => 0x97, c if (c as u32) < 256 => c as u32, _ => '?' as u32,
+        };
+        match b {
+            0x28 | 0x29 | 0x5C => {
+                uit.push('\\');
+                uit.push(char::from_u32(b).unwrap());
+            }
+            0x20..=0x7E => uit.push(char::from_u32(b).unwrap()),
+            _ => uit.push_str(&format!("\\{:03o}", b)),
+        }
+    }
+    uit
+}
+
+fn maak_pdf(tekst: &str) -> Vec<u8> {
+    // Regels afbreken op ongeveer 85 tekens, 46 regels per bladzijde (A4).
+    let mut regels: Vec<String> = Vec::new();
+    for alinea in tekst.lines() {
+        let mut regel = String::new();
+        for woord in alinea.split(' ') {
+            if regel.chars().count() + woord.chars().count() + 1 > 85 && !regel.is_empty() {
+                regels.push(std::mem::take(&mut regel));
+            }
+            if !regel.is_empty() {
+                regel.push(' ');
+            }
+            regel.push_str(woord);
+        }
+        regels.push(regel);
+    }
+    let paginas: Vec<&[String]> = if regels.is_empty() { vec![&[][..]] } else { regels.chunks(46).collect() };
+    let mut objecten: Vec<String> = Vec::new();
+    let n = paginas.len();
+    // 1 catalogus, 2 bladzijden, 3 letter, dan per bladzijde: bladzijde + inhoud.
+    let kinderen: Vec<String> = (0..n).map(|i| format!("{} 0 R", 4 + 2 * i)).collect();
+    objecten.push("<< /Type /Catalog /Pages 2 0 R /Lang (nl-NL) >>".into());
+    objecten.push(format!("<< /Type /Pages /Kids [{}] /Count {} >>", kinderen.join(" "), n));
+    objecten.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into());
+    for (i, pagina) in paginas.iter().enumerate() {
+        let mut inhoud = String::from("BT /F1 12 Tf 16 TL 56 786 Td\n");
+        for r in pagina.iter() {
+            inhoud.push_str(&format!("({}) Tj T*\n", pdf_tekst(r)));
+        }
+        inhoud.push_str("ET");
+        objecten.push(format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents {} 0 R >>",
+            5 + 2 * i
+        ));
+        objecten.push(format!("<< /Length {} >>\nstream\n{}\nendstream", inhoud.len(), inhoud));
+    }
+    let mut uit = String::from("%PDF-1.4\n");
+    let mut plekken = Vec::new();
+    for (i, o) in objecten.iter().enumerate() {
+        plekken.push(uit.len());
+        uit.push_str(&format!("{} 0 obj\n{}\nendobj\n", i + 1, o));
+    }
+    let xref = uit.len();
+    uit.push_str(&format!("xref\n0 {}\n0000000000 65535 f \n", objecten.len() + 1));
+    for p in plekken {
+        uit.push_str(&format!("{:010} 00000 n \n", p));
+    }
+    uit.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", objecten.len() + 1, xref));
+    uit.into_bytes()
+}
+
+/// Tekst in een Word-bestand (0) of PDF-bestand (1) schrijven.
+fn schrijf_document(soort: u8, p: W, w: W, r: usize) -> R<()> {
+    let pad = volledig_pad(&p);
+    let tekst = w.tekst().replace("\r\n", "\n");
+    let data = if soort == 0 { maak_docx(&tekst) } else { maak_pdf(&tekst) };
+    if let Some(m) = pad.parent() {
+        let _ = std::fs::create_dir_all(m);
+    }
+    std::fs::write(&pad, data).or_else(|e| fout(r, format!("Ik kan {} niet schrijven. Staat het misschien open in Word of een PDF-lezer? ({})", pad.display(), e)))
 }
 
 fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
@@ -799,6 +1048,42 @@ impl Staat {
         #[cfg(windows)]
         self.scherm.win.menuregel(naam, self.scherm.knoppen.len() - 1);
     }
+    /// Updates zoeken: het versiebestand ophalen, vergelijken, en na een vraag de nieuwe versie installeren.
+    fn zoek_updates(&mut self, r: usize) -> R<()> {
+        let data = internet("GET", UPDATE_ADRES, None).or_else(|e| fout(r, format!("Ik kan niet kijken of er een update is. {}", e)))?;
+        let tekst = String::from_utf8_lossy(&data).to_string();
+        let mut regels = tekst.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
+        let versie = regels.next().unwrap_or("").trim_start_matches(['v', 'V']).trim_start_matches("ersie").trim().to_string();
+        let link = regels.next().unwrap_or("").to_string();
+        if versie.is_empty() || !link.starts_with("http") {
+            return fout(r, "Het versiebestand op het update-adres klopt niet. Op de eerste regel moet staan: versie 1.1, en op de tweede regel de link naar het installatiebestand.".to_string());
+        }
+        if !is_nieuwer(&versie, VERSIE) {
+            self.zeg(W::T(format!("Je hebt de nieuwste versie ({}).", VERSIE)));
+            return Ok(());
+        }
+        if self.scherm.tekststand {
+            println!("[update] versie {} is er (nu {}): {}", versie, VERSIE, link);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        {
+            let vraag = format!("Er is een nieuwe versie van {}: versie {}. Je hebt nu versie {}.
+
+Wil je de nieuwe versie downloaden en installeren?", PROGRAMMANAAM, versie, VERSIE);
+            if win::vraag_ja(self.scherm.win.actief(), &vraag) {
+                let data = internet("GET", &link, None).or_else(|e| fout(r, format!("Het downloaden van de update is niet gelukt. {}", e)))?;
+                let pad = std::env::temp_dir().join(format!("{} update.exe", PROGRAMMANAAM));
+                std::fs::write(&pad, data).or_else(|e| fout(r, format!("Ik kan de update niet bewaren: {}", e)))?;
+                if std::process::Command::new(&pad).spawn().is_ok() {
+                    // Dit programma stopt, zodat de update het kan vervangen.
+                    std::process::exit(0);
+                }
+                return fout(r, "Ik kan de update niet starten.".to_string());
+            }
+        }
+        Ok(())
+    }
     fn stop_geluid(&mut self) {
         if self.scherm.tekststand {
             println!("[geluid stopt]");
@@ -827,6 +1112,160 @@ impl Staat {
         #[cfg(windows)]
         self.scherm.win.kleur(achtergrond, rgb);
     }
+    fn tabel(&mut self, naam: &str, r: usize) -> R<usize> {
+        let i = self.zoek(naam, r)?;
+        if self.scherm.onderdelen[i].soort != 6 {
+            return fout(r, format!("{} is geen tabel.", naam));
+        }
+        #[cfg(windows)]
+        {
+            if !self.scherm.tekststand {
+                let h = self.scherm.onderdelen[i].h;
+                self.scherm.onderdelen[i].gekozen = win::tabel_gekozen(h);
+            }
+        }
+        Ok(i)
+    }
+    fn tabel_toon(&mut self, i: usize) {
+        if self.scherm.tekststand {
+            return;
+        }
+        #[cfg(windows)]
+        {
+            let o = &self.scherm.onderdelen[i];
+            win::tabel_toon(o.h, &o.keuzes, &o.rijen, o.gekozen);
+        }
+    }
+    fn tabel_kolom(&mut self, naam: &str, kolom: &str, r: usize) -> R<()> {
+        let i = self.tabel(naam, r)?;
+        let o = &mut self.scherm.onderdelen[i];
+        o.keuzes.push(kolom.to_string());
+        for rij in &mut o.rijen {
+            rij.push(String::new());
+        }
+        if self.scherm.tekststand {
+            println!("[tabel {}] kolom {}", naam, kolom);
+        }
+        self.tabel_toon(i);
+        Ok(())
+    }
+    fn tabel_rij(&mut self, naam: &str, rij: Vec<W>, r: usize) -> R<()> {
+        let i = self.tabel(naam, r)?;
+        let o = &mut self.scherm.onderdelen[i];
+        if o.keuzes.is_empty() {
+            return fout(r, format!("De tabel {} heeft nog geen kolommen. Voeg eerst kolommen toe, bijvoorbeeld: Voeg de kolom Datum toe aan de tabel {}.", naam, naam));
+        }
+        if rij.len() != o.keuzes.len() {
+            return fout(r, format!("De tabel {} heeft {} kolommen ({}), maar deze rij heeft {} waarden.", naam, o.keuzes.len(), o.keuzes.join(", "), rij.len()));
+        }
+        let tekst: Vec<String> = rij.iter().map(|w| w.tekst()).collect();
+        if self.scherm.tekststand {
+            println!("[tabel {}] rij {}: {}", naam, o.rijen.len() + 1, tekst.join(" | "));
+        }
+        o.rijen.push(tekst);
+        o.gekozen = Some(o.rijen.len() - 1);
+        self.tabel_toon(i);
+        Ok(())
+    }
+    fn tabel_haal_weg(&mut self, naam: &str, r: usize) -> R<()> {
+        let i = self.tabel(naam, r)?;
+        let o = &mut self.scherm.onderdelen[i];
+        let Some(k) = o.gekozen.filter(|k| *k < o.rijen.len()) else {
+            return fout(r, format!("Er is geen rij gekozen in de tabel {}.", naam));
+        };
+        o.rijen.remove(k);
+        o.gekozen = if o.rijen.is_empty() { None } else { Some(k.min(o.rijen.len() - 1)) };
+        if self.scherm.tekststand {
+            println!("[tabel {}] rij {} weg", naam, k + 1);
+        }
+        self.tabel_toon(i);
+        Ok(())
+    }
+    fn tabel_leeg(&mut self, naam: &str, r: usize) -> R<()> {
+        let i = self.tabel(naam, r)?;
+        self.scherm.onderdelen[i].rijen.clear();
+        self.scherm.onderdelen[i].gekozen = None;
+        if self.scherm.tekststand {
+            println!("[tabel {}] leeg", naam);
+        }
+        self.tabel_toon(i);
+        Ok(())
+    }
+    fn tabel_sorteer(&mut self, naam: &str, kolom: &str, r: usize) -> R<()> {
+        let i = self.tabel(naam, r)?;
+        let o = &mut self.scherm.onderdelen[i];
+        let Some(k) = o.keuzes.iter().position(|x| x.to_lowercase() == kolom.to_lowercase()) else {
+            return fout(r, format!("De tabel {} heeft geen kolom {}. De kolommen zijn: {}.", naam, kolom, o.keuzes.join(", ")));
+        };
+        o.rijen.sort_by(|a, b| match (cel_waarde(&a[k]), cel_waarde(&b[k])) {
+            (W::G(x), W::G(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+            _ => a[k].to_lowercase().cmp(&b[k].to_lowercase()),
+        });
+        o.gekozen = if o.rijen.is_empty() { None } else { Some(0) };
+        if self.scherm.tekststand {
+            println!("[tabel {}] gesorteerd op {}", naam, kolom);
+        }
+        self.tabel_toon(i);
+        Ok(())
+    }
+    fn tabel_csv(&mut self, naam: &str, p: W, opslaan: bool, r: usize) -> R<()> {
+        let i = self.tabel(naam, r)?;
+        let pad = volledig_pad(&p);
+        if opslaan {
+            let o = &self.scherm.onderdelen[i];
+            let mut t = String::from("\u{FEFF}");
+            for rij in std::iter::once(&o.keuzes).chain(o.rijen.iter()) {
+                t.push_str(&rij.iter().map(|v| csv_veld(v)).collect::<Vec<_>>().join(";"));
+                t.push_str("\r\n");
+            }
+            if let Some(m) = pad.parent() {
+                let _ = std::fs::create_dir_all(m);
+            }
+            return std::fs::write(&pad, t).or_else(|e| fout(r, format!("Ik kan {} niet schrijven: {}", pad.display(), e)));
+        }
+        let tekst = lees_tekstbestand(&pad).or_else(|e| fout(r, format!("Ik kan {} niet lezen: {}", pad.display(), e)))?;
+        let mut rijen = lees_csv(tekst.trim_start_matches('\u{FEFF}'));
+        if rijen.is_empty() {
+            return fout(r, format!("{} is leeg.", pad.display()));
+        }
+        let kolommen = rijen.remove(0);
+        let n = kolommen.len();
+        let o = &mut self.scherm.onderdelen[i];
+        o.keuzes = kolommen;
+        o.rijen = rijen.into_iter().map(|mut x| {
+            x.resize(n, String::new());
+            x
+        }).collect();
+        o.gekozen = if o.rijen.is_empty() { None } else { Some(0) };
+        if self.scherm.tekststand {
+            println!("[tabel {}] ingelezen: {} kolommen, {} rijen", naam, n, o.rijen.len());
+        }
+        self.tabel_toon(i);
+        Ok(())
+    }
+    fn tabel_waarde(&mut self, wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
+        let naam = invoer[0].tekst();
+        let i = self.tabel(&naam, r)?;
+        let o = &self.scherm.onderdelen[i];
+        let rij = |k: usize| W::L(o.rijen[k].iter().map(|c| cel_waarde(c)).collect());
+        match wat {
+            9 => match o.gekozen.filter(|k| *k < o.rijen.len()) {
+                Some(k) => Ok(rij(k)),
+                None => fout(r, format!("Er is geen rij gekozen in de tabel {}.", naam)),
+            },
+            10 => Ok(W::G(o.rijen.len() as f64)),
+            _ => {
+                let n = match invoer.get(1) {
+                    Some(W::G(g)) if g.fract() == 0.0 && *g >= 1.0 => *g as usize,
+                    _ => return fout(r, "Het rijnummer moet een heel getal zijn, 1 of hoger.".to_string()),
+                };
+                if n > o.rijen.len() {
+                    return fout(r, format!("De tabel {} heeft {} rijen. Rij {} bestaat dus niet.", naam, o.rijen.len(), n));
+                }
+                Ok(rij(n - 1))
+            }
+        }
+    }
     fn focus(&mut self, naam: &str, r: usize) -> R<()> {
         let i = self.zoek(naam, r)?;
         self.scherm.focus(i);
@@ -842,10 +1281,60 @@ struct Ond {
     aan: bool,
     keuzes: Vec<String>,
     gekozen: Option<usize>,
+    /// Bij een tabel: de rijen (de kolommen staan in `keuzes`).
+    rijen: Vec<Vec<String>>,
     h: usize,
 }
 
-const SOORT_WOORD: [&str; 6] = ["tekstvak", "groot tekstvak", "label", "selectievakje", "keuzelijst", "uitklaplijst"];
+const SOORT_WOORD: [&str; 7] = ["tekstvak", "groot tekstvak", "label", "selectievakje", "keuzelijst", "uitklaplijst", "tabel"];
+
+/// Een getal in een tabelcel (3,5 of 3.5)? Dan rekent het programma ermee als getal.
+fn cel_waarde(t: &str) -> W {
+    let schoon = t.trim().replace(' ', "");
+    let punt = if schoon.contains(',') { schoon.replace('.', "").replace(',', ".") } else { schoon.clone() };
+    match punt.parse::<f64>() {
+        Ok(g) if !schoon.is_empty() && g.is_finite() => W::G(g),
+        _ => W::T(t.to_string()),
+    }
+}
+
+fn csv_veld(t: &str) -> String {
+    if t.contains([';', '"', '\n', ',']) {
+        format!("\"{}\"", t.replace('"', "\"\""))
+    } else {
+        t.to_string()
+    }
+}
+
+fn lees_csv(tekst: &str) -> Vec<Vec<String>> {
+    let scheiding = if tekst.lines().next().map_or(false, |l| l.contains(';')) { ';' } else { ',' };
+    let mut rijen = Vec::new();
+    let mut rij = Vec::new();
+    let mut veld = String::new();
+    let mut in_aanhaling = false;
+    let mut tekens = tekst.chars().peekable();
+    while let Some(c) = tekens.next() {
+        match c {
+            '"' if in_aanhaling && tekens.peek() == Some(&'"') => {
+                veld.push('"');
+                tekens.next();
+            }
+            '"' => in_aanhaling = !in_aanhaling,
+            c if c == scheiding && !in_aanhaling => rij.push(std::mem::take(&mut veld)),
+            '\r' if !in_aanhaling => {}
+            '\n' if !in_aanhaling => {
+                rij.push(std::mem::take(&mut veld));
+                rijen.push(std::mem::take(&mut rij));
+            }
+            c => veld.push(c),
+        }
+    }
+    if !veld.is_empty() || !rij.is_empty() {
+        rij.push(veld);
+        rijen.push(rij);
+    }
+    rijen
+}
 
 type Hoofd = fn(&mut Staat) -> R<()>;
 type BijKnop = fn(&mut Staat, usize) -> R<()>;
@@ -880,6 +1369,11 @@ fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], 
                 "--vink" => {
                     println!("[vink aan] {}", naam);
                     s.scherm.onderdelen[i].aan = true;
+                }
+                _ if s.scherm.onderdelen[i].soort == 6 => {
+                    let o = &mut s.scherm.onderdelen[i];
+                    o.gekozen = inhoud.trim().parse::<usize>().ok().filter(|n| *n >= 1 && *n <= o.rijen.len()).map(|n| n - 1);
+                    println!("[kies in {}] rij {}", naam, inhoud);
                 }
                 _ => {
                     let o = &mut s.scherm.onderdelen[i];
@@ -963,7 +1457,7 @@ impl Scherm {
         }
     }
     fn onderdeel(&mut self, soort: u8, naam: &str) {
-        let mut o = Ond { soort, naam: naam.to_string(), tekst: String::new(), aan: false, keuzes: Vec::new(), gekozen: None, h: 0 };
+        let mut o = Ond { soort, naam: naam.to_string(), tekst: String::new(), aan: false, keuzes: Vec::new(), gekozen: None, rijen: Vec::new(), h: 0 };
         if soort == 2 {
             o.tekst = naam.to_string();
         }
@@ -1686,6 +2180,89 @@ mod win {
         k.0 as u32 | (k.1 as u32) << 8 | (k.2 as u32) << 16
     }
 
+    pub(super) fn vraag_ja(eigenaar: HWND, tekst: &str) -> bool {
+        unsafe { MessageBoxW(eigenaar, w(tekst).as_ptr(), w("Update").as_ptr(), 0x4 | 0x20 | MB_SETFOREGROUND) == 6 }
+    }
+
+    #[link(name = "winhttp")]
+    extern "system" {
+        fn WinHttpOpen(agent: *const u16, toegang: u32, proxy: *const u16, behalve: *const u16, vlaggen: u32) -> HANDLE;
+        fn WinHttpConnect(sessie: HANDLE, host: *const u16, poort: u16, r: u32) -> HANDLE;
+        fn WinHttpOpenRequest(c: HANDLE, werk: *const u16, pad: *const u16, versie: *const u16, verwijzer: *const u16, soorten: *const *const u16, vlaggen: u32) -> HANDLE;
+        fn WinHttpSendRequest(v: HANDLE, kop: *const u16, koplengte: u32, inhoud: *const c_void, lengte: u32, totaal: u32, ctx: usize) -> i32;
+        fn WinHttpReceiveResponse(v: HANDLE, r: *mut c_void) -> i32;
+        fn WinHttpQueryHeaders(v: HANDLE, info: u32, naam: *const u16, buf: *mut c_void, lengte: *mut u32, index: *mut u32) -> i32;
+        fn WinHttpReadData(v: HANDLE, buf: *mut c_void, lengte: u32, gelezen: *mut u32) -> i32;
+        fn WinHttpCloseHandle(h: HANDLE) -> i32;
+    }
+
+    pub(super) fn internet(methode: &str, adres: &str, inhoud: Option<&[u8]>) -> Result<Vec<u8>, String> {
+        let (veilig, rest) = if let Some(r) = adres.strip_prefix("https://") {
+            (true, r)
+        } else if let Some(r) = adres.strip_prefix("http://") {
+            (false, r)
+        } else {
+            return Err(format!("Een internetadres begint met https:// of http://, en niet zoals {}.", adres));
+        };
+        let (hostdeel, pad) = match rest.find('/') {
+            Some(p) => (&rest[..p], &rest[p..]),
+            None => (rest, "/"),
+        };
+        let (host, poort) = match hostdeel.rsplit_once(':') {
+            Some((h, p)) if p.parse::<u16>().is_ok() => (h, p.parse::<u16>().unwrap()),
+            _ => (hostdeel, if veilig { 443 } else { 80 }),
+        };
+        unsafe {
+            let sessie = WinHttpOpen(w("JaapsProgrammeertaal").as_ptr(), 4, null(), null(), 0);
+            let sessie = if sessie.is_null() { WinHttpOpen(w("JaapsProgrammeertaal").as_ptr(), 0, null(), null(), 0) } else { sessie };
+            if sessie.is_null() {
+                return Err("Internet kan ik niet openen op deze computer.".into());
+            }
+            let sluit = |h: HANDLE| {
+                if !h.is_null() {
+                    WinHttpCloseHandle(h);
+                }
+            };
+            let verbinding = WinHttpConnect(sessie, w(host).as_ptr(), poort, 0);
+            let verzoek = if verbinding.is_null() {
+                null_mut()
+            } else {
+                WinHttpOpenRequest(verbinding, w(methode).as_ptr(), w(pad).as_ptr(), null(), null(), null(), if veilig { 0x0080_0000 } else { 0 })
+            };
+            let mut uitkomst = Err(format!("Ik kan {} niet bereiken. Is er internet?", host));
+            if !verzoek.is_null() {
+                let kop = w("Content-Type: text/plain; charset=utf-8");
+                let (kp, kl) = if inhoud.is_some() { (kop.as_ptr(), u32::MAX) } else { (null(), 0) };
+                let data = inhoud.unwrap_or(&[]);
+                if WinHttpSendRequest(verzoek, kp, kl, data.as_ptr() as *const c_void, data.len() as u32, data.len() as u32, 0) != 0
+                    && WinHttpReceiveResponse(verzoek, null_mut()) != 0
+                {
+                    let mut status: u32 = 0;
+                    let mut lengte: u32 = 4;
+                    WinHttpQueryHeaders(verzoek, 19 | 0x2000_0000, null(), &mut status as *mut u32 as *mut c_void, &mut lengte, null_mut());
+                    let mut alles = Vec::new();
+                    let mut buf = vec![0u8; 65536];
+                    loop {
+                        let mut gelezen: u32 = 0;
+                        if WinHttpReadData(verzoek, buf.as_mut_ptr() as *mut c_void, buf.len() as u32, &mut gelezen) == 0 || gelezen == 0 {
+                            break;
+                        }
+                        alles.extend_from_slice(&buf[..gelezen as usize]);
+                    }
+                    uitkomst = if (200..300).contains(&status) {
+                        Ok(alles)
+                    } else {
+                        Err(format!("De website {} gaf een fout terug (code {}).", host, status))
+                    };
+                }
+            }
+            sluit(verzoek);
+            sluit(verbinding);
+            sluit(sessie);
+            uitkomst
+        }
+    }
+
     pub(super) fn melding(eigenaar: HWND, tekst: &str, titel: &str) {
         unsafe {
             MessageBoxW(eigenaar, w(tekst).as_ptr(), w(titel).as_ptr(), MB_ICONINFORMATION | MB_SETFOREGROUND);
@@ -1861,6 +2438,18 @@ mod win {
                     label(self);
                     self.plaats("LISTBOX", "", WS_TABSTOP | WS_BORDER | WS_VSCROLL | LBS_NOTIFY, 0, 160, 0, true)
                 }
+                6 => {
+                    label(self);
+                    unsafe {
+                        InitCommonControlsEx(&INITCOMMONCONTROLSEX { grootte: 8, soorten: 0x1 });
+                    }
+                    // Een tabel: LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, met rasterlijnen en hele rijen kiezen.
+                    let h = self.plaats("SysListView32", naam, WS_TABSTOP | WS_BORDER | 0x0001 | 0x0004 | 0x0008, 0, 220, 0, true);
+                    unsafe {
+                        SendMessageW(h, 0x1036, 0, 0x20 | 0x01);
+                    }
+                    h
+                }
                 _ => {
                     label(self);
                     let h = self.plaats("COMBOBOX", "", WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, 0, 240, 0, true);
@@ -1899,6 +2488,96 @@ mod win {
                     W::T(String::from_utf16_lossy(&buf[..n]))
                 }
                 _ => W::T(tekst_van(h).replace("\r\n", "\n")),
+            }
+        }
+    }
+
+    #[repr(C)]
+    struct LVCOLUMNW {
+        mask: u32,
+        fmt: i32,
+        cx: i32,
+        tekst: *const u16,
+        max: i32,
+        sub: i32,
+        beeld: i32,
+        volgorde: i32,
+    }
+
+    #[repr(C)]
+    struct LVITEMW {
+        mask: u32,
+        item: i32,
+        sub: i32,
+        state: u32,
+        state_mask: u32,
+        tekst: *const u16,
+        max: i32,
+        beeld: i32,
+        param: isize,
+        inspring: i32,
+        groep: i32,
+        kolommen: u32,
+        pu: *mut u32,
+        pi: *mut i32,
+        groep2: i32,
+    }
+
+    /// De gekozen rij van een tabel (of geen).
+    pub(super) fn tabel_gekozen(h: usize) -> Option<usize> {
+        let i = unsafe { SendMessageW(h as HWND, 0x100C, usize::MAX, 2) };
+        (i >= 0).then_some(i as usize)
+    }
+
+    /// De hele tabel opnieuw tonen: kolommen, rijen, en de gekozen rij.
+    pub(super) fn tabel_toon(h: usize, kolommen: &[String], rijen: &[Vec<String>], gekozen: Option<usize>) {
+        let h = h as HWND;
+        unsafe {
+            SendMessageW(h, 0x1009, 0, 0);
+            while SendMessageW(h, 0x101C, 0, 0) != 0 {}
+            let breedte = if kolommen.is_empty() { 100 } else { (380 / kolommen.len() as i32).max(80) };
+            for (k, naam) in kolommen.iter().enumerate() {
+                let t = w(naam);
+                let c = LVCOLUMNW { mask: 0x1 | 0x2 | 0x4 | 0x8, fmt: 0, cx: breedte, tekst: t.as_ptr(), max: 0, sub: k as i32, beeld: 0, volgorde: 0 };
+                SendMessageW(h, 0x1061, k, &c as *const LVCOLUMNW as isize);
+            }
+            for (r, rij) in rijen.iter().enumerate() {
+                for (k, cel) in rij.iter().enumerate() {
+                    let t = w(cel);
+                    let mut it = LVITEMW {
+                        mask: 1,
+                        item: r as i32,
+                        sub: k as i32,
+                        state: 0,
+                        state_mask: 0,
+                        tekst: t.as_ptr(),
+                        max: 0,
+                        beeld: 0,
+                        param: 0,
+                        inspring: 0,
+                        groep: 0,
+                        kolommen: 0,
+                        pu: null_mut(),
+                        pi: null_mut(),
+                        groep2: 0,
+                    };
+                    if k == 0 {
+                        SendMessageW(h, 0x104D, 0, &mut it as *mut LVITEMW as isize);
+                    } else {
+                        SendMessageW(h, 0x1074, r, &mut it as *mut LVITEMW as isize);
+                    }
+                }
+            }
+            // Elke kolom zo breed als zijn naam of inhoud (LVSCW_AUTOSIZE_USEHEADER).
+            for k in 0..kolommen.len() {
+                SendMessageW(h, 0x101E, k, -2);
+            }
+            if let Some(g) = gekozen {
+                let mut it: LVITEMW = std::mem::zeroed();
+                it.state = 0x1 | 0x2;
+                it.state_mask = 0x1 | 0x2;
+                SendMessageW(h, 0x102B, g, &mut it as *mut LVITEMW as isize);
+                SendMessageW(h, 0x1013, g, 0);
             }
         }
     }

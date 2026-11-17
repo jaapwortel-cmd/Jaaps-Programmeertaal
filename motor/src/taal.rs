@@ -139,6 +139,16 @@ pub enum Ingebouwd {
     Tijd,
     /// De datum van vandaag, zoals 17-11-2026.
     Datum,
+    /// Wat er op een webpagina staat (zoals het is, met HTML).
+    Webpagina,
+    /// Alleen de leesbare tekst van een webpagina (zonder HTML).
+    WebTekst,
+    /// De gekozen rij van een tabel (een lijst).
+    GekozenRij,
+    /// Hoeveel rijen er in een tabel staan.
+    AantalRijen,
+    /// Een rij van een tabel, met een nummer (een lijst).
+    RijNummer,
 }
 
 impl Ingebouwd {
@@ -268,6 +278,17 @@ pub enum Soort {
     SchrijfBestand { waarde: Uitdrukking, pad: Uitdrukking, toevoegen: bool },
     /// Een map maken.
     MaakMap(Uitdrukking),
+    /// Tekst naar een internetadres versturen.
+    Verstuur { waarde: Uitdrukking, adres: Uitdrukking },
+    /// Een bestand van internet downloaden.
+    Download { adres: Uitdrukking, pad: Uitdrukking },
+    /// Kijken of er een nieuwe versie is, en die (na een vraag) installeren.
+    ZoekUpdates,
+    /// Iets met een tabel: kolom toevoegen, rij toevoegen, gekozen rij weghalen, leegmaken, sorteren,
+    /// opslaan als CSV of inlezen uit CSV.
+    Tabel { tabel: String, actie: TabelActie },
+    /// Tekst in een Word-bestand (0) of PDF-bestand (1) schrijven.
+    Document { soort: u8, waarde: Uitdrukking, pad: Uitdrukking },
     /// Een regel in het logboek schrijven.
     Logboek(Uitdrukking),
     /// Een piep: hoogte in hertz, duur in milliseconden.
@@ -371,6 +392,17 @@ pub fn contrast(a: (u8, u8, u8), b: (u8, u8, u8)) -> f64 {
     (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum TabelActie {
+    Kolom(String),
+    Rij(Vec<Uitdrukking>),
+    HaalGekozenWeg,
+    Leeg,
+    Sorteer(String),
+    Opslaan(Uitdrukking),
+    Inlezen(Uitdrukking),
+}
+
 /// De soorten onderdelen die je in een venster kunt zetten.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OnderdeelSoort {
@@ -380,6 +412,7 @@ pub enum OnderdeelSoort {
     Selectievakje,
     Keuzelijst,
     Uitklaplijst,
+    Tabel,
 }
 
 impl OnderdeelSoort {
@@ -391,6 +424,7 @@ impl OnderdeelSoort {
             OnderdeelSoort::Selectievakje => "selectievakje",
             OnderdeelSoort::Keuzelijst => "keuzelijst",
             OnderdeelSoort::Uitklaplijst => "uitklaplijst",
+            OnderdeelSoort::Tabel => "tabel",
         }
     }
     pub fn nummer(self) -> u8 {
@@ -429,6 +463,8 @@ pub enum InstallatieZin {
     PrivacyBestand(String),
     /// Onderteken het programma met een eigen certificaat op deze naam.
     Onderteken(String),
+    /// Waar het versiebestand voor updates staat (een internetadres).
+    UpdateAdres(String),
 }
 
 impl Soort {
@@ -436,7 +472,11 @@ impl Soort {
     pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
-            Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
+            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
+            Soort::Verstuur { waarde, adres } => vec![waarde, adres],
+            Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter_mut().collect(),
+            Soort::Tabel { actie: TabelActie::Opslaan(p) | TabelActie::Inlezen(p), .. } => vec![p],
+            Soort::Download { adres, pad } => vec![adres, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
             Soort::Zip { map, zip, .. } => vec![map, zip],
@@ -472,7 +512,11 @@ impl Soort {
     pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
-            Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
+            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
+            Soort::Verstuur { waarde, adres } => vec![waarde, adres],
+            Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter().collect(),
+            Soort::Tabel { actie: TabelActie::Opslaan(p) | TabelActie::Inlezen(p), .. } => vec![p],
+            Soort::Download { adres, pad } => vec![adres, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
             Soort::Zip { map, zip, .. } => vec![map, zip],
