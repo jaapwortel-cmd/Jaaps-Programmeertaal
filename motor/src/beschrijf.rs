@@ -93,6 +93,11 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 TabelActie::Opslaan(p) => format!("sla de tabel {} op als CSV-bestand {} (Excel kan dat openen).", tabel, uitdrukking(p)),
                 TabelActie::Inlezen(p) => format!("lees de tabel {} in uit het CSV-bestand {}.", tabel, uitdrukking(p)),
             },
+            Soort::BeginOpname => "begin met opnemen van de microfoon.".into(),
+            Soort::StopOpname(p) => format!("stop met opnemen en bewaar de opname als WAV-bestand {}.", uitdrukking(p)),
+            Soort::MaakAfbeelding { pad, beschrijving } => {
+                format!("zet de afbeelding {} in het laatste venster. De schermlezer leest voor: {}.", pad, beschrijving)
+            }
             Soort::ZoekUpdates => "kijk op internet of er een nieuwe versie is, en vraag of die geïnstalleerd mag worden.".into(),
             Soort::MaakMap(p) => format!("maak de map {}.", uitdrukking(p)),
             Soort::Piep { hoogte, duur } => format!("laat een piep horen van {} hertz, {} milliseconden lang.", uitdrukking(hoogte), uitdrukking(duur)),

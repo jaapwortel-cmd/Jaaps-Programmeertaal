@@ -449,6 +449,78 @@ Wat er op het scherm komt: druk op Ctrl+F6. Je hoort per venster de titel, de kl
 zijn, alle onderdelen van boven naar beneden, de Tab-volgorde, waar de focus begint, de grootte, en tips.
 De tips komen uit vaste regels. Bijvoorbeeld: een knop hoort meestal onder de vakken die je invult.
 
+4.7h Tabellen
+
+Een tabel heeft kolommen en rijen, zoals in Excel of een boekhoudprogramma.
+
+Maak een tabel met als naam Uitgaven
+Voeg de kolom Datum toe aan de tabel Uitgaven
+Voeg de kolom Omschrijving toe aan de tabel Uitgaven
+Voeg de kolom Bedrag toe aan de tabel Uitgaven
+Voeg de rij "1-1" en "Brood" en 2,50 toe aan de tabel Uitgaven
+
+De waarden van een rij scheid je met "en". Een rij heeft net zoveel waarden als de tabel kolommen heeft.
+
+Haal de gekozen rij weg uit de tabel Uitgaven
+Maak de tabel Uitgaven leeg
+Sorteer de tabel Uitgaven op de kolom Bedrag
+Sla de tabel Uitgaven op in het bestand uitgaven.csv       (Excel kan dit openen)
+Lees de tabel Uitgaven uit het bestand uitgaven.csv
+
+Lezen uit een tabel:
+de gekozen rij van de tabel Uitgaven                (een lijst)
+rij nummer 2 van de tabel Uitgaven                  (een lijst)
+het aantal rijen in de tabel Uitgaven
+Een bedrag in een cel is een getal: daar kun je mee rekenen. Voorbeeld: alles optellen:
+Onthoud totaal is 0
+Herhaal voor elk nummer van 1 tot het aantal rijen in de tabel Uitgaven
+Onthoud rij is rij nummer nummer van de tabel Uitgaven
+Tel nummer 3 uit de lijst rij op bij totaal
+Einde herhaal
+
+Bediening: met pijltje omhoog en omlaag ga je door de rijen. De schermlezer leest bij elke cel de naam
+van de kolom voor. De tabel heeft de naam die erboven staat.
+
+4.7i Internet
+
+de tekst van de webpagina https://...          (alleen de leesbare tekst, zonder opmaak)
+de inhoud van de webpagina https://...         (alles, met de HTML-opmaak)
+Verstuur "hallo" naar het adres https://...
+Download het bestand van het adres https://... naar muziek.mp3
+
+Updates van je eigen programma via een link (bijvoorbeeld Dropbox):
+De versie is 1.0
+De updates staan op het adres https://www.dropbox.com/...
+Zoek naar updates           (bijvoorbeeld achter een menuregel "Zoek naar updates")
+
+Op het update-adres staat een klein tekstbestand, het versiebestand, met twee regels:
+versie 1.1
+https://www.dropbox.com/... (de link naar het nieuwe installatiebestand)
+Bij Ctrl+F8 maakt het programma een voorbeeld van dit bestand naast je installatiebestand.
+Is de versie nieuwer, dan vraagt je programma of de update mag. Bij Ja wordt hij gedownload en gestart.
+Een Dropbox-link wordt vanzelf een directe download. Eerlijk: pCloud-links zijn vaak een webpagina in plaats van
+het bestand zelf; gebruik daar een directe link, en test het eerst.
+
+4.7j Opnemen met de microfoon
+
+Begin met opnemen
+Stop met opnemen en sla het op in het bestand opname.wav
+De opname gebruikt de standaardmicrofoon van Windows, 44100 keer per seconde, mono. Hoogstens twee uur.
+Geeft Windows geen toegang tot de microfoon? Kijk bij Instellingen, Privacy en beveiliging, Microfoon.
+
+4.7k Afbeeldingen
+
+Maak een afbeelding van het bestand hond.jpg met de beschrijving Mijn hond in het park
+De afbeelding komt in het laatste venster, zoals andere onderdelen. Hij is hoogstens 400 beeldpunten breed.
+De beschrijving is verplicht: die leest de schermlezer voor. PNG, JPG, BMP, GIF en TIFF werken.
+
+4.7l Word en PDF
+
+Schrijf "Beste Piet, bedankt voor je brief." in het Word-bestand brief.docx
+Schrijf de tekst in het tekstvak Brief in het PDF-bestand brief.pdf
+Het bestand wordt nieuw gemaakt; wat er stond, verdwijnt. Elke regel wordt een alinea.
+Eerlijk: Word- en PDF-bestanden lezen kan nog niet, alleen maken. Een PDF is nu nog gewone tekst zonder kopjes.
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
@@ -662,7 +734,7 @@ pas daarna wordt het echte bestand vervangen.
 --------------------
 
 Dit staat op de wensenlijst, maar zit nog niet in deze versie:
-- tabellen, menu's en werkbalken in je eigen programma;
+- werkbalken in je eigen programma;
 - zelf een plek of grootte voor onderdelen kiezen (ze staan altijd onder elkaar);
 - MP3 en andere geluiden dan WAV, muziek, opnemen;
 - afbeeldingen, QR-codes en streepjescodes;

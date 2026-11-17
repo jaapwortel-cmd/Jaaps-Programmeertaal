@@ -21,6 +21,8 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   omschrijving voor het programma ...": voorlezen en vragen wat ermee moet.
 - Engelse basiszinnen, je programma omzetten naar het Engels (vaste regels), en eigen woorden die
   het programma onthoudt (zelflerend, zonder AI).
+- Tabellen (met CSV voor Excel), internet (ophalen, versturen, downloaden, updates via een link),
+  opnemen met de microfoon, afbeeldingen met een beschrijving, en Word- en PDF-bestanden maken.
 - Tabbladen, een menubalk met menuregels en sneltoetsen, twee voorwaarden met "en" en "of", voorlezen met
   de stem van Windows, volume, en bestanden kopiëren, verplaatsen en weggooien (naar de Prullenbak).
 - Zeg: de schermlezer iets laten zeggen zonder meldingsvenster. Een eigen pictogram voor je programma.

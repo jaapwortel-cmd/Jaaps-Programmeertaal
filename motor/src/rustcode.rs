@@ -360,6 +360,19 @@ impl<'a> Maker<'a> {
                     };
                     self.regel(diepte, &regel);
                 }
+                Soort::BeginOpname => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.begin_opname({})?;", r));
+                }
+                Soort::StopOpname(p) => {
+                    self.opmerking(diepte, r);
+                    let p = self.uitdrukking(p, r);
+                    self.regel(diepte, &format!("{{ let p = {}; s.stop_opname(p, {})?; }}", p, r));
+                }
+                Soort::MaakAfbeelding { pad, beschrijving } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.afbeelding({}, {}, {})?;", rust_tekst(pad), rust_tekst(beschrijving), r));
+                }
                 Soort::ZoekUpdates => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.zoek_updates({})?;", r));

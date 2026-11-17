@@ -1266,6 +1266,69 @@ Wil je de nieuwe versie downloaden en installeren?", PROGRAMMANAAM, versie, VERS
             }
         }
     }
+    fn begin_opname(&mut self, r: usize) -> R<()> {
+        if self.scherm.tekststand {
+            println!("[opname begint]");
+            return Ok(());
+        }
+        #[cfg(windows)]
+        {
+            return win::begin_opname().or_else(|e| fout(r, e));
+        }
+        fout(r, "Opnemen kan alleen op Windows.".to_string())
+    }
+    fn stop_opname(&mut self, p: W, r: usize) -> R<()> {
+        let pad = volledig_pad(&p);
+        let data: Vec<u8> = if self.scherm.tekststand {
+            println!("[opname gestopt] {}", p.tekst());
+            Vec::new()
+        } else {
+            #[cfg(windows)]
+            {
+                win::stop_opname().or_else(|e| fout(r, e))?
+            }
+            #[cfg(not(windows))]
+            {
+                Vec::new()
+            }
+        };
+        // Een WAV-bestand: 44100 keer per seconde, 16 bit, mono.
+        let mut wav = Vec::with_capacity(44 + data.len());
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&44100u32.to_le_bytes());
+        wav.extend_from_slice(&88200u32.to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        wav.extend_from_slice(&data);
+        if let Some(m) = pad.parent() {
+            let _ = std::fs::create_dir_all(m);
+        }
+        std::fs::write(&pad, wav).or_else(|e| fout(r, format!("Ik kan de opname niet bewaren in {}: {}", pad.display(), e)))
+    }
+    fn afbeelding(&mut self, bestand: &str, beschrijving: &str, r: usize) -> R<()> {
+        let pad = geluidspad(&W::T(bestand.to_string()));
+        if !pad.is_file() {
+            return fout(r, format!("Ik kan de afbeelding {} niet vinden. Zet hem naast je programma, of in Documenten.", bestand));
+        }
+        if self.scherm.tekststand {
+            println!("[afbeelding] {}: {}", bestand, beschrijving);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        {
+            if !self.scherm.win.afbeelding(&pad, beschrijving) {
+                return fout(r, format!("De afbeelding {} kan ik niet tonen. Is het een gewone PNG, JPG of BMP?", bestand));
+            }
+        }
+        Ok(())
+    }
     fn focus(&mut self, naam: &str, r: usize) -> R<()> {
         let i = self.zoek(naam, r)?;
         self.scherm.focus(i);
@@ -2489,6 +2552,244 @@ mod win {
                 }
                 _ => W::T(tekst_van(h).replace("\r\n", "\n")),
             }
+        }
+    }
+
+    // ----------------------------------------------------------------- opnemen
+
+    #[repr(C)]
+    struct WAVEFORMATEX {
+        soort: u16,
+        kanalen: u16,
+        per_seconde: u32,
+        bytes_per_seconde: u32,
+        blok: u16,
+        bits: u16,
+        extra: u16,
+    }
+
+    #[repr(C)]
+    struct WAVEHDR {
+        data: *mut u8,
+        lengte: u32,
+        opgenomen: u32,
+        gebruiker: usize,
+        vlaggen: u32,
+        lussen: u32,
+        volgende: *mut WAVEHDR,
+        gereserveerd: usize,
+    }
+
+    #[link(name = "winmm")]
+    extern "system" {
+        fn waveInOpen(h: *mut HANDLE, apparaat: u32, fmt: *const WAVEFORMATEX, terug: usize, inst: usize, vlaggen: u32) -> u32;
+        fn waveInPrepareHeader(h: HANDLE, hdr: *mut WAVEHDR, grootte: u32) -> u32;
+        fn waveInUnprepareHeader(h: HANDLE, hdr: *mut WAVEHDR, grootte: u32) -> u32;
+        fn waveInAddBuffer(h: HANDLE, hdr: *mut WAVEHDR, grootte: u32) -> u32;
+        fn waveInStart(h: HANDLE) -> u32;
+        fn waveInReset(h: HANDLE) -> u32;
+        fn waveInClose(h: HANDLE) -> u32;
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateEventW(attr: *mut c_void, handmatig: i32, begin: i32, naam: *const u16) -> HANDLE;
+        fn WaitForSingleObject(h: HANDLE, ms: u32) -> u32;
+        fn CloseHandle(h: HANDLE) -> i32;
+    }
+
+    struct Opname {
+        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        draad: std::thread::JoinHandle<Result<Vec<u8>, String>>,
+    }
+
+    static OPNAME: std::sync::Mutex<Option<Opname>> = std::sync::Mutex::new(None);
+
+    pub(super) fn begin_opname() -> Result<(), String> {
+        let mut o = OPNAME.lock().unwrap();
+        if o.is_some() {
+            return Err("Er loopt al een opname. Stop die eerst.".into());
+        }
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (klaar_tx, klaar_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+        let stop2 = stop.clone();
+        let draad = std::thread::spawn(move || -> Result<Vec<u8>, String> {
+            unsafe {
+                let fmt = WAVEFORMATEX { soort: 1, kanalen: 1, per_seconde: 44100, bytes_per_seconde: 88200, blok: 2, bits: 16, extra: 0 };
+                let gebeurtenis = CreateEventW(null_mut(), 0, 0, null());
+                let mut h: HANDLE = null_mut();
+                // WAVE_MAPPER: de standaardmicrofoon van Windows. CALLBACK_EVENT.
+                if waveInOpen(&mut h, u32::MAX, &fmt, gebeurtenis as usize, 0, 0x0005_0000) != 0 {
+                    CloseHandle(gebeurtenis);
+                    let _ = klaar_tx.send(Err("Ik vind geen microfoon, of Windows geeft geen toestemming. Kijk bij Instellingen, Privacy, Microfoon.".into()));
+                    return Ok(Vec::new());
+                }
+                let grootte = std::mem::size_of::<WAVEHDR>() as u32;
+                let mut buffers: Vec<Box<[u8]>> = (0..8).map(|_| vec![0u8; 8820].into_boxed_slice()).collect();
+                let mut koppen: Vec<Box<WAVEHDR>> = buffers
+                    .iter_mut()
+                    .map(|b| {
+                        Box::new(WAVEHDR { data: b.as_mut_ptr(), lengte: b.len() as u32, opgenomen: 0, gebruiker: 0, vlaggen: 0, lussen: 0, volgende: null_mut(), gereserveerd: 0 })
+                    })
+                    .collect();
+                for k in koppen.iter_mut() {
+                    waveInPrepareHeader(h, &mut **k, grootte);
+                    waveInAddBuffer(h, &mut **k, grootte);
+                }
+                waveInStart(h);
+                let _ = klaar_tx.send(Ok(()));
+                let mut data = Vec::new();
+                let mut oogst = |koppen: &mut Vec<Box<WAVEHDR>>, opnieuw: bool, data: &mut Vec<u8>| {
+                    for k in koppen.iter_mut() {
+                        if k.vlaggen & 1 != 0 {
+                            data.extend_from_slice(std::slice::from_raw_parts(k.data, k.opgenomen as usize));
+                            k.vlaggen &= !1;
+                            if opnieuw {
+                                waveInAddBuffer(h, &mut **k, grootte);
+                            }
+                        }
+                    }
+                };
+                while !stop2.load(std::sync::atomic::Ordering::SeqCst) {
+                    WaitForSingleObject(gebeurtenis, 50);
+                    oogst(&mut koppen, true, &mut data);
+                    if data.len() > 44100 * 2 * 60 * 120 {
+                        break; // Hoogstens twee uur.
+                    }
+                }
+                waveInReset(h);
+                oogst(&mut koppen, false, &mut data);
+                for k in koppen.iter_mut() {
+                    waveInUnprepareHeader(h, &mut **k, grootte);
+                }
+                waveInClose(h);
+                CloseHandle(gebeurtenis);
+                drop(buffers);
+                Ok(data)
+            }
+        });
+        match klaar_rx.recv() {
+            Ok(Ok(())) => {
+                *o = Some(Opname { stop, draad });
+                Ok(())
+            }
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err("Het opnemen kon niet beginnen.".into()),
+        }
+    }
+
+    pub(super) fn stop_opname() -> Result<Vec<u8>, String> {
+        let Some(o) = OPNAME.lock().unwrap().take() else {
+            return Err("Er loopt geen opname. Begin eerst met: Begin met opnemen.".into());
+        };
+        o.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        o.draad.join().map_err(|_| "Het opnemen ging mis.".to_string())?
+    }
+
+    // ----------------------------------------------------------------- afbeeldingen (WIC)
+
+    #[repr(C)]
+    struct BITMAPINFOHEADER {
+        grootte: u32,
+        breedte: i32,
+        hoogte: i32,
+        vlakken: u16,
+        bits: u16,
+        compressie: u32,
+        beeld: u32,
+        xp: i32,
+        yp: i32,
+        kleuren: u32,
+        belangrijk: u32,
+    }
+
+    #[link(name = "gdi32")]
+    extern "system" {
+        fn CreateDIBSection(dc: HANDLE, info: *const BITMAPINFOHEADER, gebruik: u32, bits: *mut *mut c_void, sectie: HANDLE, plek: u32) -> HANDLE;
+    }
+
+    unsafe fn methode_van(obj: *mut c_void, nr: usize) -> usize {
+        *(*(obj as *const *const usize)).add(nr)
+    }
+
+    unsafe fn los(obj: *mut c_void) {
+        if !obj.is_null() {
+            let f: unsafe extern "system" fn(*mut c_void) -> u32 = std::mem::transmute(methode_van(obj, 2));
+            f(obj);
+        }
+    }
+
+    /// Leest een afbeelding met WIC en maakt er een Windows-bitmap van, hoogstens `max` breed.
+    unsafe fn laad_afbeelding(pad: &std::path::Path, max: u32) -> Option<(HANDLE, u32, u32)> {
+        CoInitializeEx(null_mut(), 2);
+        let clsid = guid(0xCACA_F262, 0x9370, 0x4615, [0xA1, 0x3B, 0x9F, 0x55, 0x39, 0xDA, 0x4C, 0x0A]);
+        let iid = guid(0xEC5E_C8A9, 0xC395, 0x4314, [0x9C, 0x77, 0x54, 0xD7, 0xA9, 0x35, 0xFF, 0x70]);
+        let mut fabriek: *mut c_void = null_mut();
+        if CoCreateInstance(&clsid, null_mut(), 1, &iid, &mut fabriek) != 0 || fabriek.is_null() {
+            return None;
+        }
+        type Lees = unsafe extern "system" fn(*mut c_void, *const u16, *const c_void, u32, u32, *mut *mut c_void) -> i32;
+        type Vraag = unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> i32;
+        type Plaatje = unsafe extern "system" fn(*mut c_void, u32, *mut *mut c_void) -> i32;
+        type Maat = unsafe extern "system" fn(*mut c_void, *mut u32, *mut u32) -> i32;
+        type Schaal = unsafe extern "system" fn(*mut c_void, *mut c_void, u32, u32, u32) -> i32;
+        type Zet = unsafe extern "system" fn(*mut c_void, *mut c_void, *const [u8; 16], u32, *mut c_void, f64, u32) -> i32;
+        type Kopieer = unsafe extern "system" fn(*mut c_void, *const c_void, u32, u32, *mut u8) -> i32;
+        let mut lezer: *mut c_void = null_mut();
+        let lees: Lees = std::mem::transmute(methode_van(fabriek, 3));
+        if lees(fabriek, w(&pad.to_string_lossy()).as_ptr(), null(), 0x8000_0000, 0, &mut lezer) != 0 {
+            los(fabriek);
+            return None;
+        }
+        let mut beeld: *mut c_void = null_mut();
+        let plaatje: Plaatje = std::mem::transmute(methode_van(lezer, 13));
+        plaatje(lezer, 0, &mut beeld);
+        let (mut b, mut h) = (0u32, 0u32);
+        let maat: Maat = std::mem::transmute(methode_van(beeld, 3));
+        maat(beeld, &mut b, &mut h);
+        let (nb, nh) = if b > max { (max, (h as u64 * max as u64 / b.max(1) as u64) as u32) } else { (b, h) };
+        let mut schaler: *mut c_void = null_mut();
+        let maak_schaler: Vraag = std::mem::transmute(methode_van(fabriek, 11));
+        maak_schaler(fabriek, &mut schaler);
+        let schaal: Schaal = std::mem::transmute(methode_van(schaler, 8));
+        schaal(schaler, beeld, nb.max(1), nh.max(1), 3);
+        let mut omzetter: *mut c_void = null_mut();
+        let maak_omzetter: Vraag = std::mem::transmute(methode_van(fabriek, 10));
+        maak_omzetter(fabriek, &mut omzetter);
+        let bgra = guid(0x6FDD_C324, 0x4E03, 0x4BFE, [0xB1, 0x85, 0x3D, 0x77, 0x76, 0x8D, 0xC9, 0x0F]);
+        let zet: Zet = std::mem::transmute(methode_van(omzetter, 8));
+        let gelukt = zet(omzetter, schaler, &bgra, 0, null_mut(), 0.0, 0) == 0;
+        let mut uit = None;
+        if gelukt {
+            let info = BITMAPINFOHEADER { grootte: 40, breedte: nb as i32, hoogte: -(nh as i32), vlakken: 1, bits: 32, compressie: 0, beeld: 0, xp: 0, yp: 0, kleuren: 0, belangrijk: 0 };
+            let mut bits: *mut c_void = null_mut();
+            let bmp = CreateDIBSection(null_mut(), &info, 0, &mut bits, null_mut(), 0);
+            if !bmp.is_null() && !bits.is_null() {
+                let kopieer: Kopieer = std::mem::transmute(methode_van(omzetter, 7));
+                if kopieer(omzetter, null(), nb * 4, nb * nh * 4, bits as *mut u8) == 0 {
+                    uit = Some((bmp, nb, nh));
+                }
+            }
+        }
+        for o in [omzetter, schaler, beeld, lezer, fabriek] {
+            los(o);
+        }
+        uit
+    }
+
+    impl WinScherm {
+        /// Een afbeelding in het laatste venster. De beschrijving is de naam die de schermlezer voorleest.
+        pub(super) fn afbeelding(&mut self, pad: &std::path::Path, beschrijving: &str) -> bool {
+            self.voorbereiden();
+            let max = (400.0 * self.schaal) as u32;
+            let Some((bmp, _, h)) = (unsafe { laad_afbeelding(pad, max) }) else { return false };
+            let hoogte = (h as f32 / self.schaal.max(0.1)) as i32;
+            // SS_BITMAP (0x0E) | SS_NOTIFY (0x100)
+            let vak = self.plaats("STATIC", beschrijving, 0x0E | 0x100, 0, hoogte, 0, false);
+            unsafe {
+                SendMessageW(vak, 0x0172, 0, bmp as isize);
+            }
+            true
         }
     }
 

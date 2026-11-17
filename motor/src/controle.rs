@@ -477,6 +477,23 @@ impl<'a> Controle<'a> {
                         }
                     }
                 }
+                Soort::BeginOpname => {}
+                Soort::StopOpname(p) => {
+                    let mut namen = Vec::new();
+                    p.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    if let Uitdrukking::Vast(Waarde::Tekst(t)) = p {
+                        if !t.to_lowercase().ends_with(".wav") {
+                            self.meld(Melding::fout(r, format!("Een opname wordt een WAV-bestand. Bedoel je {}.wav?", t)));
+                        }
+                    }
+                }
+                Soort::MaakAfbeelding { pad, .. } => {
+                    let laag = pad.to_lowercase();
+                    if ![".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff"].iter().any(|e| laag.ends_with(e)) {
+                        self.meld(Melding::fout(r, format!("Ik kan PNG, JPG, BMP, GIF en TIFF tonen. {} is een ander soort bestand.", pad)));
+                    }
+                }
                 Soort::ZoekUpdates => {
                     let inst = crate::installatie::uit_programma(self.programma);
                     let heeft_adres = self.programma.opdrachten.iter().any(|o| matches!(o.soort, Soort::Installatie(InstallatieZin::UpdateAdres(_))));

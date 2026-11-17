@@ -284,6 +284,12 @@ pub enum Soort {
     Download { adres: Uitdrukking, pad: Uitdrukking },
     /// Kijken of er een nieuwe versie is, en die (na een vraag) installeren.
     ZoekUpdates,
+    /// Beginnen met opnemen van de microfoon.
+    BeginOpname,
+    /// Stoppen met opnemen en de opname bewaren als WAV-bestand.
+    StopOpname(Uitdrukking),
+    /// Een afbeelding in het laatste venster, met een beschrijving voor de schermlezer.
+    MaakAfbeelding { pad: String, beschrijving: String },
     /// Iets met een tabel: kolom toevoegen, rij toevoegen, gekozen rij weghalen, leegmaken, sorteren,
     /// opslaan als CSV of inlezen uit CSV.
     Tabel { tabel: String, actie: TabelActie },
@@ -474,6 +480,7 @@ impl Soort {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
+            Soort::StopOpname(p) => vec![p],
             Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter_mut().collect(),
             Soort::Tabel { actie: TabelActie::Opslaan(p) | TabelActie::Inlezen(p), .. } => vec![p],
             Soort::Download { adres, pad } => vec![adres, pad],
@@ -514,6 +521,7 @@ impl Soort {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
+            Soort::StopOpname(p) => vec![p],
             Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter().collect(),
             Soort::Tabel { actie: TabelActie::Opslaan(p) | TabelActie::Inlezen(p), .. } => vec![p],
             Soort::Download { adres, pad } => vec![adres, pad],

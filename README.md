@@ -115,6 +115,16 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 
 **Kopiëren, verplaatsen, weggooien**: `Kopieer het bestand a.txt naar b.txt`, `Verplaats het bestand a.txt naar Oud/a.txt`, `Gooi het bestand a.txt weg` (naar de Prullenbak).
 
+**Tabellen**: `Maak een tabel met als naam Uitgaven`, `Voeg de kolom Bedrag toe aan de tabel Uitgaven`, `Voeg de rij "Brood" en 2,50 toe aan de tabel Uitgaven`, `Haal de gekozen rij weg uit ...`, `Maak de tabel ... leeg`, `Sorteer de tabel ... op de kolom ...`, `Sla de tabel ... op in het bestand x.csv`, `Lees de tabel ... uit het bestand x.csv`; lezen: `de gekozen rij van de tabel ...`, `rij nummer 2 van de tabel ...`, `het aantal rijen in de tabel ...`.
+
+**Internet**: `de tekst van de webpagina https://...`, `de inhoud van de webpagina https://...`, `Verstuur "x" naar het adres https://...`, `Download het bestand van het adres https://... naar a.mp3`. Updates: `De updates staan op het adres https://...` en `Zoek naar updates` (versiebestand met `versie 1.1` en de link naar het installatiebestand).
+
+**Opnemen**: `Begin met opnemen`, `Stop met opnemen en sla het op in het bestand opname.wav`.
+
+**Afbeeldingen**: `Maak een afbeelding van het bestand hond.jpg met de beschrijving Mijn hond in het park` (PNG, JPG, BMP, GIF, TIFF).
+
+**Word en PDF**: `Schrijf "..." in het Word-bestand brief.docx`, `Schrijf "..." in het PDF-bestand brief.pdf` (alleen maken, nog niet lezen).
+
 **Lijsten**
 - `Maak een lijst met als naam boodschappen`, `Voeg "melk" toe aan de lijst boodschappen`, `Haal "melk" weg uit de lijst boodschappen`, `Maak de lijst boodschappen leeg`
 - Lezen: `de lijst boodschappen`, `het aantal in de lijst boodschappen`, `het eerste uit ...`, `het laatste uit ...`, `nummer 2 uit de lijst boodschappen`
@@ -270,15 +280,15 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); Engelse zinnen voor lijsten, stukjes, bestanden, tekstvakken en installatie; tekst vertalen.
 
-**Scherm**: tabellen, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
+**Scherm**: werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
 
-**Geluid**: OGG en FLAC, volume, mono/stereo/3D, opnemen, muziekspelers, audio-editor. (Wel gebouwd: piep, WAV en MP3 afspelen.)
+**Geluid**: OGG en FLAC, stereo/3D, een microfoon kiezen, muziekspelers, audio-editor. (Wel gebouwd: piep, WAV en MP3 afspelen.)
 
-**Beeld**: afbeeldingen met beschrijving, 3D, QR-codes en streepjescodes.
+**Beeld**: 3D, QR-codes en streepjescodes.
 
-**Bestanden**: DOCX en PDF (ZIP inpakken en uitpakken werkt wel) (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
+**Bestanden**: DOCX en PDF lezen (ZIP inpakken en uitpakken werkt wel) (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
 
-**Netwerk**: verbinding met een andere computer, internet, PHP en CSS, updates via Dropbox of pCloud.
+**Netwerk**: verbinding met een andere computer, PHP en CSS.
 
 **Spraak en toegankelijkheid**: braille, spraakherkenning, voorlezen, hardware, Whisper en taalmodellen als onderdeel van jouw programma's (niet van de taal zelf).
 

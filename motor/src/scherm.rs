@@ -58,6 +58,11 @@ fn verzamel(lijst: &[Opdracht], wanneer: &str, vensters: &mut Vec<Venster>) {
                     v.voeg_toe(soort.woord(), naam);
                 }
             }
+            Soort::MaakAfbeelding { pad, beschrijving } => {
+                if let Some(v) = vensters.last_mut() {
+                    v.voeg_toe("afbeelding", &format!("{} (de schermlezer zegt: {})", pad, beschrijving));
+                }
+            }
             Soort::MaakTabblad { naam } => {
                 if let Some(v) = vensters.last_mut() {
                     v.tabs.push((naam.clone(), Vec::new()));
@@ -214,7 +219,7 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
                     .unwrap_or_default();
                 uit.push(format!("  {}. {} {}{}{}", j + 1, lidwoord(soort), naam, extra, toets));
             }
-            let tab: Vec<String> = v.onderdelen.iter().filter(|o| o.0 != "label").map(|o| o.1.clone()).collect();
+            let tab: Vec<String> = v.onderdelen.iter().filter(|o| o.0 != "label" && o.0 != "afbeelding").map(|o| o.1.clone()).collect();
             if !tab.is_empty() {
                 uit.push(format!("Met Tab ga je in deze volgorde langs: {}.", tab.join(", ")));
                 uit.push(format!("Bij de start staat de focus op: {}.", tab[0]));
@@ -240,7 +245,7 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
 
 fn lidwoord(soort: &str) -> String {
     match soort {
-        "knop" | "keuzelijst" | "uitklaplijst" | "tabel" => format!("de {}", soort),
+        "knop" | "keuzelijst" | "uitklaplijst" | "tabel" | "afbeelding" => format!("de {}", soort),
         _ => format!("het {}", soort),
     }
 }
@@ -254,6 +259,7 @@ fn hoogte_van(soort: &str) -> i32 {
         "selectievakje" => 48,
         "keuzelijst" => 214,
         "tabel" => 274,
+        "afbeelding" => 300,
         _ => 94,
     }
 }

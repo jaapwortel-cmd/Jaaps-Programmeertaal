@@ -71,13 +71,13 @@ const WOORDENLIJST: &[&str] = &[
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
     "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
     "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga", "verstuur", "download", "adres", "webpagina",
-    "updates", "zoek", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
+    "updates", "zoek", "opnemen", "opname", "begin", "start", "afbeelding", "beschrijving", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
     "werkbalk",
-    "afbeelding", "plaatje", "foto", "tekstverwerker", "qr-code", "streepjescode",
+    "tekstverwerker", "qr-code", "streepjescode",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -1010,6 +1010,24 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 "tabblad" | "tab" => Ok(Vorm::Los(Soort::MaakTabblad {
                     naam: met_als_titel(&s, i + 1, &["naam", "titel"], "het tabblad", "Maak een tabblad met als naam Algemeen")?,
                 })),
+                "afbeelding" | "plaatje" | "foto" => {
+                    let voorbeeld = "Schrijf het zo: Maak een afbeelding van het bestand hond.jpg met de beschrijving Mijn hond in het park.";
+                    let b = zoek(&s, &["bestand"], i + 1).ok_or_else(|| fout(voorbeeld))?;
+                    let Some(m) = zoek(&s, &["beschrijving"], b + 1) else {
+                        return Err(fout(format!(
+                            "Welke beschrijving moet de afbeelding krijgen? De schermlezer leest die voor. Schrijf erachter: met de beschrijving ... ({})",
+                            voorbeeld
+                        )));
+                    };
+                    let mut eind_pad = m;
+                    while eind_pad > b + 1 && matches!(klein(&s, eind_pad - 1).as_str(), "met" | "de" | "als") {
+                        eind_pad -= 1;
+                    }
+                    if eind_pad <= b + 1 || m + 1 >= s.len() {
+                        return Err(fout(voorbeeld));
+                    }
+                    Ok(Vorm::Los(Soort::MaakAfbeelding { pad: rest_tekst(&s[b + 1..eind_pad]), beschrijving: rest_tekst(&s[m + 1..]) }))
+                }
                 "menu" => Ok(Vorm::Los(Soort::MaakMenu {
                     naam: met_als_titel(&s, i + 1, &["naam", "titel"], "het menu", "Maak een menu met als naam Bestand")?,
                 })),
@@ -1041,6 +1059,14 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::LeesVoor(spreektekst(r)?)))
         }
         "stop" if zoek(&s, &["voorlezen"], 1).is_some() => Ok(Vorm::Los(Soort::StopVoorlezen)),
+        "begin" | "start" if zoek(&s, &["opnemen"], 1).is_some() || zoek(&s, &["opname"], 1).is_some() => Ok(Vorm::Los(Soort::BeginOpname)),
+        "stop" if zoek(&s, &["opnemen"], 1).is_some() || zoek(&s, &["opname"], 1).is_some() => {
+            let p = zoek(&s, &["bestand"], 1).or_else(|| (1..s.len()).rev().find(|&i| klein(&s, i) == "als"));
+            let Some(p) = p.filter(|p| p + 1 < s.len()) else {
+                return Err(fout("Waar moet de opname komen? Schrijf bijvoorbeeld: Stop met opnemen en sla het op in het bestand opname.wav."));
+            };
+            Ok(Vorm::Los(Soort::StopOpname(pad(&s[p + 1..]).map_err(fout)?)))
+        }
         "ga" | "kies" if zoek(&s, &["tabblad"], 1).is_some() => {
             let t = zoek(&s, &["tabblad"], 1).unwrap();
             if t + 1 >= s.len() {
