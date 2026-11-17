@@ -58,6 +58,8 @@ struct Controle<'a> {
     al_gemeld: HashSet<(usize, String)>,
     /// (naam, soort, regel) van elk onderdeel op het scherm.
     onderdelen: Vec<(String, OnderdeelSoort, usize)>,
+    /// De namen van alle tabbladen.
+    tabbladen: Vec<String>,
 }
 
 fn onderdelen_in(u: &Uitdrukking, uit: &mut Vec<(String, bool)>) {
@@ -91,6 +93,10 @@ fn onderdelen_in_voorwaarde(v: &Voorwaarde, uit: &mut Vec<(String, bool)>) {
         Voorwaarde::Bevat(a, b) => {
             onderdelen_in(a, uit);
             onderdelen_in(b, uit);
+        }
+        Voorwaarde::En(a, b) | Voorwaarde::Of(a, b) => {
+            onderdelen_in_voorwaarde(a, uit);
+            onderdelen_in_voorwaarde(b, uit);
         }
     }
 }
@@ -300,6 +306,10 @@ impl<'a> Controle<'a> {
         v.namen(&mut namen);
         self.controleer_namen(regel, namen, in_knop, None);
         match v {
+            Voorwaarde::En(a, b) | Voorwaarde::Of(a, b) => {
+                self.controleer_voorwaarde(regel, a, in_knop);
+                self.controleer_voorwaarde(regel, b, in_knop);
+            }
             Voorwaarde::Bevat(a, b) => {
                 match self.type_van(a) {
                     Err(t) => self.meld(Melding::fout(regel, t)),
@@ -481,7 +491,62 @@ impl<'a> Controle<'a> {
                         }
                     }
                 }
-                Soort::Zeg(u) => {
+                Soort::MaakMenu { .. } | Soort::MaakMenuregel { .. } | Soort::StopVoorlezen | Soort::MaakTabblad { .. } => {}
+                Soort::KiesTabblad { naam } => {
+                    if !self.tabbladen.iter().any(|t| t.to_lowercase() == naam.to_lowercase()) {
+                        let lijkt = self.tabbladen.iter().find(|t| tekst::mag_tikfout_zijn(&naam.to_lowercase(), &t.to_lowercase())).cloned();
+                        let m = match lijkt {
+                            Some(goed) => {
+                                let nieuw = format!("Ga naar het tabblad {}", goed);
+                                Melding::vraag(r, format!("Er is geen tabblad met de naam {}.", naam))
+                                    .met_voorstel(format!("Bedoel je: {}?", nieuw), Wijziging::VervangRegel { regel: r, nieuw })
+                            }
+                            None => Melding::vraag(r, format!("Er is geen tabblad met de naam {}. Welk tabblad bedoel je?", naam)),
+                        };
+                        self.meld(m);
+                    }
+                }
+                Soort::Volume(u) => {
+                    let mut namen = Vec::new();
+                    u.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    match self.type_van(u) {
+                        Err(t) => self.meld(Melding::fout(r, t)),
+                        Ok(Type::Tekst | Type::Waarheid | Type::Lijst) => self.meld(Melding::fout(r, "Het volume is een getal van 0 tot 100.")),
+                        _ => {}
+                    }
+                    if let Some(g) = vast_getal(u) {
+                        if !(0.0..=100.0).contains(&g) {
+                            self.meld(Melding::fout(r, "Het volume is een getal van 0 tot 100."));
+                        }
+                    }
+                }
+                Soort::BestandActie { van, naar, .. } => {
+                    let mut lijst = vec![van];
+                    if let Some(n) = naar {
+                        lijst.push(n);
+                    }
+                    for u in lijst {
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                        if let Err(t) = self.type_van(u) {
+                            self.meld(Melding::fout(r, t));
+                        }
+                    }
+                }
+                Soort::Zeg(u) | Soort::LeesVoor(u) => {
+                    if let Uitdrukking::Naam(n) = u {
+                        if !self.is_bekend(n, r, in_knop) && !self.onthoud.iter().any(|o| tekst::mag_tikfout_zijn(n, &o.0)) {
+                            if let Some(nieuw) = aanhalen(self.regels.get(r - 1).copied().unwrap_or(""), n) {
+                                self.al_gemeld.insert((r, n.clone()));
+                                self.meld(Melding::vraag(r, format!("Je gebruikt \"{}\", maar je hebt nog niet gezegd wat {} is.", n, n)).met_voorstel(
+                                    format!("Bedoel je de tekst {}? Dan wordt de regel: {}", n, nieuw),
+                                    Wijziging::VervangRegel { regel: r, nieuw },
+                                ));
+                            }
+                        }
+                    }
                     let mut namen = Vec::new();
                     u.namen(&mut namen);
                     self.controleer_namen(r, namen, in_knop, None);
@@ -638,6 +703,14 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
         types: HashMap::new(),
         onthoud: Vec::new(),
         al_gemeld: HashSet::new(),
+        tabbladen: p
+            .alle()
+            .iter()
+            .filter_map(|o| match &o.soort {
+                Soort::MaakTabblad { naam } => Some(naam.clone()),
+                _ => None,
+            })
+            .collect(),
         onderdelen: p
             .alle()
             .iter()
@@ -716,14 +789,18 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
     let knoppen: Vec<(String, usize)> = alle
         .iter()
         .filter_map(|o| match &o.soort {
-            Soort::MaakKnop { naam } => Some((naam.clone(), o.regel)),
+            Soort::MaakKnop { naam } | Soort::MaakMenuregel { naam } => Some((naam.clone(), o.regel)),
             _ => None,
         })
         .collect();
     let mut op_scherm: Vec<(String, usize)> = alle
         .iter()
         .filter_map(|o| match &o.soort {
-            Soort::MaakKnop { naam } | Soort::MaakOnderdeel { naam, .. } => Some((naam.clone(), o.regel)),
+            Soort::MaakKnop { naam }
+            | Soort::MaakOnderdeel { naam, .. }
+            | Soort::MaakMenu { naam }
+            | Soort::MaakTabblad { naam }
+            | Soort::MaakMenuregel { naam } => Some((naam.clone(), o.regel)),
             _ => None,
         })
         .collect();
@@ -798,6 +875,25 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
     controleer_installatie(&mut c, p);
     controleer_stukjes(&mut c, p);
     controleer_scherm(&mut c, p);
+    // Een menuregel hoort in een menu.
+    let mut menu_gezien = false;
+    let mut gesorteerd = p.alle();
+    gesorteerd.sort_by_key(|o| o.regel);
+    for o in gesorteerd {
+        match &o.soort {
+            Soort::MaakVenster { .. } => menu_gezien = false,
+            Soort::MaakMenu { .. } => menu_gezien = true,
+            Soort::MaakMenuregel { naam } if !menu_gezien => {
+                let nieuw = "Maak een menu met als naam Bestand".to_string();
+                c.meld(
+                    Melding::vraag(o.regel, format!("Je maakt de menuregel {}, maar er is nog geen menu om hem in te zetten.", naam))
+                        .met_voorstel(format!("Zal ik er eerst een menu voor maken, met de regel: {}?", nieuw), Wijziging::VoegInVoor { regel: o.regel, nieuw }),
+                );
+                break;
+            }
+            _ => {}
+        }
+    }
 
     // Ronde 2: elke opdracht nalopen.
     c.controleer_lijst(&p.opdrachten, false);
@@ -989,7 +1085,7 @@ fn controleer_scherm(c: &mut Controle, p: &Programma) {
     let knoppen: Vec<String> = alle
         .iter()
         .filter_map(|o| match &o.soort {
-            Soort::MaakKnop { naam } => Some(naam.to_lowercase()),
+            Soort::MaakKnop { naam } | Soort::MaakMenuregel { naam } => Some(naam.to_lowercase()),
             _ => None,
         })
         .collect();

@@ -196,6 +196,8 @@ fn voorwaarde(v: &Voorwaarde, n: &mut Vec<String>) -> String {
         }
         Voorwaarde::IsWaar(a) => waarde(a, n),
         Voorwaarde::Bevat(a, b) => format!("{} contains {}", waarde(a, n), waarde(b, n)),
+        Voorwaarde::En(a, b) => format!("{} and {}", voorwaarde(a, n), voorwaarde(b, n)),
+        Voorwaarde::Of(a, b) => format!("{} or {}", voorwaarde(a, n), voorwaarde(b, n)),
     }
 }
 

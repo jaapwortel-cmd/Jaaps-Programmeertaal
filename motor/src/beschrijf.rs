@@ -48,6 +48,8 @@ fn voorwaarde(v: &Voorwaarde) -> String {
     match v {
         Voorwaarde::Vergelijk(a, verg, b) => format!("{} {} {}", uitdrukking(a), verg.woorden(), uitdrukking(b)),
         Voorwaarde::IsWaar(a) => format!("{} waar is", uitdrukking(a)),
+        Voorwaarde::En(a, b) => format!("{} en {}", voorwaarde(a), voorwaarde(b)),
+        Voorwaarde::Of(a, b) => format!("{} of {}", voorwaarde(a), voorwaarde(b)),
         Voorwaarde::Bevat(a, b) => format!("{} {} bevat", uitdrukking(a), uitdrukking(b)),
     }
 }
@@ -73,6 +75,16 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 if *wachten { " en wacht tot het klaar is" } else { " (het programma gaat meteen verder)" }
             ),
             Soort::StopGeluid => "stop het geluid.".into(),
+            Soort::LeesVoor(u) => format!("lees {} voor met de stem van Windows.", uitdrukking(u)),
+            Soort::StopVoorlezen => "stop met voorlezen.".into(),
+            Soort::Volume(u) => format!("zet het volume op {} (van 0 tot 100).", uitdrukking(u)),
+            Soort::MaakTabblad { naam } => format!("maak een tabblad in het laatste venster. De naam is: {}. Wat hierna komt, staat op dit tabblad.", naam),
+            Soort::KiesTabblad { naam } => format!("ga naar het tabblad {}.", naam),
+            Soort::MaakMenu { naam } => format!("maak een menu in de menubalk van het laatste venster. De naam is: {}.", naam),
+            Soort::MaakMenuregel { naam } => format!("maak een regel in het laatste menu. De naam is: {}.", naam),
+            Soort::BestandActie { soort: 0, van, naar } => format!("kopieer {} naar {}.", uitdrukking(van), naar.as_ref().map(uitdrukking).unwrap_or_default()),
+            Soort::BestandActie { soort: 1, van, naar } => format!("verplaats {} naar {}.", uitdrukking(van), naar.as_ref().map(uitdrukking).unwrap_or_default()),
+            Soort::BestandActie { van, .. } => format!("gooi {} weg (naar de Prullenbak, zodat je het terug kunt halen).", uitdrukking(van)),
             Soort::Zeg(u) => format!("laat de schermlezer {} zeggen, zonder meldingsvenster.", uitdrukking(u)),
             Soort::Pictogram(b) => format!("het pictogram van het programma is {}.", b),
             Soort::Zip { inpakken: true, map, zip } => format!("pak de map {} in tot het zipbestand {}.", uitdrukking(map), uitdrukking(zip)),

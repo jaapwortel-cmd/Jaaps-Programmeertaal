@@ -8,7 +8,7 @@
 // Met --druk Naam drukt de proef daarna op de knop Naam.
 // ======================================================================
 #![cfg_attr(windows, windows_subsystem = "windows")]
-#![allow(dead_code, unused_variables, unused_mut, unreachable_code, unused_imports, non_snake_case, unused_braces)]
+#![allow(dead_code, unused_variables, unused_mut, unreachable_code, unused_imports, non_snake_case, unused_braces, unused_parens)]
 
 #[derive(Clone, Debug)]
 enum W {
@@ -404,6 +404,67 @@ fn zip(inpakken: bool, map: W, z: W, r: usize) -> R<()> {
     }
 }
 
+thread_local! {
+    /// Het volume (0 tot 100) voor geluid en voorlezen.
+    static VOLUME: std::cell::Cell<u32> = std::cell::Cell::new(100);
+}
+
+fn kopieer_alles(van: &std::path::Path, naar: &std::path::Path) -> std::io::Result<()> {
+    if van.is_dir() {
+        std::fs::create_dir_all(naar)?;
+        for e in std::fs::read_dir(van)? {
+            let e = e?;
+            kopieer_alles(&e.path(), &naar.join(e.file_name()))?;
+        }
+        Ok(())
+    } else {
+        if let Some(m) = naar.parent() {
+            std::fs::create_dir_all(m)?;
+        }
+        std::fs::copy(van, naar).map(|_| ())
+    }
+}
+
+/// Kopiëren (0), verplaatsen (1) of naar de Prullenbak gooien (2).
+fn bestand_actie(soort: u8, van: W, naar: Option<W>, r: usize) -> R<()> {
+    let v = volledig_pad(&van);
+    if !v.exists() {
+        return fout(r, format!("{} bestaat niet.", v.display()));
+    }
+    if soort == 2 {
+        #[cfg(windows)]
+        {
+            return if win::naar_prullenbak(&v) { Ok(()) } else { fout(r, format!("Ik kan {} niet weggooien.", v.display())) };
+        }
+        let bak = basismap().join("Prullenbak");
+        let _ = std::fs::create_dir_all(&bak);
+        let doel = bak.join(v.file_name().unwrap_or_default());
+        return std::fs::rename(&v, &doel).or_else(|e| fout(r, format!("Ik kan {} niet weggooien: {}", v.display(), e)));
+    }
+    let mut n = volledig_pad(&naar.unwrap_or(W::T(String::new())));
+    if n.is_dir() && !v.is_dir() {
+        n = n.join(v.file_name().unwrap_or_default());
+    }
+    let uitkomst = if soort == 0 {
+        kopieer_alles(&v, &n)
+    } else {
+        if let Some(m) = n.parent() {
+            let _ = std::fs::create_dir_all(m);
+        }
+        std::fs::rename(&v, &n).or_else(|_| {
+            kopieer_alles(&v, &n)?;
+            if v.is_dir() {
+                std::fs::remove_dir_all(&v)
+            } else {
+                std::fs::remove_file(&v)
+            }
+        })
+    };
+    uitkomst.or_else(|e| {
+        fout(r, format!("{} van {} naar {} is niet gelukt: {}", if soort == 0 { "Kopiëren" } else { "Verplaatsen" }, v.display(), n.display(), e))
+    })
+}
+
 fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
     match w {
         Some(w) => Ok(w),
@@ -664,6 +725,80 @@ impl Staat {
             }
         }
     }
+    fn lees_voor(&mut self, w: W) {
+        let t = w.tekst();
+        if self.scherm.tekststand {
+            println!("[voorlezen] {}", t);
+            return;
+        }
+        #[cfg(windows)]
+        {
+            if !win::lees_voor(&t) {
+                self.zeg(W::T(t));
+            }
+        }
+    }
+    fn stop_voorlezen(&mut self) {
+        if self.scherm.tekststand {
+            println!("[stop voorlezen]");
+            return;
+        }
+        #[cfg(windows)]
+        win::stop_voorlezen();
+    }
+    fn volume(&mut self, w: W, r: usize) -> R<()> {
+        let v = match w {
+            W::G(g) if (0.0..=100.0).contains(&g) => g as u32,
+            _ => return fout(r, "Het volume is een getal van 0 tot 100.".to_string()),
+        };
+        VOLUME.with(|x| x.set(v));
+        if self.scherm.tekststand {
+            println!("[volume] {}", v);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        win::zet_volume(v);
+        Ok(())
+    }
+    fn tabblad(&mut self, naam: &str) {
+        self.scherm.tabbladen.push(naam.to_string());
+        if self.scherm.tekststand {
+            println!("[tabblad] {}", naam);
+            return;
+        }
+        #[cfg(windows)]
+        self.scherm.win.tabblad(naam);
+    }
+    fn kies_tabblad(&mut self, naam: &str, r: usize) -> R<()> {
+        if !self.scherm.tabbladen.iter().any(|t| t.to_lowercase() == naam.to_lowercase()) {
+            return fout(r, format!("Het tabblad {} is er (nog) niet.", naam));
+        }
+        if self.scherm.tekststand {
+            println!("[ga naar tabblad] {}", naam);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        win::kies_tabblad(naam);
+        Ok(())
+    }
+    fn menu(&mut self, naam: &str) {
+        if self.scherm.tekststand {
+            println!("[menu] {}", naam);
+            return;
+        }
+        #[cfg(windows)]
+        self.scherm.win.menu(naam);
+    }
+    fn menuregel(&mut self, naam: &str) {
+        let actie = self.acties.iter().position(|a| a.to_lowercase() == naam.to_lowercase());
+        self.scherm.knoppen.push((naam.to_string(), actie));
+        if self.scherm.tekststand {
+            println!("[menuregel] {}", naam);
+            return;
+        }
+        #[cfg(windows)]
+        self.scherm.win.menuregel(naam, self.scherm.knoppen.len() - 1);
+    }
     fn stop_geluid(&mut self) {
         if self.scherm.tekststand {
             println!("[geluid stopt]");
@@ -809,6 +944,7 @@ struct Scherm {
     /// (naam, actie) van elke knop, in volgorde.
     knoppen: Vec<(String, Option<usize>)>,
     onderdelen: Vec<Ond>,
+    tabbladen: Vec<String>,
     uitvoer: Vec<String>,
     #[cfg(windows)]
     win: win::WinScherm,
@@ -820,6 +956,7 @@ impl Scherm {
             tekststand: true,
             knoppen: Vec::new(),
             onderdelen: Vec::new(),
+            tabbladen: Vec::new(),
             uitvoer: Vec::new(),
             #[cfg(windows)]
             win: win::WinScherm::default(),
@@ -1091,7 +1228,8 @@ mod win {
         static KNOP_HWNDS: RefCell<Vec<HWND>> = RefCell::new(Vec::new());
         /// Tekstvensters (uitvoer, handleiding) met hun tekstvak, zodat het vak meegroeit met het venster.
         static TEKSTVAKKEN: RefCell<Vec<(HWND, HWND)>> = RefCell::new(Vec::new());
-        static SNELTOETSEN: RefCell<Vec<(u16, bool, bool, bool, HWND)>> = RefCell::new(Vec::new());
+        /// (toets, ctrl, alt, shift, knop of venster, menunummer of 0)
+        static SNELTOETSEN: RefCell<Vec<(u16, bool, bool, bool, HWND, usize)>> = RefCell::new(Vec::new());
         /// Per venster: achtergrondkleur, tekstkleur en de kwast voor de achtergrond.
         static KLEUREN: RefCell<Vec<(HWND, Option<u32>, Option<u32>, HANDLE)>> = RefCell::new(Vec::new());
         static HANDLEIDING_VENSTER: Cell<HWND> = Cell::new(std::ptr::null_mut());
@@ -1221,6 +1359,265 @@ mod win {
         }
     }
 
+    #[link(name = "user32")]
+    extern "system" {
+        fn CreateMenu() -> HANDLE;
+        fn CreatePopupMenu() -> HANDLE;
+        fn AppendMenuW(menu: HANDLE, vlaggen: u32, id: usize, tekst: *const u16) -> i32;
+        fn ModifyMenuW(menu: HANDLE, plek: u32, vlaggen: u32, id: usize, tekst: *const u16) -> i32;
+        fn SetMenu(h: HWND, menu: HANDLE) -> i32;
+        fn DrawMenuBar(h: HWND) -> i32;
+    }
+
+    #[link(name = "winmm")]
+    extern "system" {
+        fn waveOutSetVolume(apparaat: HANDLE, volume: u32) -> u32;
+    }
+
+    #[link(name = "ole32")]
+    extern "system" {
+        fn CoInitializeEx(r: *mut c_void, vlaggen: u32) -> i32;
+        fn CoCreateInstance(clsid: *const [u8; 16], buiten: *mut c_void, ctx: u32, iid: *const [u8; 16], uit: *mut *mut c_void) -> i32;
+    }
+
+    #[repr(C)]
+    struct SHFILEOPSTRUCTW {
+        hwnd: HWND,
+        functie: u32,
+        van: *const u16,
+        naar: *const u16,
+        vlaggen: u16,
+        afgebroken: i32,
+        namen: *mut c_void,
+        titel: *const u16,
+    }
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn SHFileOperationW(op: *mut SHFILEOPSTRUCTW) -> i32;
+    }
+
+    #[repr(C)]
+    struct TCITEMW {
+        mask: u32,
+        state: u32,
+        state_mask: u32,
+        tekst: *const u16,
+        max: i32,
+        beeld: i32,
+        param: isize,
+    }
+
+    #[repr(C)]
+    struct INITCOMMONCONTROLSEX {
+        grootte: u32,
+        soorten: u32,
+    }
+
+    #[link(name = "comctl32")]
+    extern "system" {
+        fn InitCommonControlsEx(i: *const INITCOMMONCONTROLSEX) -> i32;
+    }
+
+    /// De tabbladen van één venster: het Windows-onderdeel, en per tabblad de onderdelen erop.
+    pub(super) struct Tabs {
+        venster: HWND,
+        ctrl: HWND,
+        namen: Vec<String>,
+        onderdelen: Vec<Vec<HWND>>,
+        y: Vec<i32>,
+        begin_y: i32,
+    }
+
+    thread_local! {
+        pub(super) static TABS: RefCell<Vec<Tabs>> = RefCell::new(Vec::new());
+    }
+
+    /// Laat alleen de onderdelen van tabblad `nr` zien.
+    pub(super) fn toon_tab(ctrl: HWND, nr: usize) {
+        TABS.with(|t| {
+            if let Some(tabs) = t.borrow().iter().find(|x| x.ctrl == ctrl) {
+                for (i, lijst) in tabs.onderdelen.iter().enumerate() {
+                    for h in lijst {
+                        unsafe {
+                            ShowWindow(*h, if i == nr { SW_SHOW } else { 0 });
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /// Ctrl+Tab of Ctrl+Shift+Tab: naar het volgende of vorige tabblad. Geeft true als er tabbladen zijn.
+    pub(super) fn wissel_tab(venster: HWND, terug: bool) -> bool {
+        let Some((ctrl, aantal)) = TABS.with(|t| t.borrow().iter().find(|x| x.venster == venster).map(|x| (x.ctrl, x.namen.len()))) else {
+            return false;
+        };
+        unsafe {
+            let nu = SendMessageW(ctrl, 0x130B, 0, 0).max(0) as usize;
+            let nieuw = if terug { (nu + aantal - 1) % aantal } else { (nu + 1) % aantal };
+            SendMessageW(ctrl, 0x130C, nieuw, 0);
+            toon_tab(ctrl, nieuw);
+            SetFocus(ctrl);
+        }
+        true
+    }
+
+    pub(super) fn kies_tabblad(naam: &str) {
+        let gevonden = TABS.with(|t| {
+            t.borrow().iter().find_map(|x| x.namen.iter().position(|n| n.to_lowercase() == naam.to_lowercase()).map(|i| (x.ctrl, i)))
+        });
+        if let Some((ctrl, i)) = gevonden {
+            unsafe {
+                SendMessageW(ctrl, 0x130C, i, 0);
+                toon_tab(ctrl, i);
+                SetFocus(ctrl);
+            }
+        }
+    }
+
+    thread_local! {
+        /// Per venster: de menubalk en het laatste menu.
+        static MENUS: RefCell<Vec<(HWND, HANDLE, HANDLE)>> = RefCell::new(Vec::new());
+        /// Per menuregel (nummer van de knop): het menu waar hij in staat.
+        static MENUREGELS: RefCell<Vec<(usize, HWND, HANDLE)>> = RefCell::new(Vec::new());
+        static STEM: Cell<*mut c_void> = Cell::new(std::ptr::null_mut());
+    }
+
+    fn guid(d1: u32, d2: u16, d3: u16, d4: [u8; 8]) -> [u8; 16] {
+        let mut g = [0u8; 16];
+        g[..4].copy_from_slice(&d1.to_le_bytes());
+        g[4..6].copy_from_slice(&d2.to_le_bytes());
+        g[6..8].copy_from_slice(&d3.to_le_bytes());
+        g[8..].copy_from_slice(&d4);
+        g
+    }
+
+    impl WinScherm {
+        pub(super) fn tabblad(&mut self, naam: &str) {
+            let Some(&venster) = self.vensters.last() else { return };
+            let heeft = TABS.with(|t| t.borrow().iter().any(|x| x.venster == venster));
+            if !heeft {
+                unsafe {
+                    InitCommonControlsEx(&INITCOMMONCONTROLSEX { grootte: 8, soorten: 0x8 });
+                }
+                let y = *self.volgende_y.last().unwrap();
+                let ctrl = self.plaats("SysTabControl32", "", WS_TABSTOP | 0x0400_0000, 0, 44, 0, true);
+                TABS.with(|t| {
+                    t.borrow_mut().push(Tabs { venster, ctrl, namen: Vec::new(), onderdelen: Vec::new(), y: Vec::new(), begin_y: y + self.s(56) })
+                });
+            }
+            TABS.with(|t| {
+                let mut t = t.borrow_mut();
+                let tabs = t.iter_mut().find(|x| x.venster == venster).unwrap();
+                let tekst = w(naam);
+                let item = TCITEMW { mask: 1, state: 0, state_mask: 0, tekst: tekst.as_ptr(), max: 0, beeld: 0, param: 0 };
+                unsafe {
+                    SendMessageW(tabs.ctrl, 0x133E, tabs.namen.len(), &item as *const TCITEMW as isize);
+                }
+                tabs.namen.push(naam.to_string());
+                tabs.onderdelen.push(Vec::new());
+                let begin = tabs.begin_y;
+                tabs.y.push(begin);
+            });
+        }
+
+        pub(super) fn menu(&mut self, naam: &str) {
+            let Some(&venster) = self.vensters.last() else { return };
+            unsafe {
+                let popup = CreatePopupMenu();
+                MENUS.with(|m| {
+                    let mut m = m.borrow_mut();
+                    let balk = match m.iter().find(|x| x.0 == venster) {
+                        Some(x) => x.1,
+                        None => {
+                            let b = CreateMenu();
+                            SetMenu(venster, b);
+                            b
+                        }
+                    };
+                    AppendMenuW(balk, 0x10, popup as usize, w(naam).as_ptr());
+                    m.retain(|x| x.0 != venster);
+                    m.push((venster, balk, popup));
+                });
+                DrawMenuBar(venster);
+            }
+        }
+
+        pub(super) fn menuregel(&mut self, naam: &str, nummer: usize) {
+            let Some(&venster) = self.vensters.last() else { return };
+            let Some(popup) = MENUS.with(|m| m.borrow().iter().find(|x| x.0 == venster).map(|x| x.2)) else { return };
+            unsafe {
+                AppendMenuW(popup, 0, KNOP_ID + nummer, w(naam).as_ptr());
+            }
+            // Houd de lijst met knoppen gelijk: deze plek heeft geen knop.
+            KNOP_HWNDS.with(|k| k.borrow_mut().push(null_mut()));
+            MENUREGELS.with(|m| m.borrow_mut().push((nummer, venster, popup)));
+        }
+    }
+
+    /// De Windows-stem (SAPI) laat tekst voorlezen. Gaat meteen verder (niet wachten).
+    pub(super) fn lees_voor(tekst: &str) -> bool {
+        unsafe {
+            let mut stem = STEM.with(|s| s.get());
+            if stem.is_null() {
+                CoInitializeEx(null_mut(), 2);
+                let clsid = guid(0x9674_9377, 0x3391, 0x11D2, [0x9E, 0xE3, 0x00, 0xC0, 0x4F, 0x79, 0x73, 0x96]);
+                let iid = guid(0x6C44_DF74, 0x72B9, 0x4992, [0xA1, 0xEC, 0xEF, 0x99, 0x6E, 0x04, 0x22, 0xD4]);
+                if CoCreateInstance(&clsid, null_mut(), 1 | 4, &iid, &mut stem) != 0 || stem.is_null() {
+                    return false;
+                }
+                STEM.with(|s| s.set(stem));
+            }
+            let vtabel = *(stem as *const *const usize);
+            type Volume = unsafe extern "system" fn(*mut c_void, u16) -> i32;
+            type Spreek = unsafe extern "system" fn(*mut c_void, *const u16, u32, *mut u32) -> i32;
+            let volume: Volume = std::mem::transmute(*vtabel.add(30));
+            volume(stem, VOLUME.with(|v| v.get()) as u16);
+            let spreek: Spreek = std::mem::transmute(*vtabel.add(20));
+            // SPF_ASYNC (1): meteen verder. SPF_IS_NOT_XML (16): tekens zoals < gewoon voorlezen.
+            spreek(stem, w(tekst).as_ptr(), 1 | 16, null_mut()) >= 0
+        }
+    }
+
+    pub(super) fn stop_voorlezen() {
+        let stem = STEM.with(|s| s.get());
+        if stem.is_null() {
+            return;
+        }
+        unsafe {
+            let vtabel = *(stem as *const *const usize);
+            type Spreek = unsafe extern "system" fn(*mut c_void, *const u16, u32, *mut u32) -> i32;
+            let spreek: Spreek = std::mem::transmute(*vtabel.add(20));
+            // SPF_PURGEBEFORESPEAK (2) met een lege tekst: stoppen.
+            spreek(stem, w("").as_ptr(), 1 | 2, null_mut());
+        }
+    }
+
+    pub(super) fn zet_volume(v: u32) {
+        let kanaal = v * 0xFFFF / 100;
+        unsafe {
+            waveOutSetVolume(null_mut(), kanaal | (kanaal << 16));
+            mciSendStringW(w(&format!("setaudio jaapgeluid volume to {}", v * 10)).as_ptr(), null_mut(), 0, null_mut());
+        }
+    }
+
+    /// Naar de Prullenbak, zodat je het terug kunt halen.
+    pub(super) fn naar_prullenbak(pad: &std::path::Path) -> bool {
+        let van: Vec<u16> = pad.to_string_lossy().encode_utf16().chain([0, 0]).collect();
+        let mut op = SHFILEOPSTRUCTW {
+            hwnd: null_mut(),
+            functie: 3,
+            van: van.as_ptr(),
+            naar: null(),
+            vlaggen: 0x40 | 0x10 | 0x04 | 0x400,
+            afgebroken: 0,
+            namen: null_mut(),
+            titel: null(),
+        };
+        unsafe { SHFileOperationW(&mut op) == 0 && !pad.exists() }
+    }
+
     /// Het pictogram van het programma op een venster zetten (titelbalk en taakbalk).
     pub(super) fn zet_pictogram(venster: HWND) {
         if PICTOGRAM.is_empty() {
@@ -1258,6 +1655,8 @@ mod win {
             if mciSendStringW(w(&open).as_ptr(), null_mut(), 0, null_mut()) != 0 {
                 return false;
             }
+            let volume = format!("setaudio jaapgeluid volume to {}", VOLUME.with(|v| v.get()) * 10);
+            mciSendStringW(w(&volume).as_ptr(), null_mut(), 0, null_mut());
             let speel = if wachten { "play jaapgeluid wait" } else { "play jaapgeluid" };
             mciSendStringW(w(speel).as_ptr(), null_mut(), 0, null_mut()) == 0
         }
@@ -1265,11 +1664,22 @@ mod win {
 
     pub(super) fn sneltoets(knop: usize, code: u16, ctrl: bool, alt: bool, shift: bool, tekst: &str) {
         let Some(h) = KNOP_HWNDS.with(|k| k.borrow().get(knop).copied()) else { return };
+        if h.is_null() {
+            // Een menuregel: de sneltoets komt achter de naam in het menu, zoals in elk Windows-programma.
+            if let Some((_, venster, popup)) = MENUREGELS.with(|m| m.borrow().iter().find(|x| x.0 == knop).copied()) {
+                let naam = tekst.rsplit_once(" (").map(|(n, t)| format!("{}\t{}", n, t.trim_end_matches(')'))).unwrap_or(tekst.to_string());
+                unsafe {
+                    ModifyMenuW(popup, (KNOP_ID + knop) as u32, 0, KNOP_ID + knop, w(&naam).as_ptr());
+                }
+                SNELTOETSEN.with(|s| s.borrow_mut().push((code, ctrl, alt, shift, venster, KNOP_ID + knop)));
+            }
+            return;
+        }
         unsafe {
             // De sneltoets staat ook in de naam van de knop: zo hoor je hem.
             SetWindowTextW(h, w(tekst).as_ptr());
         }
-        SNELTOETSEN.with(|s| s.borrow_mut().push((code, ctrl, alt, shift, h)));
+        SNELTOETSEN.with(|s| s.borrow_mut().push((code, ctrl, alt, shift, h, 0)));
     }
 
     fn rgb(k: (u8, u8, u8)) -> u32 {
@@ -1341,7 +1751,13 @@ mod win {
         /// Zet een Windows-onderdeel onder het vorige in het laatste venster.
         fn plaats(&mut self, klasse: &str, tekst: &str, stijl: u32, ex: u32, hoogte: i32, id: usize, focus: bool) -> HWND {
             let Some(&venster) = self.vensters.last() else { return null_mut() };
-            let y = *self.volgende_y.last().unwrap();
+            // Op een tabblad: onder de vorige onderdelen van dat tabblad.
+            let tab = if klasse == "SysTabControl32" {
+                None
+            } else {
+                TABS.with(|t| t.borrow().iter().find(|x| x.venster == venster).map(|x| (x.namen.len() - 1, *x.y.last().unwrap())))
+            };
+            let y = tab.map(|t| t.1).unwrap_or(*self.volgende_y.last().unwrap());
             unsafe {
                 let h = CreateWindowExW(
                     ex,
@@ -1361,9 +1777,23 @@ mod win {
                     SendMessageW(h, WM_SETFONT, f as usize, 1);
                 }
                 let nieuw_y = y + self.s(hoogte) + self.s(12);
-                *self.volgende_y.last_mut().unwrap() = nieuw_y;
-                SetWindowPos(venster, null_mut(), 0, 0, self.s(460), nieuw_y + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
-                if focus && !*self.heeft_focus.last().unwrap() {
+                let mut hoogste = nieuw_y;
+                match tab {
+                    Some((nr, _)) => TABS.with(|t| {
+                        let mut t = t.borrow_mut();
+                        let tabs = t.iter_mut().find(|x| x.venster == venster).unwrap();
+                        *tabs.y.last_mut().unwrap() = nieuw_y;
+                        tabs.onderdelen[nr].push(h);
+                        hoogste = *tabs.y.iter().max().unwrap();
+                        if nr != 0 {
+                            ShowWindow(h, 0);
+                        }
+                    }),
+                    None => *self.volgende_y.last_mut().unwrap() = nieuw_y,
+                }
+                SetWindowPos(venster, null_mut(), 0, 0, self.s(460), hoogste + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                let op_ander_tabblad = tab.map_or(false, |t| t.0 != 0);
+                if focus && !op_ander_tabblad && !*self.heeft_focus.last().unwrap() {
                     *self.heeft_focus.last_mut().unwrap() = true;
                     SetFocus(h);
                 }
@@ -1542,6 +1972,20 @@ mod win {
                     MoveWindow(vak, 0, 0, r.right, r.bottom, 1);
                 }
             }
+            0x004E => {
+                // WM_NOTIFY: een ander tabblad gekozen (TCN_SELCHANGE).
+                #[repr(C)]
+                struct NMHDR {
+                    van: HWND,
+                    id: usize,
+                    code: i32,
+                }
+                let n = &*(lp as *const NMHDR);
+                if n.code == -551 {
+                    let nr = SendMessageW(n.van, 0x130B, 0, 0).max(0) as usize;
+                    toon_tab(n.van, nr);
+                }
+            }
             0x0014 => {
                 // WM_ERASEBKGND: de achtergrondkleur.
                 let kwast = KLEUREN.with(|k| k.borrow().iter().find(|x| x.0 == h).map(|x| x.3)).filter(|k| !k.is_null());
@@ -1663,7 +2107,7 @@ mod win {
             namen,
             acties,
             stappen: 0,
-            scherm: Scherm { tekststand: false, knoppen: Vec::new(), onderdelen: Vec::new(), uitvoer: Vec::new(), win: WinScherm::default() },
+            scherm: Scherm { tekststand: false, knoppen: Vec::new(), onderdelen: Vec::new(), tabbladen: Vec::new(), uitvoer: Vec::new(), win: WinScherm::default() },
         };
         if let Err(f) = hoofd(&mut staat) {
             foutmelding(staat.scherm.win.actief(), &foutzin(&f));
@@ -1702,10 +2146,14 @@ mod win {
                     let alt = GetKeyState(0x12) < 0;
                     let shift = GetKeyState(0x10) < 0;
                     let knop = SNELTOETSEN.with(|s| {
-                        s.borrow().iter().find(|t| t.0 as usize == msg.wParam && t.1 == ctrl && t.2 == alt && t.3 == shift).map(|t| t.4)
+                        s.borrow().iter().find(|t| t.0 as usize == msg.wParam && t.1 == ctrl && t.2 == alt && t.3 == shift).map(|t| (t.4, t.5))
                     });
-                    if let Some(knop) = knop {
-                        SendMessageW(knop, BM_CLICK, 0, 0);
+                    if let Some((doel, menu)) = knop {
+                        if menu == 0 {
+                            SendMessageW(doel, BM_CLICK, 0, 0);
+                        } else {
+                            PostMessageW(doel, WM_COMMAND, menu, 0);
+                        }
                         continue;
                     }
                 }
@@ -1740,6 +2188,11 @@ mod win {
                         HANDLEIDING_VENSTER.with(|v| v.set(h));
                     }
                     continue;
+                }
+                if msg.message == WM_KEYDOWN && msg.wParam == 0x09 && GetKeyState(0x11) < 0 && !wortel.is_null() {
+                    if wissel_tab(wortel, GetKeyState(0x10) < 0) {
+                        continue;
+                    }
                 }
                 if msg.message == WM_KEYDOWN && msg.wParam == VK_RETURN {
                     let focus = GetFocus();

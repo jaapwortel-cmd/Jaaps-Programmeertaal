@@ -36,7 +36,7 @@ Dan hoor je: Hallo. Druk op Escape om het venster te sluiten.
 ---------------
 
 Ctrl+N          Nieuw programma
-Ctrl+O          Een programma openen (een TXT-bestand)
+Ctrl+O          Een programma openen (een TXT-bestand), met het gewone Openen-venster van Windows
 Ctrl+S          Opslaan
 Ctrl+Shift+S    Opslaan als
 F7              Controleren (testen)
@@ -55,6 +55,10 @@ F1              Deze handleiding
 Alt+F4          Afsluiten
 
 Alle opdrachten staan ook in de menubalk. Druk op Alt om de menubalk te openen.
+
+Het Openen-venster (Ctrl+O) is hetzelfde als in Word en Kladblok. Je ziet mappen en tekstbestanden.
+Enter op een map: die map in. Backspace: een map hoger. Enter op een bestand: openen.
+Het venster begint in Documenten\Jaaps Programmeertaal.
 
 
 3. Wat er gebeurt als iets niet klopt
@@ -115,7 +119,48 @@ Einde van de knop
 Ook goed: Als ik op de knop Welkom klik. En: Einde knop.
 In zo'n blok mag je ook een nieuw venster maken. Zo kun je meerdere vensters hebben.
 
-4.2b Tekstvakken, labels, selectievakjes en keuzelijsten
+4.2a Tabbladen
+
+Een venster met veel onderdelen kun je verdelen over tabbladen, net als bij Instellingen in Windows.
+Bovenaan het venster staat dan een rij met de namen van de tabbladen. Je ziet altijd maar één tabblad
+tegelijk. Zo blijft het venster rustig en overzichtelijk.
+
+Maak een venster met als titel Instellingen
+Maak een tabblad met als naam Algemeen
+Maak een tekstvak met als naam Naam
+Maak een tabblad met als naam Geluid
+Maak een selectievakje met als naam Geluid aan
+
+Alles wat je na "Maak een tabblad" maakt, komt op dat tabblad: hier staat het tekstvak Naam op het tabblad
+Algemeen, en het selectievakje op het tabblad Geluid. Een nieuw tabblad begint weer bovenaan.
+
+Bediening:
+- Ctrl+Tab gaat naar het volgende tabblad, Ctrl+Shift+Tab naar het vorige.
+- Staat de focus op de rij met tabbladen, dan wissel je met pijltje links en rechts.
+- De schermlezer zegt dan bijvoorbeeld: "Geluid, tabblad 2 van 2".
+- Bij de start zie je het eerste tabblad.
+
+Vanuit je programma naar een tabblad gaan, bijvoorbeeld als iemand op een knop drukt:
+Ga naar het tabblad Geluid
+
+Ctrl+F6 vertelt per tabblad wat erop staat.
+
+4.2b Een menubalk
+
+Je eigen programma kan een menubalk krijgen, zoals elk Windows-programma:
+Maak een menu met als naam Bestand
+Maak een menuregel met als naam Opslaan
+Maak een menuregel met als naam Afsluiten
+Geef de menuregel Opslaan de sneltoets Ctrl+S
+
+Wat een menuregel doet, schrijf je zo:
+Als ik de menuregel Opslaan kies
+(hier de opdrachten)
+Einde van de knop
+
+De menubalk open je met Alt of F10; met de pijltjes loop je erdoor. De sneltoets staat achter de naam in het menu.
+
+4.2c Tekstvakken, labels, selectievakjes en keuzelijsten
 
 Deze onderdelen komen, net als knoppen, in het laatste venster. Ze staan onder elkaar.
 Een tekstvak en een keuzelijst krijgen hun naam erboven, zodat de schermlezer die voorleest.
@@ -222,6 +267,11 @@ is gelijk aan            (ook: is)
 is niet gelijk aan       (ook: is niet)
 is minstens              (groter dan of gelijk aan)
 is hoogstens             (kleiner dan of gelijk aan)
+
+Twee voorwaarden tegelijk:
+Als leeftijd is minstens 18 en naam is "Jaap"        (allebei moeten waar zijn)
+Als dag is "zaterdag" of dag is "zondag"            (één van de twee is genoeg)
+"En" gaat voor "of", net als keer voor plus gaat: a of b en c betekent a of (b en c).
 
 Tekst vergelijken mag ook: Als mijn naam is "Jaap". Hoofdletters tellen dan niet mee.
 Iets dat waar of niet waar is mag ook zonder vergelijking: Als klaar.
@@ -346,6 +396,23 @@ Het programma speelt WAV, MP3, WMA, M4A, AAC en MIDI af, met de geluidsonderdele
 Zipbestanden (met Windows zelf):
 Pak de map Foto's in tot het zipbestand Foto's.zip
 Pak het zipbestand Foto's.zip uit in de map Foto's terug
+
+4.7f2 Voorlezen en volume
+
+Lees voor "Goedemorgen"                   (met de stem van Windows, los van je schermlezer)
+Lees de tekst Welkom bij mijn programma voor
+Stop met voorlezen
+Zet het volume op 50                      (van 0 tot 100; geldt voor geluid en voorlezen)
+
+Het verschil met Zeg: Zeg gaat via je schermlezer (JAWS, NVDA). Lees voor gebruikt de stem van Windows zelf.
+
+4.7f3 Bestanden kopiëren, verplaatsen en weggooien
+
+Kopieer het bestand brief.txt naar Reserve\brief.txt
+Kopieer de map Foto's naar Reserve foto's
+Verplaats het bestand brief.txt naar Oud\brief.txt
+Gooi het bestand brief.txt weg
+Weggooien gaat naar de Prullenbak. Daar kun je het altijd terughalen.
 
 4.7g Sneltoetsen, kleuren en een handleiding voor je eigen programma
 
@@ -600,7 +667,6 @@ Dit staat op de wensenlijst, maar zit nog niet in deze versie:
 - MP3 en andere geluiden dan WAV, muziek, opnemen;
 - afbeeldingen, QR-codes en streepjescodes;
 - internet en netwerk;
-- twee voorwaarden in één keer met "en" of "of";
 - Engelse zinnen voor lijsten, stukjes, bestanden, tekstvakken en installatie (de basiszinnen werken wel);
 - tekst tussen aanhalingstekens vertalen.
 

@@ -123,6 +123,16 @@ impl<'a> Maker<'a> {
                 let u = self.uitdrukking(u, r);
                 format!("waar({}, {})?", u, r)
             }
+            Voorwaarde::En(a, b) => {
+                let a = self.voorwaarde(a, r);
+                let b = self.voorwaarde(b, r);
+                format!("({} && {})", a, b)
+            }
+            Voorwaarde::Of(a, b) => {
+                let a = self.voorwaarde(a, r);
+                let b = self.voorwaarde(b, r);
+                format!("({} || {})", a, b)
+            }
             Voorwaarde::Bevat(a, b) => {
                 let a = self.uitdrukking(a, r);
                 let b = self.uitdrukking(b, r);
@@ -241,6 +251,45 @@ impl<'a> Maker<'a> {
                     self.regel(diepte, &format!("{{ let w = {}; s.zeg(w); }}", u));
                 }
                 Soort::Pictogram(_) => self.opmerking(diepte, r),
+                Soort::LeesVoor(u) => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.lees_voor(w); }}", u));
+                }
+                Soort::StopVoorlezen => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, "s.stop_voorlezen();");
+                }
+                Soort::Volume(u) => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.volume(w, {})?; }}", u, r));
+                }
+                Soort::MaakTabblad { naam } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.tabblad({});", rust_tekst(naam)));
+                }
+                Soort::KiesTabblad { naam } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.kies_tabblad({}, {})?;", rust_tekst(naam), r));
+                }
+                Soort::MaakMenu { naam } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.menu({});", rust_tekst(naam)));
+                }
+                Soort::MaakMenuregel { naam } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.menuregel({});", rust_tekst(naam)));
+                }
+                Soort::BestandActie { soort, van, naar } => {
+                    self.opmerking(diepte, r);
+                    let v = self.uitdrukking(van, r);
+                    let n = match naar {
+                        Some(n) => format!("Some({})", self.uitdrukking(n, r)),
+                        None => "None".into(),
+                    };
+                    self.regel(diepte, &format!("{{ let v = {}; let n = {}; bestand_actie({}, v, n, {})?; }}", v, n, soort, r));
+                }
                 Soort::StopGeluid => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, "s.stop_geluid();");

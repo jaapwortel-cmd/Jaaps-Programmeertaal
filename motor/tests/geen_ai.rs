@@ -84,7 +84,7 @@ fn looptijd_gebruikt_alleen_windows_zelf() {
         if let Some(rest) = regel.trim().strip_prefix("#[link(name = \"") {
             let lib = rest.split('"').next().unwrap();
             assert!(
-                ["user32", "kernel32", "gdi32", "shell32", "winmm", "ole32", "advapi32", "comdlg32"].contains(&lib),
+                ["user32", "kernel32", "gdi32", "shell32", "winmm", "ole32", "advapi32", "comdlg32", "comctl32"].contains(&lib),
                 "Onverwachte bibliotheek: {} (alleen onderdelen van Windows zelf mogen)",
                 lib
             );

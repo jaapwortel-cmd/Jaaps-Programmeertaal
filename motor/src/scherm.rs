@@ -12,6 +12,27 @@ struct Venster {
     achtergrond: (String, (u8, u8, u8)),
     tekst: (String, (u8, u8, u8)),
     sneltoetsen: Vec<(String, String)>,
+    /// Tabbladen: naam, en de onderdelen (soort, naam) op dat tabblad.
+    tabs: Vec<(String, Vec<(String, String)>)>,
+    /// Menubalk: menu, en de regels erin.
+    menus: Vec<(String, Vec<String>)>,
+}
+
+impl Venster {
+    /// Een onderdeel komt op het laatste tabblad, of (zonder tabbladen) in het venster zelf.
+    fn voeg_toe(&mut self, soort: &str, naam: &str) {
+        match self.tabs.last_mut() {
+            Some(t) => t.1.push((soort.into(), naam.into())),
+            None => self.onderdelen.push((soort.into(), naam.into())),
+        }
+    }
+    fn alle(&self) -> Vec<(String, String)> {
+        let mut a = self.onderdelen.clone();
+        for t in &self.tabs {
+            a.extend(t.1.iter().cloned());
+        }
+        a
+    }
 }
 
 fn verzamel(lijst: &[Opdracht], wanneer: &str, vensters: &mut Vec<Venster>) {
@@ -24,15 +45,32 @@ fn verzamel(lijst: &[Opdracht], wanneer: &str, vensters: &mut Vec<Venster>) {
                 achtergrond: ("lichtgrijs".into(), (240, 240, 240)),
                 tekst: ("zwart".into(), (0, 0, 0)),
                 sneltoetsen: Vec::new(),
+                tabs: Vec::new(),
+                menus: Vec::new(),
             }),
             Soort::MaakKnop { naam } => {
                 if let Some(v) = vensters.last_mut() {
-                    v.onderdelen.push(("knop".into(), naam.clone()));
+                    v.voeg_toe("knop", naam);
                 }
             }
             Soort::MaakOnderdeel { soort, naam } => {
                 if let Some(v) = vensters.last_mut() {
-                    v.onderdelen.push((soort.woord().into(), naam.clone()));
+                    v.voeg_toe(soort.woord(), naam);
+                }
+            }
+            Soort::MaakTabblad { naam } => {
+                if let Some(v) = vensters.last_mut() {
+                    v.tabs.push((naam.clone(), Vec::new()));
+                }
+            }
+            Soort::MaakMenu { naam } => {
+                if let Some(v) = vensters.last_mut() {
+                    v.menus.push((naam.clone(), Vec::new()));
+                }
+            }
+            Soort::MaakMenuregel { naam } => {
+                if let Some(m) = vensters.last_mut().and_then(|v| v.menus.last_mut()) {
+                    m.1.push(naam.clone());
                 }
             }
             Soort::Kleur { achtergrond, kleur, rgb } => {
@@ -45,7 +83,10 @@ fn verzamel(lijst: &[Opdracht], wanneer: &str, vensters: &mut Vec<Venster>) {
                 }
             }
             Soort::Sneltoets { knop, toets } => {
-                if let Some(v) = vensters.iter_mut().rev().find(|v| v.onderdelen.iter().any(|o| o.0 == "knop" && o.1.to_lowercase() == knop.to_lowercase())) {
+                if let Some(v) = vensters.iter_mut().rev().find(|v| {
+                    v.alle().iter().any(|o| o.0 == "knop" && o.1.to_lowercase() == knop.to_lowercase())
+                        || v.menus.iter().any(|m| m.1.iter().any(|r| r.to_lowercase() == knop.to_lowercase()))
+                }) {
                     v.sneltoetsen.push((knop.clone(), toets.naam.clone()));
                 }
             }
@@ -100,8 +141,64 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
             getallen::schrijf((ct * 10.0).round() / 10.0),
             oordeel
         ));
-        if v.onderdelen.is_empty() {
+        let toets_van = |naam: &str| v.sneltoetsen.iter().find(|s| s.0.to_lowercase() == naam.to_lowercase()).map(|s| s.1.clone());
+        if !v.menus.is_empty() {
+            uit.push(format!(
+                "Bovenaan staat een menubalk met {}: {}. Je opent hem met Alt of F10, en loopt erdoor met de pijltjes.",
+                if v.menus.len() == 1 { "één menu" } else { "deze menu's" },
+                v.menus.iter().map(|m| m.0.clone()).collect::<Vec<_>>().join(", ")
+            ));
+            for (menu, regels) in &v.menus {
+                let r: Vec<String> = regels
+                    .iter()
+                    .map(|r| match toets_van(r) {
+                        Some(t) => format!("{} ({})", r, t),
+                        None => r.clone(),
+                    })
+                    .collect();
+                uit.push(format!("  Menu {}: {}.", menu, if r.is_empty() { "nog leeg".to_string() } else { r.join(", ") }));
+            }
+        }
+        let beschrijf_lijst = |lijst: &[(String, String)], uit: &mut Vec<String>| {
+            for (j, (soort, naam)) in lijst.iter().enumerate() {
+                let extra = match soort.as_str() {
+                    "tekstvak" | "groot tekstvak" | "keuzelijst" | "uitklaplijst" => format!(", met erboven de tekst \"{}:\"", naam),
+                    _ => String::new(),
+                };
+                let toets = if soort == "knop" { toets_van(naam).map(|t| format!(", sneltoets {}", t)).unwrap_or_default() } else { String::new() };
+                uit.push(format!("  {}. {} {}{}{}", j + 1, lidwoord(soort), naam, extra, toets));
+            }
+        };
+        if !v.tabs.is_empty() {
+            if !v.onderdelen.is_empty() {
+                uit.push("Boven de tabbladen staat:".into());
+                beschrijf_lijst(&v.onderdelen, &mut uit);
+            }
+            uit.push(format!(
+                "{} {} tabbladen: {}. Je wisselt met Ctrl+Tab (en terug met Ctrl+Shift+Tab), of met de pijltjes als je op de tabbladen staat. De schermlezer zegt dan bijvoorbeeld: \"{}, tabblad 1 van {}\". Je ziet altijd maar één tabblad tegelijk; bij de start is dat {}.",
+                if v.onderdelen.is_empty() { "Er staan" } else { "Daaronder staan" },
+                v.tabs.len(),
+                v.tabs.iter().map(|t| t.0.clone()).collect::<Vec<_>>().join(", "),
+                v.tabs[0].0,
+                v.tabs.len(),
+                v.tabs[0].0
+            ));
+            for (naam, lijst) in &v.tabs {
+                if lijst.is_empty() {
+                    uit.push(format!("Het tabblad {} is nog leeg.", naam));
+                } else {
+                    uit.push(format!("Op het tabblad {} staat, van boven naar beneden:", naam));
+                    beschrijf_lijst(lijst, &mut uit);
+                }
+            }
+        }
+        if v.alle().is_empty() {
             uit.push("Er staat niets in het venster.".into());
+        } else if !v.tabs.is_empty() {
+            let eerste: Vec<String> = v.onderdelen.iter().chain(v.tabs[0].1.iter()).filter(|o| o.0 != "label").map(|o| o.1.clone()).collect();
+            if !eerste.is_empty() {
+                uit.push(format!("Bij de start staat de focus op: {}.", eerste[0]));
+            }
         } else {
             uit.push("Van boven naar beneden staat erin:".into());
             for (j, (soort, naam)) in v.onderdelen.iter().enumerate() {
@@ -123,7 +220,10 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
                 uit.push(format!("Bij de start staat de focus op: {}.", tab[0]));
             }
         }
-        let hoogte = 140 + v.onderdelen.iter().map(|o| hoogte_van(&o.0)).sum::<i32>();
+        let hoogte = 140
+            + if v.tabs.is_empty() { 0 } else { 56 }
+            + v.onderdelen.iter().map(|o| hoogte_van(&o.0)).sum::<i32>()
+            + v.tabs.iter().map(|t| t.1.iter().map(|o| hoogte_van(&o.0)).sum::<i32>()).max().unwrap_or(0);
         uit.push(format!(
             "Grootte: ongeveer 460 beeldpunten breed en {} hoog. Op een klein scherm of tablet {}.",
             hoogte,
@@ -176,8 +276,13 @@ fn tips(v: &Venster, handleiding: bool) -> Vec<String> {
             ));
         }
     }
-    if v.onderdelen.len() > 10 {
-        t.push("er staan veel onderdelen in dit venster. Overweeg om het te verdelen over twee vensters.".into());
+    if v.tabs.is_empty() && v.onderdelen.len() > 10 {
+        t.push("er staan veel onderdelen in dit venster. Verdeel ze over tabbladen, bijvoorbeeld: Maak een tabblad met als naam Algemeen.".into());
+    }
+    for (naam, lijst) in &v.tabs {
+        if lijst.is_empty() {
+            t.push(format!("het tabblad {} is leeg. Zet er iets op, of haal het weg.", naam));
+        }
     }
     let ct = contrast(v.achtergrond.1, v.tekst.1);
     if ct < 4.5 {

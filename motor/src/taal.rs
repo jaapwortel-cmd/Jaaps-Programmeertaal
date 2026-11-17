@@ -177,6 +177,10 @@ pub enum Voorwaarde {
     IsWaar(Uitdrukking),
     /// Staat iets in een lijst?
     Bevat(Uitdrukking, Uitdrukking),
+    /// Allebei waar ("en").
+    En(Box<Voorwaarde>, Box<Voorwaarde>),
+    /// Minstens één van de twee waar ("of").
+    Of(Box<Voorwaarde>, Box<Voorwaarde>),
 }
 
 impl Voorwaarde {
@@ -191,6 +195,10 @@ impl Voorwaarde {
                 a.namen(uit);
                 b.namen(uit);
             }
+            Voorwaarde::En(a, b) | Voorwaarde::Of(a, b) => {
+                a.namen(uit);
+                b.namen(uit);
+            }
         }
     }
 
@@ -198,6 +206,11 @@ impl Voorwaarde {
         match self {
             Voorwaarde::Vergelijk(a, _, b) | Voorwaarde::Bevat(a, b) => vec![a, b],
             Voorwaarde::IsWaar(a) => vec![a],
+            Voorwaarde::En(a, b) | Voorwaarde::Of(a, b) => {
+                let mut v = a.uitdrukkingen_mut();
+                v.extend(b.uitdrukkingen_mut());
+                v
+            }
         }
     }
 
@@ -205,6 +218,11 @@ impl Voorwaarde {
         match self {
             Voorwaarde::Vergelijk(a, _, b) | Voorwaarde::Bevat(a, b) => vec![a, b],
             Voorwaarde::IsWaar(a) => vec![a],
+            Voorwaarde::En(a, b) | Voorwaarde::Of(a, b) => {
+                let mut v = a.uitdrukkingen();
+                v.extend(b.uitdrukkingen());
+                v
+            }
         }
     }
 }
@@ -260,6 +278,22 @@ pub enum Soort {
     StopGeluid,
     /// De schermlezer iets laten zeggen, zonder meldingsvenster.
     Zeg(Uitdrukking),
+    /// Voorlezen met de stem van Windows (los van de schermlezer).
+    LeesVoor(Uitdrukking),
+    /// Stoppen met voorlezen.
+    StopVoorlezen,
+    /// Het volume van geluid en voorlezen, van 0 tot 100.
+    Volume(Uitdrukking),
+    /// Een tabblad in het laatste venster. Wat je daarna maakt, komt op dit tabblad.
+    MaakTabblad { naam: String },
+    /// Naar een tabblad gaan.
+    KiesTabblad { naam: String },
+    /// Een menu in de menubalk van het laatste venster.
+    MaakMenu { naam: String },
+    /// Een regel in het laatste menu. Wat hij doet, schrijf je zoals bij een knop.
+    MaakMenuregel { naam: String },
+    /// Een bestand of map kopiëren (0), verplaatsen (1) of naar de Prullenbak gooien (2).
+    BestandActie { soort: u8, van: Uitdrukking, naar: Option<Uitdrukking> },
     /// Het pictogram van het programma (een .ico-bestand).
     Pictogram(String),
     /// Een map inpakken in een zipbestand, of een zipbestand uitpakken in een map.
@@ -401,11 +435,18 @@ impl Soort {
     /// Alle uitdrukkingen in deze opdracht (niet in de blokken eronder).
     pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
         match self {
-            Soort::Toon(u) | Soort::Zeg(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
             Soort::Zip { map, zip, .. } => vec![map, zip],
+            Soort::BestandActie { van, naar, .. } => {
+                let mut v = vec![van];
+                if let Some(n) = naar {
+                    v.push(n);
+                }
+                v
+            }
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }
@@ -430,11 +471,18 @@ impl Soort {
     /// Alle uitdrukkingen in deze opdracht (alleen lezen).
     pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
         match self {
-            Soort::Toon(u) | Soort::Zeg(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
             Soort::Zip { map, zip, .. } => vec![map, zip],
+            Soort::BestandActie { van, naar, .. } => {
+                let mut v = vec![van];
+                if let Some(n) = naar {
+                    v.push(n);
+                }
+                v
+            }
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }

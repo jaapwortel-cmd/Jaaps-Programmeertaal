@@ -69,12 +69,13 @@ const WOORDENLIJST: &[&str] = &[
     "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
     "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum", "speel", "piep",
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
-    "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram",
+    "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
+    "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "tabel", "menu", "werkbalk",
+    "tabel", "werkbalk",
     "afbeelding", "plaatje", "foto", "tekstverwerker", "qr-code", "streepjescode",
 ];
 
@@ -269,6 +270,20 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
         return ib(Ingebouwd::Willekeurig, vec![operand(&s[v + 1..t], false)?, operand(&s[na..], false)?]);
     }
     Ok(None)
+}
+
+/// Wat de schermlezer moet zeggen of de stem moet voorlezen: letterlijke tekst, of een waarde.
+fn spreektekst(r: &[Stuk]) -> Result<Uitdrukking, RegelFout> {
+    let letterlijk = !r.iter().any(|x| matches!(x, Stuk::Tekst(_)))
+        && uitdrukking(r).map_or(true, |u| matches!(u, Uitdrukking::Naam(_)) && r.len() > 1);
+    if letterlijk && !begint(r, &["de", "tekst", "in"]) {
+        let t = if begint(r, &["de", "tekst"]) { rest_tekst(&r[2..]) } else { rest_tekst(r) };
+        return Ok(Uitdrukking::Vast(Waarde::Tekst(t)));
+    }
+    match ontleed_regel(&format!("Toon {}", bron_tekst(r)))? {
+        Vorm::Los(Soort::Toon(u)) => Ok(u),
+        _ => Err(fout("Schrijf het zo: Zeg Het bestand is opgeslagen.")),
+    }
 }
 
 /// Leest een sneltoets, zoals "Ctrl+W", "Control Shift S", "Alt 1" of "F5".
@@ -500,10 +515,45 @@ fn heeft_en_of(s: &[Stuk]) -> bool {
 const EN_OF: &str =
     "Twee voorwaarden in één keer, met \"en\" of \"of\", kan ik nog niet. Zet twee keuzes in elkaar: eerst de ene Als, en daarbinnen de andere.";
 
+/// Waar staat een "en" of "of" dat twee voorwaarden verbindt? (Niet in "en dan", "tot en met",
+/// "groter dan of gelijk aan", of tussen de invoer van een stukje na "met".)
+fn logisch_woord(s: &[Stuk], woord: &str) -> Option<usize> {
+    let mut na_met = false;
+    for i in 1..s.len().saturating_sub(1) {
+        let k = klein(s, i);
+        if k == "met" {
+            na_met = true;
+        }
+        if k == "is" || zoek(&s[i..i + 1], &["bevat"], 0).is_some() {
+            na_met = false;
+        }
+        if k != woord {
+            continue;
+        }
+        let voor = klein(s, i - 1);
+        let na = klein(s, i + 1);
+        let overslaan = match woord {
+            "en" => na == "dan" || (voor == "tot" && na == "met") || na_met,
+            _ => voor == "dan" && na == "gelijk",
+        };
+        if !overslaan {
+            return Some(i);
+        }
+    }
+    None
+}
+
 /// Leest een voorwaarde, bijvoorbeeld: teller is groter dan 5.
+/// Twee voorwaarden kunnen samen met "en" (allebei waar) of "of" (minstens één waar).
 pub(crate) fn voorwaarde(s: &[Stuk]) -> Result<Voorwaarde, String> {
     if s.is_empty() {
         return Err("Waar moet ik op letten? Schrijf bijvoorbeeld: Als teller is groter dan 5.".into());
+    }
+    for (woord, of) in [("of", true), ("en", false)] {
+        if let Some(i) = logisch_woord(s, woord) {
+            let (a, b) = (voorwaarde(&s[..i])?, voorwaarde(&s[i + 1..])?);
+            return Ok(if of { Voorwaarde::Of(Box::new(a), Box::new(b)) } else { Voorwaarde::En(Box::new(a), Box::new(b)) });
+        }
     }
     // "het bestand notities.txt bestaat" (of: bestaat niet)
     if begint(s, &["het", "bestand"]) || begint(s, &["de", "map"]) {
@@ -847,6 +897,15 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                     soort: OnderdeelSoort::Uitklaplijst,
                     naam: met_als_titel(&s, i + 1, &["naam", "titel"], "de uitklaplijst", "Maak een uitklaplijst met als naam Kleur")?,
                 })),
+                "tabblad" | "tab" => Ok(Vorm::Los(Soort::MaakTabblad {
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel"], "het tabblad", "Maak een tabblad met als naam Algemeen")?,
+                })),
+                "menu" => Ok(Vorm::Los(Soort::MaakMenu {
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel"], "het menu", "Maak een menu met als naam Bestand")?,
+                })),
+                "menuregel" | "menu-item" | "menuitem" => Ok(Vorm::Los(Soort::MaakMenuregel {
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel", "tekst"], "de menuregel", "Maak een menuregel met als naam Opslaan")?,
+                })),
                 "knop" => Ok(Vorm::Los(Soort::MaakKnop {
                     naam: met_als_titel(&s, i + 1, &["naam", "tekst", "titel"], "knop", "Maak een knop met als naam Welkom")?,
                 })),
@@ -862,20 +921,72 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             if begin >= s.len() {
                 return Err(fout("Wat moet de schermlezer zeggen? Schrijf bijvoorbeeld: Zeg Het bestand is opgeslagen."));
             }
-            let nieuw = format!("Toon {}", bron_tekst(&s[begin..]));
-            let r = &s[begin..];
-            let letterlijk = !r.iter().any(|x| matches!(x, Stuk::Tekst(_))) && uitdrukking(r).map_or(true, |u| matches!(u, Uitdrukking::Naam(_)) && r.len() > 1);
-            if letterlijk && !begint(r, &["de", "tekst", "in"]) {
-                let mut t = rest_tekst(r);
-                if begint(r, &["de", "tekst"]) {
-                    t = rest_tekst(&r[2..]);
+            Ok(Vorm::Los(Soort::Zeg(spreektekst(&s[begin..])?)))
+        }
+        "lees" if klein(&s, 1) == "voor" || klein(&s, s.len() - 1) == "voor" => {
+            let r = if klein(&s, 1) == "voor" { &s[2..] } else { &s[1..s.len() - 1] };
+            if r.is_empty() {
+                return Err(fout("Wat moet ik voorlezen? Schrijf bijvoorbeeld: Lees voor \"Goedemorgen\"."));
+            }
+            Ok(Vorm::Los(Soort::LeesVoor(spreektekst(r)?)))
+        }
+        "stop" if zoek(&s, &["voorlezen"], 1).is_some() => Ok(Vorm::Los(Soort::StopVoorlezen)),
+        "ga" | "kies" if zoek(&s, &["tabblad"], 1).is_some() => {
+            let t = zoek(&s, &["tabblad"], 1).unwrap();
+            if t + 1 >= s.len() {
+                return Err(fout("Welk tabblad? Schrijf bijvoorbeeld: Ga naar het tabblad Geluid."));
+            }
+            Ok(Vorm::Los(Soort::KiesTabblad { naam: rest_tekst(&s[t + 1..]) }))
+        }
+        "zet" if zoek(&s, &["volume"], 1).map_or(false, |v| s[1..v].iter().all(|x| matches!(x.klein().as_deref(), Some("het" | "de")))) => {
+            let Some(p) = zoek(&s, &["op"], 2) else {
+                return Err(fout("Schrijf het zo: Zet het volume op 50. (Van 0 tot 100.)"));
+            };
+            let mut eind = s.len();
+            if matches!(klein(&s, eind - 1).as_str(), "procent" | "%") {
+                eind -= 1;
+            }
+            if p + 1 >= eind {
+                return Err(fout("Op hoeveel? Schrijf bijvoorbeeld: Zet het volume op 50."));
+            }
+            Ok(Vorm::Los(Soort::Volume(u(&s[p + 1..eind])?)))
+        }
+        "kopieer" | "verplaats" | "gooi" | "verwijder" => {
+            let soort = match w0.as_str() {
+                "kopieer" => 0u8,
+                "verplaats" => 1,
+                _ => 2,
+            };
+            let voorbeeld = match soort {
+                0 => "Kopieer het bestand brief.txt naar Reserve/brief.txt",
+                1 => "Verplaats het bestand brief.txt naar Oud/brief.txt",
+                _ => "Gooi het bestand brief.txt weg",
+            };
+            let mut b = 1;
+            while b < s.len() && matches!(klein(&s, b).as_str(), "het" | "de" | "bestand" | "map") {
+                b += 1;
+            }
+            if soort == 2 {
+                let mut e = s.len();
+                if klein(&s, e - 1) == "weg" {
+                    e -= 1;
                 }
-                return Ok(Vorm::Los(Soort::Zeg(Uitdrukking::Vast(Waarde::Tekst(t)))));
+                if b >= e {
+                    return Err(fout(format!("Welk bestand? Schrijf bijvoorbeeld: {}.", voorbeeld)));
+                }
+                return Ok(Vorm::Los(Soort::BestandActie { soort, van: pad(&s[b..e]).map_err(fout)?, naar: None }));
             }
-            match ontleed_regel(&nieuw)? {
-                Vorm::Los(Soort::Toon(u)) => Ok(Vorm::Los(Soort::Zeg(u))),
-                _ => Err(fout("Schrijf het zo: Zeg Het bestand is opgeslagen.")),
+            let Some(n) = zoek(&s, &["naar"], b + 1) else {
+                return Err(fout(format!("Waarheen? Schrijf bijvoorbeeld: {}.", voorbeeld)));
+            };
+            if n + 1 >= s.len() {
+                return Err(fout(format!("Waarheen? Schrijf bijvoorbeeld: {}.", voorbeeld)));
             }
+            let mut d = n + 1;
+            while d < s.len() - 1 && matches!(klein(&s, d).as_str(), "het" | "de" | "bestand" | "map") {
+                d += 1;
+            }
+            Ok(Vorm::Los(Soort::BestandActie { soort, van: pad(&s[b..n]).map_err(fout)?, naar: Some(pad(&s[d..]).map_err(fout)?) }))
         }
         "het" if klein(&s, 1) == "pictogram" || klein(&s, 1) == "icoon" => {
             let Some(p) = zoek(&s, &["bestand"], 2) else {
@@ -1118,7 +1229,9 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             }
         }
         "geef" if zoek(&s, &["sneltoets"], 2).is_some() => {
-            let k = zoek(&s, &["knop"], 1).ok_or_else(|| fout("Schrijf het zo: Geef de knop Welkom de sneltoets Ctrl+W."))?;
+            let k = zoek(&s, &["knop"], 1)
+                .or_else(|| zoek(&s, &["menuregel"], 1))
+                .ok_or_else(|| fout("Schrijf het zo: Geef de knop Welkom de sneltoets Ctrl+W."))?;
             let t = zoek(&s, &["sneltoets"], k).unwrap();
             let mut eind_naam = t;
             if matches!(klein(&s, eind_naam - 1).as_str(), "de" | "als") {
@@ -1264,6 +1377,18 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             let nm = n(&s[1..p])?;
             let waarde = u(&s[p + 1..])?;
             Ok(Vorm::Los(if w0 == "verhoog" { Soort::TelOp { naam: nm, waarde } } else { Soort::TrekAf { naam: nm, waarde } }))
+        }
+        "als" if matches!(klein(&s, 1).as_str(), "ik" | "je" | "iemand") && zoek(&s, &["menuregel"], 2).is_some() => {
+            // Als ik de menuregel Opslaan kies
+            let m = zoek(&s, &["menuregel"], 2).unwrap();
+            let mut eind = s.len();
+            if matches!(klein(&s, eind - 1).as_str(), "kies" | "kiest" | "druk" | "drukt" | "klik" | "klikt") {
+                eind -= 1;
+            }
+            if eind <= m + 1 {
+                return Err(fout("Welke menuregel? Schrijf bijvoorbeeld: Als ik de menuregel Opslaan kies."));
+            }
+            Ok(Vorm::OpenKnop(rest_tekst(&s[m + 1..eind])))
         }
         "als" => {
             if let Some(k) = is_knop_regel(&s) {

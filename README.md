@@ -105,6 +105,16 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 - `Herhaal 10 keer` ... `Einde herhaal`
 - `Herhaal zolang teller is kleiner dan 10, hoogstens 100 keer` ... `Einde herhaal`
 
+**Tabbladen**: `Maak een tabblad met als naam Algemeen` (wat daarna komt, staat op dat tabblad), `Ga naar het tabblad Geluid`. Wisselen met Ctrl+Tab.
+
+**Menubalk**: `Maak een menu met als naam Bestand`, `Maak een menuregel met als naam Opslaan`, `Als ik de menuregel Opslaan kies` ... `Einde van de knop`, `Geef de menuregel Opslaan de sneltoets Ctrl+S`.
+
+**Twee voorwaarden**: `Als a is groter dan 1 en naam is "Jaap"`, `Als dag is "zaterdag" of dag is "zondag"`.
+
+**Voorlezen en volume**: `Lees voor "Goedemorgen"`, `Stop met voorlezen`, `Zet het volume op 50`.
+
+**Kopiëren, verplaatsen, weggooien**: `Kopieer het bestand a.txt naar b.txt`, `Verplaats het bestand a.txt naar Oud/a.txt`, `Gooi het bestand a.txt weg` (naar de Prullenbak).
+
 **Lijsten**
 - `Maak een lijst met als naam boodschappen`, `Voeg "melk" toe aan de lijst boodschappen`, `Haal "melk" weg uit de lijst boodschappen`, `Maak de lijst boodschappen leeg`
 - Lezen: `de lijst boodschappen`, `het aantal in de lijst boodschappen`, `het eerste uit ...`, `het laatste uit ...`, `nummer 2 uit de lijst boodschappen`
@@ -258,15 +268,15 @@ De automatische controle op GitHub (UI Automation, dezelfde techniek als NVDA en
 
 Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo'n zin, dan zegt het programma dat eerlijk.
 
-**De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); twee voorwaarden met "en" of "of"; Engelse zinnen voor lijsten, stukjes, bestanden, tekstvakken en installatie; tekst vertalen.
+**De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); Engelse zinnen voor lijsten, stukjes, bestanden, tekstvakken en installatie; tekst vertalen.
 
-**Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
+**Scherm**: tabellen, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
 
 **Geluid**: OGG en FLAC, volume, mono/stereo/3D, opnemen, muziekspelers, audio-editor. (Wel gebouwd: piep, WAV en MP3 afspelen.)
 
 **Beeld**: afbeeldingen met beschrijving, 3D, QR-codes en streepjescodes.
 
-**Bestanden**: bestanden en mappen verwijderen of verplaatsen, DOCX en PDF (ZIP inpakken en uitpakken werkt wel) (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
+**Bestanden**: DOCX en PDF (ZIP inpakken en uitpakken werkt wel) (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
 
 **Netwerk**: verbinding met een andere computer, internet, PHP en CSS, updates via Dropbox of pCloud.
 
