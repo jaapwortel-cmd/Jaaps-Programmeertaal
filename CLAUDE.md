@@ -67,3 +67,11 @@ Programmeertaal in gewone Nederlandse zinnen, gemaakt voor Jaap Wortel. Rust, zo
   motor/tests/alles_wat_rust_kan.rs. Geen privé-dingen (zoals Mail Jaap) in wat gebruikers zien.
 - Opdrachtvak in eigen programma's alleen met de zin "Geef mijn programma een opdrachtvak" (Jaap: niet in elk programma).
 - Je zinnen gaan mee in de .exe (static JOUW_ZINNEN met merktekens); Ctrl+O op een .exe haalt ze terug.
+
+## Stand 17 nov 2026 (avond)
+
+- Gebouwd: websites (website.rs, F5 = Firefox), internetradio (47 zenders uit Computerhulp Maatje + radio-browser), Word/PDF lezen
+  (eigen inflate), 3D-geluid (WAV), werkbalk, QR-codes (getest met zxing), venstergedrag, reservekopie, Jaaps zinnen (jaaps_zinnen.rs).
+- Jaap wil: het programma VRAGEN om iets te maken ("maak een internetradio voor me") en dan het hele programma krijgen. Begonnen:
+  wensen.rs geeft bij radio/website het voorbeeldprogramma als voorstel. Volgende stap: meer sjablonen (zoals zijn Audio Editor:
+  radio met landen/zenderlijst, opnemen, enz.). Jaap kijkt zelf hoe zijn Audio Editor werkt.

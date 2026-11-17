@@ -160,6 +160,21 @@ pub fn begrijp(zin: &str) -> Option<Voorstel> {
         }
     }
 
+    // Een heel programma laten maken: "maak een internetradio voor me", "bouw een website".
+    let maak = ["maak", "bouw", "wil", "graag", "kun", "kan"].iter().any(|w| heeft(&t, w));
+    if maak && (heeft(&t, "internetradio") || heeft(&t, "radioprogramma") || (heeft(&t, "radio") && (heeft(&t, "programma") || heeft(&t, "een")))) && !heeft(&t, "website") {
+        return Some(Voorstel::Regels {
+            regels: include_str!("../../voorbeelden/Mijn radio.txt").lines().map(|r| r.trim_end().to_string()).filter(|r| !r.is_empty()).collect(),
+            uitleg: "Ik maak een internetradio voor je: een venster met een werkbalk met de knoppen Radio 1, Radio 2, 3FM en Stop. Andere zenders kun je erbij zetten.".into(),
+        });
+    }
+    if maak && (heeft(&t, "website") || heeft(&t, "site") || heeft(&t, "homepage")) {
+        return Some(Voorstel::Regels {
+            regels: include_str!("../../voorbeelden/Mijn radiosite (website).txt").lines().map(|r| r.trim_end().to_string()).filter(|r| !r.is_empty()).collect(),
+            uitleg: "Ik maak een website voor je met twee pagina's (Home en Over mij), een radiospeler en een menu. Zet hem in een nieuw, leeg programma (Control N), en druk daarna F5: dan gaat hij open in Firefox.".into(),
+        });
+    }
+
     // Dingen die nu ook kunnen.
     let regel = |r: &str, u: &str| Some(Voorstel::Regels { regels: vec![r.to_string()], uitleg: u.to_string() });
     if ["gemaximaliseerd", "schermvullend", "maximaal", "volledig scherm"].iter().any(|w| t.contains(w)) {
@@ -377,9 +392,10 @@ mod tests {
     fn eerlijk_wat_nog_niet_kan() {
         assert!(matches!(begrijp("het venster moet gemaximaliseerd starten"), Some(Voorstel::Regels { .. })));
         assert!(matches!(begrijp("vraag bij afsluiten of ik het zeker weet"), Some(Voorstel::Regels { .. })));
-        assert!(matches!(begrijp("ik wil een internetradio bouwen"), Some(Voorstel::Uitleg(_))));
+        assert!(matches!(begrijp("ik wil een internetradio bouwen"), Some(Voorstel::Regels { .. })));
+        assert!(matches!(begrijp("hoe werkt internetradio"), Some(Voorstel::Uitleg(_))));
         assert!(matches!(begrijp("zet radio 538 aan"), Some(Voorstel::Regels { .. })));
-        assert!(matches!(begrijp("ik wil een website bouwen"), Some(Voorstel::Uitleg(_))));
+        assert!(matches!(begrijp("maak een website voor me"), Some(Voorstel::Regels { .. })));
         assert!(matches!(begrijp("ik wil 3d beelden maken"), Some(Voorstel::NogNiet(_))));
         assert!(matches!(begrijp("geen Edge gebruiken"), Some(Voorstel::NogNiet(_))));
         assert_eq!(begrijp("bananen zijn geel"), None);
