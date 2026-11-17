@@ -238,6 +238,28 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
             uit.push(format!("Tip: {}", tip));
         }
     }
+    // Braille (uit Bouwmaatje): pijlen, lijnen en emoji zijn onleesbaar op een brailleleesregel.
+    let mut teksten = Vec::new();
+    for o in p.alle() {
+        for u in o.soort.uitdrukkingen() {
+            if let crate::taal::Uitdrukking::Vast(crate::taal::Waarde::Tekst(t)) = u {
+                teksten.push(t.clone());
+            }
+        }
+        if let Soort::MaakKnop { naam } | Soort::MaakVenster { titel: naam } = &o.soort {
+            teksten.push(naam.clone());
+        }
+    }
+    let mut n = 0;
+    for t in teksten {
+        let slecht: String = t.chars().filter(|c| slecht_voor_braille(*c)).collect();
+        let lijn = ["=====", "-----", "*****", "#####", "~~~~~", "_____"].iter().find(|x| t.contains(**x));
+        if (!slecht.is_empty() || lijn.is_some()) && n < 3 {
+            let wat = if slecht.is_empty() { format!("een lijn van tekens ({})", lijn.unwrap()) } else { format!("de tekens {}", slecht) };
+            uit.push(format!("Tip voor braille: in \"{}\" staat {}. Op een brailleleesregel is dat onleesbaar. Gebruik gewone woorden, bijvoorbeeld \"naar\" in plaats van een pijl.", t.chars().take(60).collect::<String>(), wat));
+            n += 1;
+        }
+    }
     uit.push(String::new());
     uit.push("Altijd: Escape sluit een venster. F1 opent de handleiding van je programma (als je die hebt beschreven).".into());
     uit.join("\n")
@@ -262,6 +284,11 @@ fn hoogte_van(soort: &str) -> i32 {
         "afbeelding" => 300,
         _ => 94,
     }
+}
+
+/// Pijlen, lijnen, vormen en emoji: slecht op een brailleleesregel (uit Bouwmaatje).
+pub fn slecht_voor_braille(c: char) -> bool {
+    matches!(c as u32, 0x2190..=0x21FF | 0x2500..=0x259F | 0x25A0..=0x25FF | 0x2600..=0x27BF | 0x2B00..=0x2BFF | 0x1F000..=0x1FAFF | 0xFE0F)
 }
 
 /// Vaste regels voor een betere indeling. Geen gok: alleen bekende vuistregels.

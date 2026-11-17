@@ -1223,6 +1223,25 @@ fn controleer_stukjes(c: &mut Controle, p: &Programma) {
     }
 }
 
+/// Sneltoetsen die al van Windows, JAWS, NVDA of Verteller zijn (uit Bouwmaatje).
+pub fn botst_met_schermlezer(naam: &str) -> Option<&'static str> {
+    const BOTSINGEN: &[(&str, &str)] = &[
+        ("ctrl+alt+n", "start NVDA"),
+        ("ctrl+alt+j", "start JAWS"),
+        ("ctrl+alt+delete", "is van Windows"),
+        ("ctrl+esc", "opent het Startmenu"),
+        ("alt+tab", "wisselt tussen vensters"),
+        ("alt+f4", "sluit het venster (dat doet Windows al)"),
+        ("ctrl+alt+up", "gebruikt de schermlezer in tabellen"),
+        ("ctrl+alt+down", "gebruikt de schermlezer in tabellen"),
+        ("ctrl+alt+left", "gebruikt de schermlezer in tabellen"),
+        ("ctrl+alt+right", "gebruikt de schermlezer in tabellen"),
+        ("insert", "is de toets van de schermlezer"),
+    ];
+    let n = naam.to_lowercase().replace("control", "ctrl").replace("escape", "esc").replace("pijl omhoog", "up").replace("pijl omlaag", "down").replace(' ', "");
+    BOTSINGEN.iter().find(|(k, _)| *k == n).map(|(_, w)| *w)
+}
+
 /// Sneltoetsen, kleuren (is de tekst goed te lezen?) en de handleiding.
 fn controleer_scherm(c: &mut Controle, p: &Programma) {
     let mut alle = p.alle();
@@ -1265,6 +1284,12 @@ fn controleer_scherm(c: &mut Controle, p: &Programma) {
                             "De sneltoets {} hoort al bij de knop {} (regel {}). Twee knoppen met dezelfde sneltoets spreken elkaar tegen. Welke sneltoets moet deze knop krijgen?",
                             toets.naam, andere, eerder
                         ),
+                    ));
+                }
+                if let Some(wat) = botst_met_schermlezer(&toets.naam) {
+                    c.meld(Melding::vraag(
+                        r,
+                        format!("De sneltoets {} {}. Bij iemand met een schermlezer werkt hij dan niet. Welke andere sneltoets wil je?", toets.naam, wat),
                     ));
                 }
                 toetsen.push((knop.to_lowercase(), toets.naam.clone(), r));

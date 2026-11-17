@@ -66,6 +66,21 @@ pub fn bouw(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path) 
         uit_volledig.as_path()
     };
     std::fs::create_dir_all(werkmap).map_err(|e| format!("Ik kan de werkmap {} niet maken: {}", werkmap.display(), e))?;
+    // Sneller: is er niets veranderd sinds de vorige keer? Dan het vorige programma gebruiken.
+    let vingerafdruk = format!("{:016x}-{:?}-{}", vingerafdruk(code), stand, rustc.display());
+    let bewaard = werkmap.join("vorige-uitkomst.bin");
+    let afdruk_bestand = werkmap.join("vorige-uitkomst.txt");
+    if std::fs::read_to_string(&afdruk_bestand).ok().as_deref() == Some(vingerafdruk.as_str()) && bewaard.is_file() {
+        if uit.is_file() && std::fs::metadata(uit).map(|m| m.len()).ok() == std::fs::metadata(&bewaard).map(|m| m.len()).ok() {
+            let grootte = std::fs::metadata(uit).map(|m| m.len()).unwrap_or(0);
+            return Ok(Verslag { duur: begin.elapsed(), grootte });
+        }
+        if std::fs::copy(&bewaard, uit).is_ok() {
+            let grootte = std::fs::metadata(uit).map(|m| m.len()).unwrap_or(0);
+            return Ok(Verslag { duur: begin.elapsed(), grootte });
+        }
+    }
+    let _ = std::fs::remove_file(&afdruk_bestand);
     let bron = werkmap.join("programma.rs");
     std::fs::write(&bron, code).map_err(|e| format!("Ik kan {} niet schrijven: {}", bron.display(), e))?;
     let _ = std::fs::remove_file(uit);
@@ -104,7 +119,20 @@ pub fn bouw(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path) 
         ));
     }
     let grootte = std::fs::metadata(uit).map(|m| m.len()).unwrap_or(0);
+    if std::fs::copy(uit, &bewaard).is_ok() {
+        let _ = std::fs::write(&afdruk_bestand, &vingerafdruk);
+    }
     Ok(Verslag { duur: begin.elapsed(), grootte })
+}
+
+/// Een vingerafdruk van de code (FNV-1a, 64 bits): hetzelfde bij dezelfde code.
+fn vingerafdruk(code: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in code.bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
 }
 
 /// Een grootte in gewone woorden, bijvoorbeeld "312 kilobyte".

@@ -253,3 +253,31 @@ fn jaaps_eigen_zinnen_als_voorbeeld() {
         ander => panic!("{:?}", ander),
     }
 }
+
+#[test]
+fn uit_bouwmaatje_schermlezer_en_braille() {
+    // Een sneltoets van NVDA: eerst vragen.
+    let m = lees("Maak een venster met als titel A\nMaak een knop met als naam Nieuw\nGeef de knop Nieuw de sneltoets Ctrl+Alt+N\n");
+    assert!(m.meldingen.iter().any(|x| x.tekst.contains("start NVDA")), "{:#?}", m.meldingen);
+    // Pijlen en emoji: een tip voor braille bij Ctrl+F6.
+    let u = lees("Maak een venster met als titel A\nMaak een knop met als naam Verder →\n");
+    assert!(motor::scherm::beschrijf_scherm(&u.programma).contains("Tip voor braille"));
+}
+
+#[test]
+fn zelfde_programma_niet_opnieuw_bouwen() {
+    let m = map("snel");
+    let code = motor::rust_code("Toon 1\n").unwrap();
+    let rustc = motor::bouwen::zoek_rustc(None).unwrap();
+    let werk = m.join("werk");
+    let exe = m.join(if cfg!(windows) { "p.exe" } else { "p" });
+    let eerste = motor::bouwen::bouw(&code, &exe, &rustc, motor::bouwen::Stand::Snel, &werk).unwrap();
+    let tweede = motor::bouwen::bouw(&code, &exe, &rustc, motor::bouwen::Stand::Snel, &werk).unwrap();
+    assert!(tweede.duur < eerste.duur / 5, "eerste {:?}, tweede {:?}", eerste.duur, tweede.duur);
+    // Andere code: wel opnieuw bouwen.
+    let ander = motor::rust_code("Toon 2\n").unwrap();
+    motor::bouwen::bouw(&ander, &exe, &rustc, motor::bouwen::Stand::Snel, &werk).unwrap();
+    let uit = Command::new(&exe).arg("--tekst").output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&uit.stdout).trim(), "2");
+    let _ = std::fs::remove_dir_all(&m);
+}
