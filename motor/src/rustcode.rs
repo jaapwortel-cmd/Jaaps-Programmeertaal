@@ -80,6 +80,10 @@ impl<'a> Maker<'a> {
                 format!("s.lees({}, {})?", p, r)
             }
             Uitdrukking::LegeLijst => "W::L(Vec::new())".into(),
+            Uitdrukking::Ingebouwd { wat, invoer } => {
+                let args: Vec<String> = invoer.iter().map(|i| self.uitdrukking(i, r)).collect();
+                format!("ingebouwd({}, vec![{}], {})?", wat.nummer(), args.join(", "), r)
+            }
             Uitdrukking::Aantal(a) => {
                 let a = self.uitdrukking(a, r);
                 format!("aantal_in({}, {})?", a, r)
@@ -207,6 +211,22 @@ impl<'a> Maker<'a> {
                     let u = self.uitdrukking(waarde, r);
                     let f = if matches!(o.soort, Soort::VoegToeAanLijst { .. }) { "voeg_toe" } else { "haal_uit" };
                     self.regel(diepte, &format!("{{ let w = {}; s.{}({}, w, {})?; }}", u, f, i, r));
+                }
+                Soort::SchrijfBestand { waarde, pad, toevoegen } => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(waarde, r);
+                    let p = self.uitdrukking(pad, r);
+                    self.regel(diepte, &format!("{{ let w = {}; let p = {}; schrijf_bestand(p, w, {}, {})?; }}", w, p, toevoegen, r));
+                }
+                Soort::MaakMap(p) => {
+                    self.opmerking(diepte, r);
+                    let p = self.uitdrukking(p, r);
+                    self.regel(diepte, &format!("{{ let p = {}; maak_map(p, {})?; }}", p, r));
+                }
+                Soort::Logboek(w) => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(w, r);
+                    self.regel(diepte, &format!("{{ let w = {}; logboek(&w.tekst()); }}", w));
                 }
                 Soort::Doe(Uitdrukking::Aanroep { naam, invoer }) => {
                     self.opmerking(diepte, r);

@@ -14,6 +14,18 @@ fn uitdrukking(u: &Uitdrukking) -> String {
         Uitdrukking::Onderdeel { naam, als_getal: true } => format!("het getal in het onderdeel {}", naam),
         Uitdrukking::Negatief(a) => format!("min {}", uitdrukking(a)),
         Uitdrukking::LegeLijst => "een lege lijst".into(),
+        Uitdrukking::Ingebouwd { wat, invoer } => {
+            let a = |i: usize| invoer.get(i).map(uitdrukking).unwrap_or_default();
+            match wat {
+                Ingebouwd::Inhoud => format!("de tekst in het bestand {}", a(0)),
+                Ingebouwd::Regels => format!("de regels van het bestand {} (als lijst)", a(0)),
+                Ingebouwd::Bestaat => format!("of het bestand {} bestaat", a(0)),
+                Ingebouwd::LogboekPlek => "de plek van het logboek".into(),
+                Ingebouwd::Willekeurig => format!("een willekeurig getal van {} tot en met {}", a(0), a(1)),
+                Ingebouwd::Tijd => "de tijd van dit moment".into(),
+                Ingebouwd::Datum => "de datum van vandaag".into(),
+            }
+        }
         Uitdrukking::Aantal(a) => format!("het aantal dingen in {}", uitdrukking(a)),
         Uitdrukking::Element(a, b) => format!("ding nummer {} uit {}", uitdrukking(b), uitdrukking(a)),
         Uitdrukking::Aanroep { naam, invoer } if invoer.is_empty() => format!("de uitkomst van het stukje {}", naam),
@@ -46,6 +58,15 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
         let r = o.regel;
         let zin = match &o.soort {
             Soort::Opmerking(t) => format!("een opmerking die niets doet: {}", t),
+            Soort::SchrijfBestand { waarde, pad, toevoegen } => format!(
+                "{} {} {} het bestand {}.",
+                if *toevoegen { "voeg" } else { "schrijf" },
+                uitdrukking(waarde),
+                if *toevoegen { "als nieuwe regel toe aan" } else { "in (wat er stond, verdwijnt)" },
+                uitdrukking(pad)
+            ),
+            Soort::MaakMap(p) => format!("maak de map {}.", uitdrukking(p)),
+            Soort::Logboek(w) => format!("schrijf {} in het logboek, met de datum en tijd.", uitdrukking(w)),
             Soort::VoegToeAanLijst { waarde, lijst } => format!("voeg {} toe aan de lijst {}.", uitdrukking(waarde), lijst),
             Soort::HaalUitLijst { waarde, lijst } => format!("haal {} weg uit de lijst {}.", uitdrukking(waarde), lijst),
             Soort::Doe(a) => format!("voer uit: {}.", uitdrukking(a).replacen("de uitkomst van ", "", 1)),

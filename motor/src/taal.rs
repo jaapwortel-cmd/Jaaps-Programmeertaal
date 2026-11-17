@@ -48,6 +48,8 @@ pub enum Uitdrukking {
     Element(Box<Uitdrukking>, Box<Uitdrukking>),
     /// De uitkomst van een eigen stukje.
     Aanroep { naam: String, invoer: Vec<Uitdrukking> },
+    /// Iets dat het programma zelf weet of kan: een bestand lezen, de tijd, een willekeurig getal.
+    Ingebouwd { wat: Ingebouwd, invoer: Vec<Uitdrukking> },
     Bewerking(Box<Uitdrukking>, Teken, Box<Uitdrukking>),
     Negatief(Box<Uitdrukking>),
 }
@@ -68,7 +70,7 @@ impl Uitdrukking {
                 b.namen(uit);
             }
             Uitdrukking::LegeLijst => {}
-            Uitdrukking::Aanroep { invoer, .. } => {
+            Uitdrukking::Aanroep { invoer, .. } | Uitdrukking::Ingebouwd { invoer, .. } => {
                 for i in invoer {
                     i.namen(uit);
                 }
@@ -90,6 +92,11 @@ impl Uitdrukking {
                 b.aanroepen(uit);
             }
             Uitdrukking::Negatief(a) | Uitdrukking::Aantal(a) => a.aanroepen(uit),
+            Uitdrukking::Ingebouwd { invoer, .. } => {
+                for i in invoer {
+                    i.aanroepen(uit);
+                }
+            }
             _ => {}
         }
     }
@@ -105,13 +112,38 @@ impl Uitdrukking {
                 b.verbind_stukjes(stukjes);
             }
             Uitdrukking::Negatief(a) | Uitdrukking::Aantal(a) => a.verbind_stukjes(stukjes),
-            Uitdrukking::Aanroep { invoer, .. } => {
+            Uitdrukking::Aanroep { invoer, .. } | Uitdrukking::Ingebouwd { invoer, .. } => {
                 for i in invoer {
                     i.verbind_stukjes(stukjes);
                 }
             }
             _ => {}
         }
+    }
+}
+
+/// Wat het programma zelf weet of kan.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Ingebouwd {
+    /// De tekst in een bestand.
+    Inhoud,
+    /// De regels van een bestand, als lijst.
+    Regels,
+    /// Bestaat het bestand (of de map)?
+    Bestaat,
+    /// Waar het logboek staat.
+    LogboekPlek,
+    /// Een willekeurig heel getal van ... tot en met ...
+    Willekeurig,
+    /// De tijd nu, zoals 14:05.
+    Tijd,
+    /// De datum van vandaag, zoals 17-11-2026.
+    Datum,
+}
+
+impl Ingebouwd {
+    pub fn nummer(self) -> u8 {
+        self as u8
     }
 }
 
@@ -214,6 +246,12 @@ pub enum Soort {
     Doe(Uitdrukking),
     /// "Geef als uitkomst ...": het stukje stopt en geeft dit terug.
     GeefUitkomst(Uitdrukking),
+    /// Tekst in een bestand schrijven (of eraan toevoegen).
+    SchrijfBestand { waarde: Uitdrukking, pad: Uitdrukking, toevoegen: bool },
+    /// Een map maken.
+    MaakMap(Uitdrukking),
+    /// Een regel in het logboek schrijven.
+    Logboek(Uitdrukking),
     /// Een tekstvak, label, selectievakje of keuzelijst in het laatste venster.
     MaakOnderdeel { soort: OnderdeelSoort, naam: String },
     /// Een keuze toevoegen aan een keuzelijst of uitklaplijst.
@@ -286,7 +324,8 @@ impl Soort {
     /// Alle uitdrukkingen in deze opdracht (niet in de blokken eronder).
     pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
         match self {
-            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) => vec![u],
+            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }
@@ -311,7 +350,8 @@ impl Soort {
     /// Alle uitdrukkingen in deze opdracht (alleen lezen).
     pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
         match self {
-            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) => vec![u],
+            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }

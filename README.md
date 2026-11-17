@@ -117,6 +117,15 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 - `Doe Groet`, `Doe Verdubbel met 5`, `Toon de uitkomst van Optellen met 3 en 4`
 - Voorbeeld: `voorbeelden/Lijsten en stukjes.txt`
 
+**Bestanden, mappen en logboek** (zonder volledig pad: in Documenten)
+- `Schrijf "Hallo" in het bestand notities.txt`, `Voeg "Nog een regel" toe aan het bestand notities.txt`
+- `Maak een map met als naam Mijn notities`
+- `de inhoud van het bestand notities.txt`, `de regels van het bestand notities.txt` (lijst)
+- `Als het bestand notities.txt bestaat` (of `bestaat niet`)
+- `Schrijf in het logboek "Gestart"` (met datum en tijd; fouten komen er vanzelf in), `de plek van het logboek`
+
+**Tijd, datum en toeval**: `de tijd`, `de datum`, `een willekeurig getal van 1 tot 6`
+
 **Blokken sluiten**: `Einde als`, `Einde herhaal`, `Einde van de knop`, `Einde van het stukje`, of alleen `Einde`.
 
 **Installatiebestand** (doet niets als het programma draait)
@@ -180,7 +189,7 @@ Uitvoeren (met Rust op de computer):
 cargo test --workspace
 ```
 
-Uitslag in deze sessie (Linux): 75 tests, allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
+Uitslag in deze sessie (Linux): 80 tests, allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
 
 **De opdrachtregel** (`jaaptaal.exe`, staat ook in de installatie):
 
@@ -220,7 +229,7 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Beeld**: afbeeldingen met beschrijving, 3D, QR-codes en streepjescodes.
 
-**Bestanden**: tekstbestanden lezen en schrijven vanuit je programma, logbestanden, DOCX en PDF, mappen, ZIP (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
+**Bestanden**: bestanden en mappen verwijderen of verplaatsen, DOCX en PDF, ZIP (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
 
 **Netwerk**: verbinding met een andere computer, internet, PHP en CSS, updates via Dropbox of pCloud.
 

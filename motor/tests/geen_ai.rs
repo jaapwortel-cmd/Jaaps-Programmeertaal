@@ -83,7 +83,11 @@ fn looptijd_gebruikt_alleen_windows_zelf() {
     for regel in looptijd.lines() {
         if let Some(rest) = regel.trim().strip_prefix("#[link(name = \"") {
             let lib = rest.split('"').next().unwrap();
-            assert!(["user32", "kernel32", "gdi32"].contains(&lib), "Onverwachte bibliotheek: {}", lib);
+            assert!(
+                ["user32", "kernel32", "gdi32", "shell32", "winmm", "ole32", "advapi32", "comdlg32"].contains(&lib),
+                "Onverwachte bibliotheek: {} (alleen onderdelen van Windows zelf mogen)",
+                lib
+            );
         }
     }
     assert!(!looptijd.contains("extern crate"));

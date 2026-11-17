@@ -67,12 +67,13 @@ const WOORDENLIJST: &[&str] = &[
     "versie", "maker", "voeg", "toe", "bestand", "licentie", "staat", "tekstvak", "label", "selectievakje", "keuzelijst",
     "uitklaplijst", "vink", "aan", "uit", "focus", "groot", "leeg", "aangevinkt", "keuze", "getal", "lijst", "stukje",
     "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
+    "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
     "tabel", "menu", "werkbalk",
-    "afbeelding", "plaatje", "foto", "geluid", "map", "bestand", "tekstverwerker", "qr-code", "streepjescode",
+    "afbeelding", "plaatje", "foto", "geluid", "tekstverwerker", "qr-code", "streepjescode",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -219,6 +220,55 @@ fn lijst_of_stukje(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
     Ok(None)
 }
 
+/// Een bestandsnaam: letterlijk, of met aanhalingstekens en "en dan" als uitdrukking.
+fn pad(s: &[Stuk]) -> Result<Uitdrukking, String> {
+    if s.is_empty() {
+        return Err("Welk bestand? Schrijf bijvoorbeeld: het bestand notities.txt.".into());
+    }
+    if matches!(s[0], Stuk::Tekst(_)) && s.len() > 1 {
+        return uitdrukking(s);
+    }
+    Ok(Uitdrukking::Vast(Waarde::Tekst(rest_tekst(s))))
+}
+
+/// Bestanden, tijd, datum en willekeurige getallen.
+fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
+    let ib = |wat, invoer| Ok(Some(Uitdrukking::Ingebouwd { wat, invoer }));
+    for (voor, wat) in [
+        (&["de", "inhoud", "van", "het", "bestand"][..], Ingebouwd::Inhoud),
+        (&["de", "regels", "van", "het", "bestand"][..], Ingebouwd::Regels),
+    ] {
+        if begint(s, voor) {
+            return ib(wat, vec![pad(&s[voor.len()..])?]);
+        }
+    }
+    if begint(s, &["de", "plek", "van", "het", "logboek"]) && s.len() == 5 {
+        return ib(Ingebouwd::LogboekPlek, vec![]);
+    }
+    if begint(s, &["de", "tijd"]) && s.len() == 2 || begint(s, &["het", "tijdstip"]) && s.len() == 2 {
+        return ib(Ingebouwd::Tijd, vec![]);
+    }
+    if begint(s, &["de", "datum"]) && s.len() == 2 || begint(s, &["de", "datum", "van", "vandaag"]) && s.len() == 4 {
+        return ib(Ingebouwd::Datum, vec![]);
+    }
+    if (begint(s, &["een", "willekeurig", "getal"]) || begint(s, &["een", "toevallig", "getal"])) && zoek(s, &["tot"], 3).is_some() {
+        let v = zoek(s, &["van"], 3);
+        let t = zoek(s, &["tot"], 3).unwrap();
+        let mut na = t + 1;
+        if begint(&s[na..], &["en", "met"]) {
+            na += 2;
+        }
+        let Some(v) = v.filter(|v| *v < t) else {
+            return Err("Schrijf het zo: een willekeurig getal van 1 tot 6.".into());
+        };
+        if na >= s.len() || v + 1 >= t {
+            return Err("Schrijf het zo: een willekeurig getal van 1 tot 6.".into());
+        }
+        return ib(Ingebouwd::Willekeurig, vec![operand(&s[v + 1..t], false)?, operand(&s[na..], false)?]);
+    }
+    Ok(None)
+}
+
 /// "Verdubbel met 5", "Optellen met 3 en 4": de naam van een stukje en de invoer.
 pub(crate) fn aanroep(s: &[Stuk]) -> Result<Uitdrukking, String> {
     let m = zoek(s, &["met"], 1).unwrap_or(s.len());
@@ -250,6 +300,8 @@ pub(crate) fn aanroep(s: &[Stuk]) -> Result<Uitdrukking, String> {
 fn operand(s: &[Stuk], negatief: bool) -> Result<Uitdrukking, String> {
     let u = if let Some(o) = onderdeel_operand(s) {
         o
+    } else if let Some(i) = ingebouwd(s)? {
+        i
     } else if let Some(l) = lijst_of_stukje(s)? {
         l
     } else if let [Stuk::Tekst(t)] = s {
@@ -270,6 +322,19 @@ fn operand(s: &[Stuk], negatief: bool) -> Result<Uitdrukking, String> {
         ));
     };
     Ok(if negatief { Uitdrukking::Negatief(Box::new(u)) } else { u })
+}
+
+/// Letterlijke tekst (zonder aanhalingstekens), of een uitdrukking als er aanhalingstekens of "en dan" in staan.
+fn tekst_of_uitdrukking(s: &[Stuk]) -> Result<Uitdrukking, String> {
+    if s.iter().any(|x| matches!(x, Stuk::Tekst(_))) || s.len() == 1 && getallen::lees(&klein(s, 0)).is_some() {
+        return uitdrukking(s);
+    }
+    if let Ok(u) = uitdrukking(s) {
+        if !matches!(u, Uitdrukking::Naam(_)) || s.len() == 1 {
+            return Ok(u);
+        }
+    }
+    Ok(Uitdrukking::Vast(Waarde::Tekst(rest_tekst(s))))
 }
 
 /// Leest een waarde of een som, bijvoorbeeld: 3 plus 4 keer 2, of: "Je bent" en dan leeftijd.
@@ -381,6 +446,25 @@ const EN_OF: &str =
 pub(crate) fn voorwaarde(s: &[Stuk]) -> Result<Voorwaarde, String> {
     if s.is_empty() {
         return Err("Waar moet ik op letten? Schrijf bijvoorbeeld: Als teller is groter dan 5.".into());
+    }
+    // "het bestand notities.txt bestaat" (of: bestaat niet)
+    if begint(s, &["het", "bestand"]) || begint(s, &["de", "map"]) {
+        let mut eind = s.len();
+        let mut niet = false;
+        if klein(s, eind - 1) == "niet" {
+            niet = true;
+            eind -= 1;
+        }
+        if klein(s, eind - 1) == "bestaat" {
+            eind -= 1;
+            if klein(s, eind - 1) == "niet" {
+                niet = true;
+                eind -= 1;
+            }
+            let b = Uitdrukking::Ingebouwd { wat: Ingebouwd::Bestaat, invoer: vec![pad(&s[2..eind])?] };
+            let verg = if niet { Vergelijking::NietGelijk } else { Vergelijking::Gelijk };
+            return Ok(Voorwaarde::Vergelijk(b, verg, Uitdrukking::Vast(Waarde::Waarheid(true))));
+        }
     }
     // "de lijst boodschappen bevat "melk""
     if let Some(p) = zoek(s, &["bevat"], 1) {
@@ -651,6 +735,10 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                     soort: OnderdeelSoort::GrootTekstvak,
                     naam: met_als_titel(&s, i + 2, &["naam", "titel"], "het tekstvak", "Maak een groot tekstvak met als naam Verhaal")?,
                 })),
+                "map" | "folder" => {
+                    let naam = met_als_titel(&s, i + 1, &["naam", "titel"], "de map", "Maak een map met als naam Mijn notities")?;
+                    Ok(Vorm::Los(Soort::MaakMap(Uitdrukking::Vast(Waarde::Tekst(naam)))))
+                }
                 "tekstvak" | "invulvak" => Ok(Vorm::Los(Soort::MaakOnderdeel {
                     soort: OnderdeelSoort::Tekstvak,
                     naam: met_als_titel(&s, i + 1, &["naam", "titel"], "het tekstvak", "Maak een tekstvak met als naam Naam")?,
@@ -771,6 +859,13 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             }
             Ok(Vorm::Los(Soort::VoegKeuzeToe { keuze, lijst: rest_tekst(&s[l + 1..]) }))
         }
+        "voeg" if zoek(&s, &["toe", "aan", "het", "bestand"], 1).is_some() => {
+            let t = zoek(&s, &["toe", "aan", "het", "bestand"], 1).unwrap();
+            if t == 1 {
+                return Err(fout("Wat moet erbij? Schrijf bijvoorbeeld: Voeg \"Nieuwe regel\" toe aan het bestand notities.txt."));
+            }
+            Ok(Vorm::Los(Soort::SchrijfBestand { waarde: u(&s[1..t])?, pad: pad(&s[t + 4..]).map_err(fout)?, toevoegen: true }))
+        }
         "voeg" if zoek(&s, &["toe", "aan"], 1).map_or(false, |t| zoek(&s, &["lijst"], t).is_some()) => {
             let t = zoek(&s, &["toe", "aan"], 1).unwrap();
             let l = zoek(&s, &["lijst"], t).unwrap();
@@ -787,6 +882,32 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 return Err(fout("Schrijf het zo: Haal \"melk\" weg uit de lijst boodschappen."));
             }
             Ok(Vorm::Los(Soort::HaalUitLijst { waarde: u(&s[1..w])?, lijst: n(&s[l + 1..])? }))
+        }
+        "schrijf" => {
+            if let Some(l) = zoek(&s, &["logboek"], 1) {
+                // "Schrijf in het logboek X" of "Schrijf X in het logboek"
+                let waarde = if l + 1 < s.len() {
+                    &s[l + 1..]
+                } else {
+                    let tot = (1..l).rev().find(|&i| klein(&s, i) == "in").unwrap_or(l);
+                    &s[1..tot]
+                };
+                if waarde.is_empty() {
+                    return Err(fout("Wat moet er in het logboek? Schrijf bijvoorbeeld: Schrijf in het logboek \"Het programma is gestart\"."));
+                }
+                return Ok(Vorm::Los(Soort::Logboek(tekst_of_uitdrukking(waarde).map_err(fout)?)));
+            }
+            let Some(b) = zoek(&s, &["bestand"], 2) else {
+                return Err(fout("Schrijf het zo: Schrijf \"Hallo\" in het bestand notities.txt. Of: Schrijf in het logboek \"Gestart\"."));
+            };
+            let mut tot = b;
+            while tot > 1 && matches!(klein(&s, tot - 1).as_str(), "het" | "in" | "naar") {
+                tot -= 1;
+            }
+            if tot <= 1 {
+                return Err(fout("Wat moet er in het bestand? Schrijf bijvoorbeeld: Schrijf \"Hallo\" in het bestand notities.txt."));
+            }
+            Ok(Vorm::Los(Soort::SchrijfBestand { waarde: u(&s[1..tot])?, pad: pad(&s[b + 1..]).map_err(fout)?, toevoegen: false }))
         }
         "doe" => {
             if s.len() < 2 {

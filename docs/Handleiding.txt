@@ -297,6 +297,38 @@ Wat je binnen een stukje onthoudt, bestaat alleen in dat stukje. Een stukje moet
 "Geef als uitkomst" stopt het stukje meteen.
 Let op: de invoer moet een getal, een tekst of een naam zijn. Wil je eerst rekenen, onthoud de uitkomst dan eerst.
 
+4.7d Bestanden, mappen en het logboek
+
+Een bestand zonder volledig pad komt in je map Documenten.
+
+Schrijf "Hallo" in het bestand notities.txt            (wat er stond, verdwijnt)
+Voeg "Nog een regel" toe aan het bestand notities.txt   (komt eronder)
+Maak een map met als naam Mijn notities
+Schrijf "Hallo" in het bestand Mijn notities\brief.txt
+
+Lezen:
+de inhoud van het bestand notities.txt          (alle tekst)
+de regels van het bestand notities.txt          (een lijst met één ding per regel)
+Als het bestand notities.txt bestaat
+Als het bestand notities.txt bestaat niet
+
+Het logboek:
+Schrijf in het logboek "Het programma is gestart"
+Elke regel in het logboek krijgt de datum en de tijd ervoor.
+Gaat er iets mis in je programma, dan komt de fout ook vanzelf in het logboek, met het regelnummer.
+Het logboek staat in AppData\Local\(naam van je programma)\logboek.txt.
+Toon de plek van het logboek        laat zien waar het staat.
+
+4.7e Tijd, datum en toeval
+
+de tijd                   bijvoorbeeld 14:05
+de datum                  bijvoorbeeld 17-11-2026
+een willekeurig getal van 1 tot 6       (zoals een dobbelsteen)
+
+Voorbeeld:
+Onthoud worp is een willekeurig getal van 1 tot 6
+Toon "Je gooit" en dan worp
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
@@ -434,7 +466,6 @@ Dit staat op de wensenlijst, maar zit nog niet in deze versie:
 - kleuren en lay-out kiezen;
 - geluid, muziek, opnemen;
 - afbeeldingen, QR-codes en streepjescodes;
-- bestanden en mappen lezen en schrijven vanuit je programma;
 - internet en netwerk;
 - twee voorwaarden in één keer met "en" of "of";
 - Engelse opdrachten en vertalen;

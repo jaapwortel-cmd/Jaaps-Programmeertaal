@@ -72,7 +72,7 @@ fn onderdelen_in(u: &Uitdrukking, uit: &mut Vec<(String, bool)>) {
             onderdelen_in(a, uit);
             onderdelen_in(b, uit);
         }
-        Uitdrukking::Aanroep { invoer, .. } => {
+        Uitdrukking::Aanroep { invoer, .. } | Uitdrukking::Ingebouwd { invoer, .. } => {
             for i in invoer {
                 onderdelen_in(i, uit);
             }
@@ -105,6 +105,24 @@ impl<'a> Controle<'a> {
             Uitdrukking::Onderdeel { als_getal: true, .. } => Ok(Type::Getal),
             Uitdrukking::LegeLijst => Ok(Type::Lijst),
             Uitdrukking::Aanroep { .. } => Ok(Type::Onbekend),
+            Uitdrukking::Ingebouwd { wat, invoer } => {
+                for i in invoer {
+                    self.type_van(i)?;
+                }
+                Ok(match wat {
+                    Ingebouwd::Inhoud | Ingebouwd::LogboekPlek | Ingebouwd::Tijd | Ingebouwd::Datum => Type::Tekst,
+                    Ingebouwd::Regels => Type::Lijst,
+                    Ingebouwd::Bestaat => Type::Waarheid,
+                    Ingebouwd::Willekeurig => {
+                        for i in invoer {
+                            if matches!(self.type_van(i)?, Type::Tekst | Type::Waarheid | Type::Lijst) {
+                                return Err("Een willekeurig getal kan alleen tussen twee getallen.".into());
+                            }
+                        }
+                        Type::Getal
+                    }
+                })
+            }
             Uitdrukking::Aantal(a) => match self.type_van(a)? {
                 Type::Lijst | Type::Onbekend => Ok(Type::Getal),
                 t => Err(format!("Het aantal kan ik alleen tellen in een lijst. Maar {} is {}.", kort(a), type_naam(t))),
@@ -393,7 +411,20 @@ impl<'a> Controle<'a> {
                     self.controleer_lijst(blok, in_knop);
                 }
                 Soort::Stukje { blok, .. } => self.controleer_lijst(blok, true),
-                Soort::Doe(u) | Soort::GeefUitkomst(u) => {
+                Soort::SchrijfBestand { waarde, pad, .. } => {
+                    for u in [waarde, pad] {
+                        let mut od = Vec::new();
+                        onderdelen_in(u, &mut od);
+                        self.controleer_onderdelen_in(r, od);
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                        if let Err(t) = self.type_van(u) {
+                            self.meld(Melding::fout(r, t));
+                        }
+                    }
+                }
+                Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => {
                     let mut od = Vec::new();
                     onderdelen_in(u, &mut od);
                     self.controleer_onderdelen_in(r, od);

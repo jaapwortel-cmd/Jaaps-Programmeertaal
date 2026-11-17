@@ -166,6 +166,176 @@ fn telling(a: W, b: W, r: usize) -> R<std::ops::RangeInclusive<i64>> {
     Ok(van..=tot)
 }
 
+// ---------------------------------------------------------------------
+// Bestanden, logboek, tijd en willekeurige getallen.
+// ---------------------------------------------------------------------
+
+/// De map waar bestanden zonder volledig pad komen: Documenten (of JAAPTAAL_MAP voor proeven).
+fn basismap() -> std::path::PathBuf {
+    if let Some(m) = std::env::var_os("JAAPTAAL_MAP") {
+        return m.into();
+    }
+    #[cfg(windows)]
+    {
+        if let Some(m) = win::documenten() {
+            return m;
+        }
+    }
+    std::env::current_dir().unwrap_or_default()
+}
+
+fn volledig_pad(p: &W) -> std::path::PathBuf {
+    let t = p.tekst();
+    let pad = std::path::PathBuf::from(t.trim());
+    if pad.is_absolute() {
+        pad
+    } else {
+        basismap().join(pad)
+    }
+}
+
+fn lees_tekstbestand(pad: &std::path::Path) -> std::io::Result<String> {
+    let b = std::fs::read(pad)?;
+    let b = b.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&b);
+    Ok(match String::from_utf8(b.to_vec()) {
+        Ok(s) => s,
+        Err(_) => b.iter().map(|&c| c as char).collect(),
+    })
+}
+
+fn schrijf_bestand(p: W, w: W, toevoegen: bool, r: usize) -> R<()> {
+    let pad = volledig_pad(&p);
+    let mut tekst = w.tekst().replace("\r\n", "\n").replace('\n', "\r\n");
+    let resultaat = if toevoegen {
+        use std::io::Write;
+        let oud = std::fs::read(&pad).unwrap_or_default();
+        std::fs::OpenOptions::new().create(true).append(true).open(&pad).and_then(|mut f| {
+            if oud.is_empty() {
+                f.write_all(&[0xEF, 0xBB, 0xBF])?;
+            } else if !oud.ends_with(b"\n") {
+                // De laatste regel had nog geen einde: eerst een nieuwe regel.
+                f.write_all(b"\r\n")?;
+            }
+            tekst.push_str("\r\n");
+            f.write_all(tekst.as_bytes())
+        })
+    } else {
+        let mut inhoud = vec![0xEF, 0xBB, 0xBF];
+        inhoud.extend_from_slice(tekst.as_bytes());
+        std::fs::write(&pad, inhoud)
+    };
+    resultaat.or_else(|e| fout(r, format!("Ik kan niet schrijven in {}. Reden: {}", pad.display(), e)))
+}
+
+fn maak_map(p: W, r: usize) -> R<()> {
+    let pad = volledig_pad(&p);
+    std::fs::create_dir_all(&pad).or_else(|e| fout(r, format!("Ik kan de map {} niet maken. Reden: {}", pad.display(), e)))
+}
+
+/// Datum en tijd van nu: (jaar, maand, dag, uur, minuut, seconde). Op Windows in de tijd van de computer.
+fn nu() -> (u32, u32, u32, u32, u32, u32) {
+    #[cfg(windows)]
+    {
+        return win::nu();
+    }
+    let s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let dagen = (s / 86400) as i64;
+    let rest = s % 86400;
+    // Van dagen sinds 1970 naar een datum (algoritme van Howard Hinnant).
+    let z = dagen + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    (y as u32, m as u32, d as u32, (rest / 3600) as u32, (rest % 3600 / 60) as u32, (rest % 60) as u32)
+}
+
+fn logboekpad() -> std::path::PathBuf {
+    let naam = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_stem().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "programma".into());
+    if let Some(m) = std::env::var_os("JAAPTAAL_MAP") {
+        return std::path::PathBuf::from(m).join(format!("{} logboek.txt", naam));
+    }
+    let basis = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from).unwrap_or_else(|| basismap());
+    basis.join(&naam).join("logboek.txt")
+}
+
+/// Schrijft een regel in het logboek, met datum en tijd ervoor.
+fn logboek(t: &str) {
+    use std::io::Write;
+    let (j, mn, d, u, mi, se) = nu();
+    let pad = logboekpad();
+    if let Some(m) = pad.parent() {
+        let _ = std::fs::create_dir_all(m);
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&pad) {
+        let _ = write!(f, "{:02}-{:02}-{:04} {:02}:{:02}:{:02}  {}\r\n", d, mn, j, u, mi, se, t.replace('\n', " "));
+    }
+}
+
+thread_local! {
+    static TOEVAL: std::cell::Cell<u64> = std::cell::Cell::new(0);
+}
+
+/// Een willekeurig getal (xorshift), elke keer anders omdat het met de klok begint.
+fn toeval() -> u64 {
+    TOEVAL.with(|t| {
+        let mut x = t.get();
+        if x == 0 {
+            x = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
+        }
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        t.set(x);
+        x
+    })
+}
+
+fn ingebouwd(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
+    match wat {
+        0 | 1 => {
+            let pad = volledig_pad(&invoer[0]);
+            let tekst = lees_tekstbestand(&pad).or_else(|e| fout(r, format!("Ik kan het bestand {} niet lezen. Reden: {}", pad.display(), e)))?;
+            if wat == 0 {
+                Ok(W::T(tekst.replace("\r\n", "\n").trim_end_matches('\n').to_string()))
+            } else {
+                Ok(W::L(tekst.lines().map(|l| W::T(l.to_string())).collect()))
+            }
+        }
+        2 => Ok(W::B(volledig_pad(&invoer[0]).exists())),
+        3 => Ok(W::T(logboekpad().display().to_string())),
+        4 => {
+            let heel = |w: &W| -> R<i64> {
+                match w {
+                    W::G(g) if g.fract() == 0.0 => Ok(*g as i64),
+                    ander => fout(r, format!("Een willekeurig getal kan alleen tussen hele getallen, en niet {}.", ander.tekst())),
+                }
+            };
+            let (a, b) = (heel(&invoer[0])?, heel(&invoer[1])?);
+            if b < a {
+                return fout(r, format!("Van {} tot {} kan niet: het eerste getal moet het kleinste zijn.", a, b));
+            }
+            let breedte = (b - a + 1) as u64;
+            Ok(W::G((a + (toeval() % breedte) as i64) as f64))
+        }
+        5 => {
+            let (_, _, _, u, m, _) = nu();
+            Ok(W::T(format!("{:02}:{:02}", u, m)))
+        }
+        _ => {
+            let (j, m, d, _, _, _) = nu();
+            Ok(W::T(format!("{:02}-{:02}-{:04}", d, m, j)))
+        }
+    }
+}
+
 fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
     match w {
         Some(w) => Ok(w),
@@ -404,7 +574,9 @@ type Hoofd = fn(&mut Staat) -> R<()>;
 type BijKnop = fn(&mut Staat, usize) -> R<()>;
 
 fn foutzin(f: &Fout) -> String {
-    format!("Er ging iets mis op regel {}: {}", f.regel, f.tekst)
+    let t = format!("Er ging iets mis op regel {}: {}", f.regel, f.tekst);
+    logboek(&format!("FOUT: {}", t));
+    t
 }
 
 // ---------------------------------------------------------------------
@@ -769,6 +941,46 @@ mod win {
         pub(super) klik_venster: Option<HWND>,
         lettertype: Option<HANDLE>,
         schaal: f32,
+    }
+
+    #[repr(C)]
+    struct SYSTEMTIME {
+        jaar: u16,
+        maand: u16,
+        weekdag: u16,
+        dag: u16,
+        uur: u16,
+        minuut: u16,
+        seconde: u16,
+        ms: u16,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetLocalTime(t: *mut SYSTEMTIME);
+    }
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn SHGetFolderPathW(h: HWND, csidl: i32, token: HANDLE, flags: u32, path: *mut u16) -> i32;
+    }
+
+    pub(super) fn nu() -> (u32, u32, u32, u32, u32, u32) {
+        let mut t = SYSTEMTIME { jaar: 0, maand: 0, weekdag: 0, dag: 0, uur: 0, minuut: 0, seconde: 0, ms: 0 };
+        unsafe {
+            GetLocalTime(&mut t);
+        }
+        (t.jaar as u32, t.maand as u32, t.dag as u32, t.uur as u32, t.minuut as u32, t.seconde as u32)
+    }
+
+    pub(super) fn documenten() -> Option<std::path::PathBuf> {
+        let mut buf = [0u16; 520];
+        let r = unsafe { SHGetFolderPathW(null_mut(), 0x05, null_mut(), 0, buf.as_mut_ptr()) };
+        if r != 0 {
+            return None;
+        }
+        let n = buf.iter().position(|&c| c == 0).unwrap_or(0);
+        Some(std::path::PathBuf::from(String::from_utf16_lossy(&buf[..n])))
     }
 
     pub(super) fn melding(eigenaar: HWND, tekst: &str, titel: &str) {

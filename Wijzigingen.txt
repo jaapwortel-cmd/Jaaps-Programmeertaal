@@ -11,6 +11,8 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   en lezen wat erin staat (ook als getal). Voorbeeld: Rekenhulp.
 - Lijsten (toevoegen, weghalen, aantal, nummer, bevat, voor elk ding), tellen van ... tot ...,
   en eigen stukjes met een naam, invoer en uitkomst.
+- Bestanden schrijven, aanvullen en lezen (ook als lijst met regels), mappen maken, een logboek met datum
+  en tijd (fouten komen er vanzelf in), de tijd, de datum en een willekeurig getal.
 - Een installatiebestand voor je eigen programma (Ctrl+F8), beschreven met zinnen: naam, versie, maker,
   snelkoppelingen, met of zonder beheerdersrechten, extra bestanden.
 - Een eigen licentie, met zinnen of uit een tekstbestand. Bij het installeren moet je akkoord gaan.
