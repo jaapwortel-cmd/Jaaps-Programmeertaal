@@ -32,6 +32,11 @@ const ID_VERTROUW: u16 = 209;
 const ID_ENGELS: u16 = 210;
 const ID_EIGEN_WOORDEN: u16 = 211;
 const ID_EIGEN_ZINNEN: u16 = 212;
+const ID_OPDRACHT: u16 = 213;
+const ID_ZOEK_OPDRACHT: u16 = 214;
+const ID_EIGEN_OPDRACHTEN: u16 = 215;
+const ID_WENSEN: u16 = 216;
+const ID_VERSIE_OMHOOG: u16 = 217;
 /// Onlangs geopend: 121 tot en met 129.
 const ID_ONLANGS: u16 = 121;
 const ID_WELKE_REGEL: u16 = 301;
@@ -60,6 +65,8 @@ thread_local! {
     static LAATSTE_FOCUS: Cell<HWND> = const { Cell::new(null_mut()) };
     static TEKSTVENSTERS: RefCell<Vec<HWND>> = const { RefCell::new(Vec::new()) };
     static ONLANGS_MENU: Cell<HANDLE> = const { Cell::new(null_mut()) };
+    static OPDRACHTVENSTER: Cell<Option<Opdrachtvenster>> = const { Cell::new(None) };
+    static KEUZES: RefCell<Vec<Keuze>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Wat een achtergrondklus (bouwen) teruggeeft.
@@ -1000,6 +1007,14 @@ fn opdracht(id: u16) {
                 }
             }
         }
+        ID_OPDRACHT => open_opdrachtvenster(false),
+        ID_ZOEK_OPDRACHT => open_opdrachtvenster(true),
+        ID_EIGEN_OPDRACHTEN => open_in_kladblok(
+            &eigen_opdrachten_pad(),
+            "# Mijn eigen opdrachten: links wat ik zeg, rechts wat het programma al kent. Eén per regel.\n# Voorbeeld:\nknal hem eruit = bouw een exe\n",
+        ),
+        ID_WENSEN => open_in_kladblok(&wensen_pad(), "Mijn wensen voor Jaap's Programmeertaal (wat de taal nog niet kan):\n"),
+        ID_VERSIE_OMHOOG => versie_omhoog(),
         ID_EIGEN_ZINNEN => {
             let pad = eigen_zinnen_pad();
             if !pad.exists() {
@@ -1182,6 +1197,9 @@ fn maak_menu() -> HANDLE {
         AppendMenuW(balk, MF_POPUP, bestand as usize, w("&Bestand").as_ptr());
 
         let prog = CreatePopupMenu();
+        voeg(prog, ID_OPDRACHT, "&Opdracht geven in gewone zinnen...\tCtrl+E");
+        voeg(prog, ID_ZOEK_OPDRACHT, "&Zoeken in wat je kunt zeggen...\tCtrl+F");
+        streep(prog);
         voeg(prog, ID_CONTROLEER, "&Controleren (testen)\tF7");
         voeg(prog, ID_UITVOEREN, "&Uitvoeren\tF5");
         voeg(prog, ID_PROBEER, "&Probeer alleen deze regel\tF9");
@@ -1205,6 +1223,8 @@ fn maak_menu() -> HANDLE {
         voeg(help, ID_HANDLEIDING, "&Handleiding\tF1");
         voeg(help, ID_EIGEN_WOORDEN, "Mijn &eigen woorden (openen in Kladblok)");
         voeg(help, ID_EIGEN_ZINNEN, "Mijn eigen &zinnen (openen in Kladblok)");
+        voeg(help, ID_EIGEN_OPDRACHTEN, "Mijn eigen o&pdrachten (openen in Kladblok)");
+        voeg(help, ID_WENSEN, "Mijn &wensenlijst (openen in Kladblok)");
         voeg(help, ID_OVER, "&Over Jaap's Programmeertaal");
         AppendMenuW(balk, MF_POPUP, help as usize, w("&Help").as_ptr());
         balk
@@ -1219,6 +1239,8 @@ fn maak_sneltoetsen() -> HANDLE {
         toets(FCONTROL, b'S' as u16, ID_OPSLAAN),
         toets(FCONTROL | FSHIFT, b'S' as u16, ID_OPSLAAN_ALS),
         toets(FCONTROL, b'L' as u16, ID_WELKE_REGEL),
+        toets(FCONTROL, b'E' as u16, ID_OPDRACHT),
+        toets(FCONTROL, b'F' as u16, ID_ZOEK_OPDRACHT),
         toets(0, VK_F1, ID_HANDLEIDING),
         toets(0, VK_F1 + 3, ID_NAAR_MELDINGEN),
         toets(0, VK_F1 + 4, ID_UITVOEREN),
@@ -1260,6 +1282,7 @@ pub fn start() {
     }
     registreer("JaapsProgrammeertaalEditor", hoofd_proc);
     registreer("JaapsTekstVenster", tekstvenster_proc);
+    registreer("JaapsOpdrachtVenster", opdrachtvenster_proc);
 
     unsafe {
         let inst = GetModuleHandleW(null());
@@ -1318,6 +1341,9 @@ pub fn start() {
 
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+            if opdrachtvenster_toets(&msg) {
+                continue;
+            }
             let vv = v();
             let wortel = GetAncestor(msg.hwnd, GA_ROOT);
             if wortel == vv.hoofd {
@@ -1344,6 +1370,484 @@ pub fn start() {
             }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
+        }
+    }
+}
+
+// ------------------------------------------------------------------ opdrachten in gewone zinnen
+
+#[derive(Clone, Copy)]
+struct Opdrachtvenster {
+    venster: HWND,
+    vak: HWND,
+    lijst: HWND,
+    zoeken: bool,
+}
+
+#[derive(Clone)]
+enum Keuze {
+    Functie(motor::opdrachten::Functie),
+    Bestand(PathBuf),
+}
+
+fn eigen_opdrachten_pad() -> PathBuf {
+    eigen_woorden_pad().with_file_name("Mijn eigen opdrachten.txt")
+}
+
+fn wensen_pad() -> PathBuf {
+    eigen_woorden_pad().with_file_name("Mijn wensen.txt")
+}
+
+fn eigen_opdrachten() -> Vec<(String, String)> {
+    motor::bestand::lees_txt(&eigen_opdrachten_pad()).map(|t| motor::opdrachten::eigen_opdrachten(&t)).unwrap_or_default()
+}
+
+fn open_in_kladblok(pad: &Path, begin: &str) {
+    if !pad.exists() {
+        let _ = motor::bestand::schrijf_txt(pad, begin);
+    }
+    if Command::new("notepad.exe").arg(pad).spawn().is_err() {
+        melding(&format!("Ik kan Kladblok niet openen. Het bestand staat in {}.", pad.display()), MB_ICONERROR);
+    }
+}
+
+fn open_opdrachtvenster(zoeken: bool) {
+    let titel = if zoeken {
+        "Zoeken in wat je kunt zeggen - Escape sluit"
+    } else {
+        "Opdracht geven in gewone zinnen - Escape sluit"
+    };
+    if let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) {
+        unsafe {
+            DestroyWindow(o.venster);
+        }
+    }
+    let vv = v();
+    unsafe {
+        let inst = GetModuleHandleW(null());
+        let h = CreateWindowExW(0, w("JaapsOpdrachtVenster").as_ptr(), w(titel).as_ptr(), WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 900, 600, vv.hoofd, null_mut(), inst, null_mut());
+        let kind = |klasse: &str, tekst: &str, stijl: u32, ex: u32| {
+            let k = CreateWindowExW(ex, w(klasse).as_ptr(), w(tekst).as_ptr(), WS_CHILD | WS_VISIBLE | stijl, 0, 0, 10, 10, h, null_mut(), inst, null_mut());
+            SendMessageW(k, WM_SETFONT, vv.letter as usize, 1);
+            k
+        };
+        let vraag = if zoeken { "Zoek (typ een paar woorden, Enter gaat naar de lijst):" } else { "Wat wil je doen? Typ of dicteer het, en druk Enter:" };
+        let _label1 = kind("STATIC", vraag, 0, 0);
+        let vak = kind("EDIT", "", WS_TABSTOP | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
+        let _label2 = kind("STATIC", "Wat je kunt zeggen (Enter voert uit):", 0, 0);
+        let lijst = kind("LISTBOX", "", WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY, WS_EX_CLIENTEDGE);
+        OPDRACHTVENSTER.with(|o| o.set(Some(Opdrachtvenster { venster: h, vak, lijst, zoeken })));
+        indeling_opdrachtvenster(h);
+        vul_lijst_zoek("");
+        SetFocus(vak);
+    }
+}
+
+fn indeling_opdrachtvenster(h: HWND) {
+    unsafe {
+        let mut r = RECT::default();
+        GetClientRect(h, &mut r);
+        let kinderen = kinderen_van(h);
+        if kinderen.len() < 4 {
+            return;
+        }
+        let breed = r.right - 20;
+        MoveWindow(kinderen[0], 10, 8, breed, 34, 1);
+        MoveWindow(kinderen[1], 10, 44, breed, 40, 1);
+        MoveWindow(kinderen[2], 10, 94, breed, 34, 1);
+        MoveWindow(kinderen[3], 10, 130, breed, (r.bottom - 140).max(60), 1);
+    }
+}
+
+fn kinderen_van(h: HWND) -> Vec<HWND> {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetWindow(h: HWND, cmd: u32) -> HWND;
+    }
+    let mut uit = Vec::new();
+    unsafe {
+        let mut k = GetWindow(h, 5);
+        while !k.is_null() {
+            uit.push(k);
+            k = GetWindow(k, 2);
+        }
+    }
+    uit
+}
+
+fn zet_keuzes(lijst: Vec<(String, Keuze)>) {
+    let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) else { return };
+    unsafe {
+        SendMessageW(o.lijst, LB_RESETCONTENT, 0, 0);
+        for (tekst, _) in &lijst {
+            SendMessageW(o.lijst, LB_ADDSTRING, 0, w(tekst).as_ptr() as isize);
+        }
+        SendMessageW(o.lijst, LB_SETCURSEL, 0, 0);
+    }
+    KEUZES.with(|k| *k.borrow_mut() = lijst.into_iter().map(|x| x.1).collect());
+}
+
+fn vul_lijst_zoek(zoek: &str) {
+    let lijst = motor::opdrachten::zoek(zoek).into_iter().map(|a| (motor::opdrachten::regel(a), Keuze::Functie(a.functie))).collect();
+    zet_keuzes(lijst);
+}
+
+fn sluit_opdrachtvenster() {
+    if let Some(o) = OPDRACHTVENSTER.with(|o| o.take()) {
+        unsafe {
+            DestroyWindow(o.venster);
+            SetFocus(v().editor);
+        }
+    }
+}
+
+/// Enter in het vak of in de lijst.
+fn opdrachtvenster_enter(in_lijst: bool) {
+    let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) else { return };
+    if in_lijst {
+        let i = unsafe { SendMessageW(o.lijst, LB_GETCURSEL, 0, 0) };
+        let keuze = KEUZES.with(|k| k.borrow().get(i.max(0) as usize).cloned());
+        match keuze {
+            Some(Keuze::Functie(f)) => {
+                sluit_opdrachtvenster();
+                voer_functie_uit(f, String::new());
+            }
+            Some(Keuze::Bestand(p)) => {
+                sluit_opdrachtvenster();
+                if mag_doorgaan() {
+                    open_bestand(&p);
+                }
+            }
+            None => {}
+        }
+        return;
+    }
+    let zin = lees_tekst(o.vak);
+    if o.zoeken {
+        unsafe {
+            SetFocus(o.lijst);
+        }
+        return;
+    }
+    if zin.trim().is_empty() {
+        melding("Typ of dicteer eerst wat je wilt. Bijvoorbeeld: maak er een exe van. Met Tab ga je naar de lijst met wat je kunt zeggen.", MB_ICONINFORMATION);
+        return;
+    }
+    behandel_zin(&zin);
+}
+
+fn behandel_zin(zin: &str) {
+    use motor::opdrachten::{Antwoord, Begrip};
+    use motor::wensen::Voorstel;
+    let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) else { return };
+    match motor::opdrachten::begrijp_alles(zin, &eigen_opdrachten()) {
+        Antwoord::Editor(Begrip::Doe { functie, extra }) => {
+            sluit_opdrachtvenster();
+            voer_functie_uit(functie, extra);
+        }
+        Antwoord::Editor(Begrip::BedoelJe { zin: beter, functie }) => {
+            let a = motor::opdrachten::actie(functie);
+            if melding(&format!("Bedoel je: {}?\n\nDan doe ik: {}.", beter, a.naam), MB_YESNO | MB_ICONQUESTION) == IDYES {
+                sluit_opdrachtvenster();
+                voer_functie_uit(functie, String::new());
+            }
+        }
+        Antwoord::Editor(Begrip::Kies(lijst)) => {
+            let namen: Vec<String> = lijst.iter().map(|f| motor::opdrachten::actie(*f).naam.to_string()).collect();
+            zet_keuzes(lijst.iter().map(|f| (motor::opdrachten::regel(motor::opdrachten::actie(*f)), Keuze::Functie(*f))).collect());
+            melding(&format!("Je zin past bij meer dingen: {}. Kies er een uit de lijst en druk Enter.", namen.join(", of ")), MB_ICONQUESTION);
+            unsafe {
+                SetFocus(o.lijst);
+            }
+        }
+        Antwoord::Editor(Begrip::Onbekend) => {
+            vul_lijst_zoek("");
+            melding(
+                &format!(
+                    "Dat snap ik niet: \"{}\". Ik gok niet. Zeg het anders, of kies met Tab uit de lijst met wat je kunt zeggen. Je kunt me ook een eigen opdracht leren: menu Help, Mijn eigen opdrachten.",
+                    zin.trim()
+                ),
+                MB_ICONINFORMATION,
+            );
+            unsafe {
+                SetFocus(o.vak);
+                SendMessageW(o.vak, EM_SETSEL, 0, -1);
+            }
+        }
+        Antwoord::Taal(Voorstel::Regels { regels, uitleg }) => {
+            let (regel, _) = huidige_regel();
+            let vraag = format!("{}\n\nZal ik dit in je programma zetten, onder regel {}?\n\n{}", uitleg, regel, regels.join("\n"));
+            if melding(&vraag, MB_YESNO | MB_ICONQUESTION) == IDYES {
+                sluit_opdrachtvenster();
+                voeg_regels_toe(&regels);
+            }
+        }
+        Antwoord::Taal(Voorstel::Vraag(v)) => {
+            melding(&v, MB_ICONQUESTION);
+            unsafe {
+                SetFocus(o.vak);
+                SendMessageW(o.vak, EM_SETSEL, 0, -1);
+            }
+        }
+        Antwoord::Taal(Voorstel::NogNiet(uitleg)) => {
+            if melding(&format!("{}\n\nZal ik het op je wensenlijst zetten?", uitleg), MB_YESNO | MB_ICONQUESTION) == IDYES {
+                zet_op_wensenlijst(zin);
+            }
+        }
+    }
+}
+
+fn zet_op_wensenlijst(zin: &str) {
+    let pad = wensen_pad();
+    let mut tekst = motor::bestand::lees_txt(&pad).unwrap_or_else(|_| "Mijn wensen voor Jaap's Programmeertaal (wat de taal nog niet kan):\n".into());
+    if !tekst.ends_with('\n') {
+        tekst.push('\n');
+    }
+    tekst.push_str(&format!("- {}\n", zin.trim()));
+    match motor::bestand::schrijf_txt(&pad, &tekst) {
+        Ok(()) => melding(&format!("Staat op je wensenlijst: {}. Je vindt de lijst in het menu Help, Mijn wensenlijst.", zin.trim()), MB_ICONINFORMATION),
+        Err(e) => melding(&format!("Het lukte niet om je wens te bewaren. Reden: {}", e), MB_ICONERROR),
+    };
+}
+
+/// Zet regels onder de regel waar je staat.
+fn voeg_regels_toe(regels: &[String]) {
+    let ed = v().editor;
+    let (regel, _) = huidige_regel();
+    unsafe {
+        let begin = SendMessageW(ed, EM_LINEINDEX, regel - 1, 0);
+        let lengte = SendMessageW(ed, EM_LINELENGTH, begin as usize, 0);
+        let eind = begin + lengte;
+        SendMessageW(ed, EM_SETSEL, eind as usize, eind);
+        let leeg = editor_tekst().trim().is_empty();
+        let tekst = if leeg { regels.join("\r\n") } else { format!("\r\n{}", regels.join("\r\n")) };
+        SendMessageW(ed, EM_REPLACESEL, 1, w(&tekst).as_ptr() as isize);
+        SetFocus(ed);
+    }
+    let nieuw = if editor_tekst().lines().count() <= regels.len() { 1 } else { regel + 1 };
+    zet_meldingen(&format!("Toegevoegd op regel {}: {}. Druk F7 om te controleren.", nieuw, regels.join(" / ")));
+}
+
+/// Zoekt een programma op naam: eerst bij onlangs geopend, dan in Documenten\Jaaps Programmeertaal.
+fn zoek_programma(naam: &str) -> Vec<PathBuf> {
+    let n = naam.to_lowercase();
+    let mut alle: Vec<PathBuf> = onlangs();
+    if let Ok(lijst) = std::fs::read_dir(mijn_programmas()) {
+        for e in lijst.flatten() {
+            let p = e.path();
+            if p.extension().map_or(false, |x| x.eq_ignore_ascii_case("txt")) && !alle.contains(&p) {
+                alle.push(p);
+            }
+        }
+    }
+    let stam = |p: &PathBuf| p.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let precies: Vec<PathBuf> = alle.iter().filter(|p| stam(p) == n).cloned().collect();
+    if !precies.is_empty() {
+        return precies;
+    }
+    alle.into_iter().filter(|p| stam(p).contains(&n)).collect()
+}
+
+fn voer_functie_uit(f: motor::opdrachten::Functie, extra: String) {
+    use motor::opdrachten::Functie::*;
+    let id = match f {
+        Nieuw => ID_NIEUW,
+        OpenExe => ID_OPENEN,
+        Opslaan => ID_OPSLAAN,
+        OpslaanAls => ID_OPSLAAN_ALS,
+        Controleren => ID_CONTROLEER,
+        Uitvoeren => ID_UITVOEREN,
+        ProbeerRegel => ID_PROBEER,
+        Beschrijf => ID_BESCHRIJF,
+        Scherm => ID_SCHERM,
+        RustCode => ID_RUSTCODE,
+        Engels => ID_ENGELS,
+        BouwExe => ID_BOUW_EXE,
+        Installatie => ID_INSTALLATIE,
+        Certificaat => ID_VERTROUW,
+        WelkeRegel => ID_WELKE_REGEL,
+        Meldingen => ID_NAAR_MELDINGEN,
+        Handleiding => ID_HANDLEIDING,
+        EigenWoorden => ID_EIGEN_WOORDEN,
+        EigenZinnen => ID_EIGEN_ZINNEN,
+        EigenOpdrachten => ID_EIGEN_OPDRACHTEN,
+        Wensenlijst => ID_WENSEN,
+        VersieOmhoog => ID_VERSIE_OMHOOG,
+        Over => ID_OVER,
+        WatKanIkZeggen => ID_ZOEK_OPDRACHT,
+        Openen => {
+            if extra.is_empty() {
+                ID_OPENEN
+            } else {
+                let gevonden = zoek_programma(&extra);
+                match gevonden.len() {
+                    0 => {
+                        melding(
+                            &format!("Ik vind geen programma met de naam {} bij onlangs geopend of in Documenten, Jaaps Programmeertaal. Kies het zelf.", extra),
+                            MB_ICONINFORMATION,
+                        );
+                        ID_OPENEN
+                    }
+                    1 => {
+                        if mag_doorgaan() {
+                            open_bestand(&gevonden[0]);
+                        }
+                        return;
+                    }
+                    _ => {
+                        open_opdrachtvenster(false);
+                        zet_keuzes(gevonden.iter().map(|p| (format!("Open {}", p.display()), Keuze::Bestand(p.clone()))).collect());
+                        melding(&format!("Ik vind meer programma's met {} in de naam. Kies er een uit de lijst en druk Enter.", extra), MB_ICONQUESTION);
+                        if let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) {
+                            unsafe {
+                                SetFocus(o.lijst);
+                            }
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+        Onlangs => {
+            let lijst = onlangs();
+            if lijst.is_empty() {
+                melding("Je hebt nog niets geopend.", MB_ICONINFORMATION);
+                return;
+            }
+            open_opdrachtvenster(false);
+            zet_keuzes(lijst.iter().map(|p| (format!("Open {}", p.display()), Keuze::Bestand(p.clone()))).collect());
+            if let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) {
+                unsafe {
+                    SetFocus(o.lijst);
+                }
+            }
+            return;
+        }
+        Verder => {
+            if editor_tekst().trim().is_empty() {
+                if let Some(p) = onlangs().into_iter().find(|p| p.exists()) {
+                    open_bestand(&p);
+                }
+            }
+            let totaal = editor_tekst().lines().count().max(1);
+            ga_naar_regel(totaal);
+            let ed = v().editor;
+            unsafe {
+                let n = GetWindowTextLengthW(ed) as usize;
+                SendMessageW(ed, EM_SETSEL, n, n as isize);
+                SetFocus(ed);
+            }
+            zet_meldingen(&format!("Je staat aan het eind, op regel {}. Typ of dicteer verder.", totaal));
+            return;
+        }
+        NaarRegel => {
+            match extra.parse::<usize>() {
+                Ok(n) if n >= 1 => {
+                    let totaal = editor_tekst().lines().count().max(1);
+                    ga_naar_regel(n.min(totaal));
+                    zet_meldingen(&format!("Je staat op regel {} van {}.", n.min(totaal), totaal));
+                }
+                _ => {
+                    melding("Naar welke regel? Zeg bijvoorbeeld: ga naar regel 12.", MB_ICONQUESTION);
+                }
+            }
+            return;
+        }
+        Ongedaan => {
+            unsafe {
+                SendMessageW(v().editor, EM_UNDO, 0, 0);
+                SetFocus(v().editor);
+            }
+            zet_meldingen("Ongedaan gemaakt.");
+            return;
+        }
+        Afsluiten => {
+            unsafe {
+                PostMessageW(v().hoofd, WM_CLOSE, 0, 0);
+            }
+            return;
+        }
+    };
+    opdracht(id);
+}
+
+/// Het versienummer ophogen: "De versie is 1.2" wordt "De versie is 1.3". Eerst vragen.
+fn versie_omhoog() {
+    let tekst = editor_tekst();
+    let gevonden = tekst.lines().enumerate().find(|(_, r)| r.trim().to_lowercase().starts_with("de versie is "));
+    let Some((i, r)) = gevonden else {
+        melding("Je programma heeft nog geen versie. Zeg bijvoorbeeld: de versie moet 1.0 worden.", MB_ICONINFORMATION);
+        return;
+    };
+    let oud = r.trim()["de versie is ".len()..].trim().to_string();
+    let mut delen: Vec<String> = oud.split('.').map(|d| d.to_string()).collect();
+    let Some(laatste) = delen.last_mut().and_then(|d| d.parse::<u64>().ok()) else {
+        melding(&format!("De versie {} kan ik niet ophogen: het laatste stukje is geen getal.", oud), MB_ICONINFORMATION);
+        return;
+    };
+    *delen.last_mut().unwrap() = (laatste + 1).to_string();
+    let nieuw = delen.join(".");
+    if melding(&format!("Zal ik de versie ophogen van {} naar {} (regel {})?", oud, nieuw, i + 1), MB_YESNO | MB_ICONQUESTION) != IDYES {
+        return;
+    }
+    let regels: Vec<String> = tekst.lines().enumerate().map(|(j, r)| if j == i { format!("De versie is {}", nieuw) } else { r.to_string() }).collect();
+    vervang_editor_tekst(&regels.join("\n"));
+    zet_meldingen(&format!("De versie is nu {}.", nieuw));
+}
+
+unsafe extern "system" fn opdrachtvenster_proc(h: HWND, m: u32, wp: usize, lp: isize) -> isize {
+    match m {
+        WM_SIZE => {
+            indeling_opdrachtvenster(h);
+            0
+        }
+        WM_COMMAND => {
+            if let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) {
+                let code = (wp >> 16) & 0xFFFF;
+                if lp as HWND == o.vak && code == EN_CHANGE {
+                    vul_lijst_zoek(&lees_tekst(o.vak));
+                } else if lp as HWND == o.lijst && code == LBN_DBLCLK {
+                    opdrachtvenster_enter(true);
+                }
+            }
+            0
+        }
+        WM_DESTROY => {
+            OPDRACHTVENSTER.with(|o| {
+                if o.get().map_or(false, |x| x.venster == h) {
+                    o.set(None);
+                }
+            });
+            0
+        }
+        _ => DefWindowProcW(h, m, wp, lp),
+    }
+}
+
+/// Toetsen in het opdrachtvenster: Enter, Escape en Tab. Geeft true als de toets is afgehandeld.
+fn opdrachtvenster_toets(msg: &MSG) -> bool {
+    let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) else { return false };
+    if msg.message != WM_KEYDOWN {
+        return false;
+    }
+    unsafe {
+        if GetAncestor(msg.hwnd, GA_ROOT) != o.venster {
+            return false;
+        }
+        match msg.wParam {
+            VK_ESCAPE => {
+                sluit_opdrachtvenster();
+                true
+            }
+            VK_RETURN => {
+                opdrachtvenster_enter(GetFocus() == o.lijst);
+                true
+            }
+            VK_TAB => {
+                SetFocus(if GetFocus() == o.vak { o.lijst } else { o.vak });
+                true
+            }
+            _ => false,
         }
     }
 }

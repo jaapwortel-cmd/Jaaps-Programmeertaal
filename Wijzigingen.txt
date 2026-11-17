@@ -1,4 +1,4 @@
-Wijzigingen in Jaap's Programmeertaal
+﻿Wijzigingen in Jaap's Programmeertaal
 =====================================
 
 Versie 0.1.0 (proefversie, 17 november 2026)
@@ -32,4 +32,14 @@ Versie 0.1.0 (proefversie, 17 november 2026)
 - Een eigen licentie, met zinnen of uit een tekstbestand. Bij het installeren moet je akkoord gaan.
 - Foutmeldingen en vragen met regelnummer. Bij een tikfout een voorstel dat je met ja of nee beantwoordt.
 - Handleiding met F1, sluiten met Escape.
+- Je eigen zinnen bedenken (Nieuwe zin: ... Einde van de zin), ook voor al je programma's (Mijn eigen zinnen).
+- Rust-stukjes: eigen Rust-code tussen je zinnen.
+- Rekenen en tekst: wortel, macht, afronden, rest, absolute waarde, als getal, als tekst, lengte,
+  hoofdletters, kleine letters, eerste en laatste tekens, woorden, splitsen, samenvoegen, vervangen.
+- Wachten, een ander programma starten, een bestand, map of webpagina openen.
+- Je zinnen gaan mee in je .exe: met Ctrl+O kun je ze er weer uit halen. Onlangs geopend in het menu Bestand.
+- Opdrachten in gewone zinnen (Ctrl+E), zoals je ook tegen Claude Code praat: "maak er een exe van",
+  "ga maar verder", "zet er een knop Opslaan bij". Zoeken in wat je kunt zeggen (Ctrl+F).
+  Eigen opdrachten, een wensenlijst, en het versienummer ophogen.
+- Een opdrachtvak in je eigen programma's (alleen als je erom vraagt), met eigen zinnen: Als ik zeg "...".
 - Geen AI: alleen vaste, ingebouwde regels.

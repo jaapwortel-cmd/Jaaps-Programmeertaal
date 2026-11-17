@@ -71,6 +71,7 @@ const WOORDENLIJST: &[&str] = &[
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
     "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
     "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga", "verstuur", "download", "adres", "webpagina",
+    "opdrachtvak", "zeg", "opdracht",
     "wortel", "macht", "afgerond", "decimalen", "rest", "delen", "absolute", "lengte", "tekens", "hoofdletters", "kleine", "letters",
     "woorden", "gesplitst", "samengevoegd", "vervangen", "waarin", "spaties", "seconden", "programma", "open",
     "updates", "zoek", "opnemen", "opname", "begin", "start", "afbeelding", "beschrijving", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
@@ -1196,6 +1197,18 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::LeesVoor(spreektekst(r)?)))
         }
         "stop" if zoek(&s, &["voorlezen"], 1).is_some() => Ok(Vorm::Los(Soort::StopVoorlezen)),
+        "geef" | "maak" if zoek(&s, &["opdrachtvak"], 1).is_some() => Ok(Vorm::Los(Soort::Opdrachtvak)),
+        "als" if matches!(klein(&s, 1).as_str(), "ik" | "je" | "iemand") && matches!(klein(&s, 2).as_str(), "zeg" | "typ" | "zegt" | "typt") => {
+            // Als ik zeg "maak het donker"
+            let zin = match s.get(3) {
+                Some(Stuk::Tekst(t)) if s.len() == 4 => t.clone(),
+                _ => return Err(fout("Zet de zin tussen aanhalingstekens. Schrijf bijvoorbeeld: Als ik zeg \"maak het donker\"")),
+            };
+            if zin.trim().is_empty() {
+                return Err(fout("Welke zin? Schrijf bijvoorbeeld: Als ik zeg \"maak het donker\""));
+            }
+            Ok(Vorm::OpenKnop(format!("zeg: {}", zin.trim())))
+        }
         "wacht" if s.len() >= 2 => {
             let mut eind = s.len();
             if matches!(klein(&s, eind - 1).as_str(), "seconden" | "seconde" | "sec") {
@@ -1843,6 +1856,7 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 ["herhaal"] | ["herhaling"] => Ok(Vorm::Einde(Blok::Herhaal)),
                 ["knop"] => Ok(Vorm::Einde(Blok::Knop)),
                 ["stukje"] => Ok(Vorm::Einde(Blok::Stukje)),
+                ["opdracht"] | ["zin"] => Ok(Vorm::Einde(Blok::Knop)),
                 _ => Err(fout("Ik weet niet welk blok je wilt sluiten. Schrijf: Einde als, Einde herhaal, Einde van de knop of Einde van het stukje.")),
             }
         }

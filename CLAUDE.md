@@ -56,3 +56,14 @@ Programmeertaal in gewone Nederlandse zinnen, gemaakt voor Jaap Wortel. Rust, zo
   onthouden mag.
 - "Motorschrijver": nog steeds eerst drie voorbeelden aan Jaap vragen.
 - Geen gekocht certificaat (Jaap, 17 nov 2026): alleen het eigen certificaat. Niet meer op de lijst zetten.
+
+## Opdrachten in gewone zinnen (Jaap, 17 nov 2026)
+
+- Jaap wil tegen zijn programma praten zoals tegen Claude Code. Editor: Ctrl+E (opdracht) en Ctrl+F (zoeken in wat je kunt
+  zeggen). `motor/src/opdrachten.rs` = editorfuncties (vaste woordgroepjes, dicteerfouten zoals "installatie Stant", "Exxon",
+  "error" = editor); `motor/src/wensen.rs` = verzoeken omzetten in taalzinnen (altijd eerst ja/nee), of eerlijk "kan nog niet"
+  + wensenlijst (%APPDATA%\Jaaps Programmeertaal\Mijn wensen.txt). Eigen opdrachten: Mijn eigen opdrachten.txt.
+- Nieuwe verzoeken van Jaap (uit zijn berichten en zijn andere repos) toevoegen aan die tabellen + tests in
+  motor/tests/alles_wat_rust_kan.rs. Geen privé-dingen (zoals Mail Jaap) in wat gebruikers zien.
+- Opdrachtvak in eigen programma's alleen met de zin "Geef mijn programma een opdrachtvak" (Jaap: niet in elk programma).
+- Je zinnen gaan mee in de .exe (static JOUW_ZINNEN met merktekens); Ctrl+O op een .exe haalt ze terug.

@@ -84,3 +84,60 @@ fn zinnen_weer_uit_het_programma() {
     assert_eq!(motor::zinnen_uit_programma(b"geen programma"), None);
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn opdrachtvak_in_eigen_programma() {
+    let m = map("opdrachtvak");
+    let bron = "Maak een venster met als titel Hulp\nGeef mijn programma een opdrachtvak\nMaak een knop met als naam Opslaan\nAls ik op de knop Opslaan druk\nToon \"opgeslagen\"\nEinde van de knop\nAls ik zeg \"maak het donker\"\nToon \"donker\"\nEinde van de opdracht\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let exe = bouw(bron, &m, motor::bouwen::Stand::Snel);
+    let zeg = |zin: &str| {
+        let uit = Command::new(&exe).args(["--tekst", "--typ", &format!("Opdracht={}", zin), "--druk", "Doe het"]).env("JAAPTAAL_MAP", &m).output().unwrap();
+        String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n").lines().last().unwrap_or("").to_string()
+    };
+    assert_eq!(zeg("maak het nu maar donker"), "donker");
+    assert_eq!(zeg("druk op opslaan"), "opgeslagen");
+    assert_eq!(zeg("donker"), "[vraag] Bedoel je: maak het donker?");
+    assert!(zeg("bananen").starts_with("Dat snap ik niet"));
+    // Zonder opdrachtvak: eerst vragen.
+    assert!(!lees("Maak een venster met als titel A\nAls ik zeg \"hallo\"\nToon 1\nEinde van de opdracht\n").is_goed());
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn verzoeken_in_gewone_taal() {
+    use motor::opdrachten::{begrijp_alles, Antwoord, Begrip, Functie};
+    use motor::wensen::Voorstel;
+    // Zinnen zoals Jaap ze tegen Claude Code zei, uit zijn programma's.
+    let editor = [
+        ("Ga maar ook verder met stap twee", Functie::Verder),
+        ("Maak alvast maar het programma installatieprogramma", Functie::Installatie),
+        ("Geef het nieuwe installatie Stant zodra het klaar is", Functie::Installatie),
+        ("Heb je nou begrepen wat ik wil?", Functie::Beschrijf),
+        ("wat moet er nog gebeuren voor het lijstje", Functie::Wensenlijst),
+        ("maak er een exe van", Functie::BouwExe),
+        ("zet de versie omhoog", Functie::VersieOmhoog),
+    ];
+    for (zin, f) in editor {
+        match begrijp_alles(zin, &[]) {
+            Antwoord::Editor(Begrip::Doe { functie, .. }) => assert_eq!(functie, f, "{}", zin),
+            ander => panic!("{} gaf {:?}", zin, ander),
+        }
+    }
+    let taal = [
+        ("Ook tabbladen inbouwen: een tabblad Geluid", "Maak een tabblad met als naam Geluid"),
+        ("Een eigen pictogram voor mijn programma, logo.ico", "Het pictogram staat in het bestand logo.ico"),
+        ("Eigen meldingen die je schermlezer uitspreekt: \"Klaar\"", "Zeg \"Klaar\""),
+        ("geef de knop Opslaan de sneltoets Ctrl+S", "Geef de knop Opslaan de sneltoets Ctrl+S"),
+    ];
+    for (zin, regel) in taal {
+        match begrijp_alles(zin, &[]) {
+            Antwoord::Taal(Voorstel::Regels { regels, .. }) => {
+                assert_eq!(regels.join(" | "), regel, "{}", zin);
+                assert!(lees(&format!("Maak een venster met als titel A\nMaak een knop met als naam Opslaan\n{}\n", regel)).programma.opdrachten.len() >= 2);
+            }
+            ander => panic!("{} gaf {:?}", zin, ander),
+        }
+    }
+    assert!(matches!(begrijp_alles("Jaap wil geen Microsoft Edge", &[]), Antwoord::Taal(Voorstel::NogNiet(_))));
+}

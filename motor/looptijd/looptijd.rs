@@ -72,6 +72,8 @@ impl W {
 }
 
 const MAX_STAPPEN: u64 = 10_000_000;
+/// De knop Doe het van het opdrachtvak.
+const OPDRACHT_ACTIE: usize = usize::MAX;
 const MAX_HERHALINGEN: f64 = 1_000_000.0;
 
 fn reken(a: W, teken: u8, b: W, r: usize) -> R<W> {
@@ -1059,6 +1061,75 @@ impl Staat {
         }
         Ok(())
     }
+    /// Het opdrachtvak: een tekstvak Opdracht en een knop Doe het.
+    fn opdrachtvak(&mut self) {
+        self.scherm.onderdeel(0, "Opdracht");
+        self.scherm.knop("Doe het", Some(OPDRACHT_ACTIE));
+    }
+    /// Wat je in het opdrachtvak zegt, koppelen aan een knop, menuregel of eigen zin. Geen AI:
+    /// alle woorden van de zin moeten erin staan. Anders vragen, niet gokken.
+    fn opdracht_geven(&mut self, bij_knop: BijKnop) -> R<()> {
+        let zin = self.scherm.onderdelen.iter().position(|o| o.naam == "Opdracht").map(|i| self.scherm.lees(i).tekst()).unwrap_or_default();
+        let woorden = |t: &str| -> Vec<String> {
+            let t: String = t.to_lowercase().chars().map(|c| if c.is_alphanumeric() { c } else { ' ' }).collect();
+            t.split_whitespace()
+                .filter(|w| !matches!(*w, "ik" | "wil" | "graag" | "even" | "maar" | "de" | "het" | "een" | "op" | "druk" | "klik" | "kies" | "alsjeblieft" | "nu" | "je" | "mij" | "eens" | "doe"))
+                .map(|w| w.to_string())
+                .collect()
+        };
+        let invoer = woorden(&zin);
+        if invoer.is_empty() {
+            self.scherm.toon("Typ of dicteer eerst wat je wilt in het vak Opdracht.");
+            return Ok(());
+        }
+        // Alles wat je kunt zeggen: je eigen zinnen, en de namen van knoppen en menuregels.
+        let mut kan: Vec<(String, usize)> = Vec::new();
+        for (i, a) in self.acties.iter().enumerate() {
+            if let Some(z) = a.strip_prefix("zeg: ") {
+                kan.push((z.to_string(), i));
+            }
+        }
+        for (naam, actie) in &self.scherm.knoppen {
+            if let Some(a) = actie {
+                if *a != OPDRACHT_ACTIE && !kan.iter().any(|k| k.1 == *a) {
+                    kan.push((naam.clone(), *a));
+                }
+            }
+        }
+        let past: Vec<&(String, usize)> = kan.iter().filter(|(z, _)| {
+            let w = woorden(z);
+            !w.is_empty() && w.iter().all(|x| invoer.contains(x))
+        }).collect();
+        let max = past.iter().map(|p| woorden(&p.0).len()).max().unwrap_or(0);
+        let beste: Vec<&&(String, usize)> = past.iter().filter(|p| woorden(&p.0).len() == max).collect();
+        if beste.len() == 1 {
+            return bij_knop(self, beste[0].1);
+        }
+        let alles = kan.iter().map(|k| k.0.clone()).collect::<Vec<_>>().join(", ");
+        if beste.len() > 1 {
+            let namen = beste.iter().map(|b| b.0.clone()).collect::<Vec<_>>().join(" of ");
+            self.scherm.toon(&format!("Je zin past bij meer dingen: {}. Zeg het preciezer.", namen));
+            return Ok(());
+        }
+        // Lijkt het ergens op? Dan eerst vragen.
+        let lijkt = kan.iter().map(|k| (k, woorden(&k.0).iter().filter(|w| invoer.contains(w)).count())).filter(|(_, n)| *n > 0).max_by_key(|(_, n)| *n);
+        if let Some((k, _)) = lijkt {
+            let vraag = format!("Bedoel je: {}?", k.0);
+            if self.scherm.tekststand {
+                println!("[vraag] {}", vraag);
+                return Ok(());
+            }
+            #[cfg(windows)]
+            {
+                if win::vraag_ja_nee(&vraag) {
+                    return bij_knop(self, k.1);
+                }
+            }
+            return Ok(());
+        }
+        self.scherm.toon(&format!("Dat snap ik niet: {}. Je kunt zeggen: {}.", zin.trim(), alles));
+        Ok(())
+    }
     fn wacht(&mut self, w: W, r: usize) -> R<()> {
         let sec = match w {
             W::G(g) if (0.0..=3600.0).contains(&g) => g,
@@ -1587,7 +1658,8 @@ fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], 
             Some(None) => println!("Deze knop doet nog niets."),
             Some(Some(a)) => {
                 s.stappen = 0;
-                if let Err(f) = bij_knop(&mut s, a) {
+                let uitkomst = if a == OPDRACHT_ACTIE { s.opdracht_geven(bij_knop) } else { bij_knop(&mut s, a) };
+                if let Err(f) = uitkomst {
                     println!("{}", foutzin(&f));
                     std::process::exit(1);
                 }
@@ -1817,6 +1889,7 @@ mod win {
         fn IsDialogMessageW(h: HWND, m: *mut MSG) -> i32;
         fn PostQuitMessage(code: i32);
         fn MessageBoxW(h: HWND, text: *const u16, title: *const u16, kind: u32) -> i32;
+        fn GetForegroundWindow() -> HWND;
         fn SendMessageW(h: HWND, m: u32, w: usize, l: isize) -> isize;
         fn PostMessageW(h: HWND, m: u32, w: usize, l: isize) -> i32;
         fn SetFocus(h: HWND) -> HWND;
@@ -2386,6 +2459,10 @@ mod win {
 
     fn rgb(k: (u8, u8, u8)) -> u32 {
         k.0 as u32 | (k.1 as u32) << 8 | (k.2 as u32) << 16
+    }
+
+    pub(super) fn vraag_ja_nee(tekst: &str) -> bool {
+        unsafe { MessageBoxW(GetForegroundWindow(), w(tekst).as_ptr(), w("Vraag").as_ptr(), 0x4 | 0x20 | MB_SETFOREGROUND) == 6 }
     }
 
     pub(super) fn vraag_ja(eigenaar: HWND, tekst: &str) -> bool {
@@ -3069,7 +3146,8 @@ mod win {
             Some(a) => {
                 staat.stappen = 0;
                 if let Some(f) = BIJ_KNOP.with(|b| b.get()) {
-                    if let Err(fout) = f(&mut staat, a) {
+                    let uitkomst = if a == super::OPDRACHT_ACTIE { staat.opdracht_geven(f) } else { f(&mut staat, a) };
+                    if let Err(fout) = uitkomst {
                         foutmelding(venster, &foutzin(&fout));
                     }
                 }

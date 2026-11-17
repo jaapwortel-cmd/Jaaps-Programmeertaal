@@ -21,11 +21,13 @@ pub mod getallen;
 pub mod installatie;
 pub mod melding;
 pub mod ondertekenen;
+pub mod opdrachten;
 mod ontleden;
 pub mod rustcode;
 pub mod scherm;
 pub mod taal;
 pub mod tekst;
+pub mod wensen;
 
 pub use melding::{pas_toe, Melding, Soort as MeldingSoort, Voorstel, Wijziging};
 pub use taal::Programma;

@@ -323,6 +323,8 @@ pub enum Soort {
     BeginOpname,
     /// Een aantal seconden wachten.
     Wacht(Uitdrukking),
+    /// Een vak waarin je in gewone zinnen zegt wat het programma moet doen.
+    Opdrachtvak,
     /// Een ander programma starten.
     StartProgramma(Uitdrukking),
     /// Een bestand of map openen met het programma dat daarbij hoort.

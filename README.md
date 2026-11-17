@@ -274,6 +274,10 @@ De automatische controle op GitHub (UI Automation, dezelfde techniek als NVDA en
 5. Hoor je in het installatiebestand alle vragen, ook de licentie?
 6. Zegt Ctrl+L het juiste regelnummer?
 
+## 10b. Opdrachten in gewone zinnen
+
+In de editor: **Ctrl+E** om in gewone woorden te zeggen wat je wilt ("maak er een exe van", "ga maar verder", "zet er een knop Opslaan bij"), **Ctrl+F** om te zoeken in alles wat je kunt zeggen. De verzoeken komen uit hoe Jaap tegen Claude Code praat in zijn programma's. Werkt zonder AI: `motor/src/opdrachten.rs` (de editor) en `motor/src/wensen.rs` (zinnen voor je programma). Een programma kan ook een opdrachtvak krijgen: `Geef mijn programma een opdrachtvak` en `Als ik zeg "..."`.
+
 ## 11. Wat nog niet werkt
 
 Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo'n zin, dan zegt het programma dat eerlijk.
@@ -292,7 +296,9 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Spraak en toegankelijkheid**: braille, spraakherkenning, voorlezen, hardware, Whisper en taalmodellen als onderdeel van jouw programma's (niet van de taal zelf).
 
-**Overig**: extensies en drivers ("motorschrijver"), je bestaande programma's nabouwen, alles wat Rust kan.
+**Overig**: extensies en drivers ("motorschrijver"), je bestaande programma's nabouwen. (Wel gebouwd: eigen zinnen, Rust-stukjes, reken- en tekstzinnen, wachten, programma's starten, bestanden openen.)
+
+**Opdrachten in gewone zinnen** (Ctrl+E): gebouwd met vaste woorden per opdracht, zonder AI. Dingen die de taal nog niet kan (een venster dat schermvullend start, een vraag bij afsluiten, maar één keer open, reservekopieën, een donkere stand, tooltips) gaan op je wensenlijst.
 
 **Over de installatie**: het pictogram op het .exe-bestand zelf (in de Verkenner) kan nog niet; in de titelbalk, taakbalk en snelkoppelingen wel. (Een gekocht certificaat komt er niet: Jaap kiest voor zijn eigen certificaat.)
 

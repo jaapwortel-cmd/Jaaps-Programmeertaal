@@ -1,4 +1,4 @@
-Handleiding van Jaap's Programmeertaal
+﻿Handleiding van Jaap's Programmeertaal
 ======================================
 
 Met Jaap's Programmeertaal maak je zelf een computerprogramma.
@@ -47,6 +47,8 @@ Shift+F6        Laat de Rust-code zien die van je zinnen is gemaakt
 F8              Bouw een .exe-bestand
 Ctrl+F6         Vertel wat er op het scherm komt: vensters, onderdelen, kleuren, Tab-volgorde en tips
 Ctrl+F8         Bouw een installatiebestand voor je programma (met licentie, als je die beschrijft)
+Ctrl+E          Opdracht geven in gewone zinnen, zoals "maak er een exe van" (zie hoofdstuk 14)
+Ctrl+F          Zoeken in alles wat je kunt zeggen (zie hoofdstuk 14)
 Ctrl+L          Op welke regel sta ik? Het programma zegt het regelnummer en wat er op die regel staat.
 F4              Naar het vak Meldingen
 Tab             Wisselen tussen het vak Opdrachten en het vak Meldingen
@@ -59,6 +61,8 @@ Alle opdrachten staan ook in de menubalk. Druk op Alt om de menubalk te openen.
 Het Openen-venster (Ctrl+O) is hetzelfde als in Word en Kladblok. Je ziet mappen en tekstbestanden.
 Enter op een map: die map in. Backspace: een map hoger. Enter op een bestand: openen.
 Het venster begint in Documenten\Jaaps Programmeertaal.
+Je kunt ook een .exe kiezen die je zelf hebt gebouwd: dan haalt het programma je zinnen eruit.
+In het menu Bestand staat Onlangs geopend, met je laatste 9 programma's.
 
 
 3. Wat er gebeurt als iets niet klopt
@@ -521,12 +525,90 @@ Schrijf de tekst in het tekstvak Brief in het PDF-bestand brief.pdf
 Het bestand wordt nieuw gemaakt; wat er stond, verdwijnt. Elke regel wordt een alinea.
 Eerlijk: Word- en PDF-bestanden lezen kan nog niet, alleen maken. Een PDF is nu nog gewone tekst zonder kopjes.
 
+4.7m Rekenen en tekst
+
+Toon de wortel van 16                                   (4)
+Toon 2 tot de macht 10                                  (1024)
+Toon 10 gedeeld door 3 afgerond op 2 decimalen          (3,33)
+Toon 7,6 afgerond                                       (8: een heel getal)
+Toon de rest bij het delen van 17 door 5                (2)
+Toon de absolute waarde van -4                          (4; ook: getal zonder min)
+Onthoud leeftijd is de tekst in het tekstvak Leeftijd als getal
+Toon getal als tekst
+Toon de lengte van naam                                 (hoeveel tekens)
+Toon naam in hoofdletters
+Toon naam in kleine letters
+Toon naam zonder spaties                                (spaties aan begin en eind weg)
+Toon de eerste 4 tekens van naam
+Toon de laatste 3 tekens van naam
+Onthoud woorden is de woorden van zin                   (een lijst)
+Onthoud stukken is "appel,peer" gesplitst bij ","       (een lijst)
+Toon de lijst stukken samengevoegd met " en "           (appel en peer)
+Toon zin waarin "fiets" vervangen is door "auto"
+
+4.7n Wachten, programma's starten en bestanden openen
+
+Wacht 3 seconden                          (van 0 tot 3600 seconden; het venster wacht dan ook)
+Start het programma notepad.exe
+Open het bestand brief.docx               (met het programma dat erbij hoort, zoals Word)
+Open de map Mijn notities
+Open de webpagina https://www.nu.nl       (met je eigen browser)
+
+4.7o Je eigen zinnen bedenken
+
+Je kunt zelf een nieuwe zin maken, en zeggen wat hij betekent. Wat tussen [haken] staat,
+vul je in als je de zin gebruikt:
+
+Nieuwe zin: Begroet [wie]
+Toon "Hallo" en dan [wie]
+Einde van de zin
+
+Of op één regel:
+Nieuwe zin: Zeg dag tegen [wie] betekent Toon "Dag" en dan [wie]
+
+Daarna kun je schrijven: Begroet "Jaap". Of: Zeg dag tegen "Piet".
+Een nieuwe zin mag ook meer regels betekenen, bijvoorbeeld een heel venster met knoppen.
+Zinnen die in AL je programma's moeten werken, zet je in menu Help, Mijn eigen zinnen.
+Maak je twee keer dezelfde zin, dan vraagt het programma welke je bedoelt.
+
+4.7p Rust-stukjes (voor als je zelf Rust kent, of iemand die het voor je schrijft)
+
+Maak een Rust-stukje met als naam Omdraaien, met als invoer woord
+let t = woord.tekst();
+W::T(t.chars().rev().collect())
+Einde van het Rust-stukje
+
+Toon de uitkomst van Omdraaien met "Jaap"           (paaJ)
+
+Tussen die regels staat gewone Rust-code. De laatste regel is de uitkomst. W::T is tekst,
+W::G een getal, W::B waar of niet waar, W::L een lijst. Deze regels controleert het programma
+niet: gaat het bouwen mis, dan zegt het dat de fout waarschijnlijk in het Rust-stukje zit.
+
+4.7q Een opdrachtvak in je eigen programma
+
+Geef mijn programma een opdrachtvak
+
+Je programma krijgt dan een tekstvak Opdracht en een knop Doe het. Daar typ of dicteer je
+wat het programma moet doen. De namen van je knoppen en menuregels werken vanzelf
+("druk op opslaan"). Eigen zinnen maak je zo:
+
+Als ik zeg "maak het donker"
+Geef het venster de kleur zwart
+Einde van de opdracht
+
+Alle woorden van je zin moeten in de opdracht staan; extra woorden zoals "maar" en "nu" mogen.
+Lijkt het er maar op, dan vraagt je programma: Bedoel je ...? Het gokt niet.
+Alleen programma's met deze zin krijgen een opdrachtvak.
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
 Einde herhaal             sluit een herhaling
 Einde van de knop         sluit wat een knop doet
 Einde van het stukje      sluit een eigen stukje
+Einde van de opdracht     sluit wat een eigen zin in het opdrachtvak doet
+Einde van de zin          sluit een nieuwe zin die je zelf bedenkt
+Einde van het Rust-stukje sluit een Rust-stukje
 Einde                     sluit het laatste blok, wat het ook is
 
 
@@ -729,6 +811,10 @@ Je programma is een gewoon tekstbestand (TXT). Je kunt het ook in Kladblok schri
 en dan openen met Ctrl+O. Opslaan gebeurt veilig: eerst in een tijdelijk bestand,
 pas daarna wordt het echte bestand vervangen.
 
+Je zinnen gaan ook mee in elke .exe die je bouwt. Ben je het TXT-bestand kwijt? Open dan de .exe
+met Ctrl+O: het programma haalt je zinnen eruit. Let op: wie jouw .exe krijgt, kan je zinnen
+er dus ook uit halen.
+
 
 13. Wat nog niet kan
 --------------------
@@ -743,3 +829,45 @@ Dit staat op de wensenlijst, maar zit nog niet in deze versie:
 - tekst tussen aanhalingstekens vertalen.
 
 Als je zo'n zin schrijft, zegt het programma eerlijk dat het dat nog niet kan.
+
+
+14. Opdrachten in gewone zinnen (Ctrl+E) en zoeken (Ctrl+F)
+-----------------------------------------------------------
+
+Met Ctrl+E zeg je in gewone woorden wat je wilt, net zoals tegen een helper. Typ of dicteer
+je zin en druk Enter. Bijvoorbeeld:
+
+  maak er een exe van                 (bouwt een .exe, net als F8)
+  maak het installatiebestand         (net als Ctrl+F8)
+  ga maar verder                      (naar het eind van je programma, of je laatste programma)
+  open mijn programma Begroeting      (zoekt het bij Onlangs geopend en in Documenten)
+  controleer mijn zinnen              (net als F7)
+  snap je wat ik bedoel?              (laat zien wat er van je zinnen wordt gemaakt, net als F6)
+  ga naar regel 12
+  verhoog het versienummer            (De versie is 1.2 wordt 1.3, na een vraag)
+  wat moet er nog gebeuren            (opent je wensenlijst)
+
+Je kunt ook zeggen wat er in je programma moet komen. Dan stelt het programma de juiste zin
+voor, en zet het die pas in je programma als je Ja zegt:
+
+  zet er een knop Opslaan bij         wordt: Maak een knop met als naam Opslaan
+  er moet een menu Bestand komen      wordt: Maak een menu met als naam Bestand
+  geef de knop Opslaan Control S      wordt: Geef de knop Opslaan de sneltoets Ctrl+S
+  de versie moet 1.2 worden           wordt: De versie is 1.2
+  een snelkoppeling op het bureaublad wordt: Zet een snelkoppeling op het bureaublad
+
+Mist er iets, bijvoorbeeld de naam van de knop, dan stelt het programma één vraag.
+Kan de taal iets nog niet (bijvoorbeeld een venster dat schermvullend start), dan zegt
+het programma dat eerlijk en vraagt het of het op je wensenlijst mag (menu Help, Mijn wensenlijst).
+
+Het programma kent ook veelvoorkomende dicteerfouten, zoals "installatie Stant" (installatiebestand)
+en "Exxon" (exe). Een tikfout verbetert het pas als jij Ja zegt.
+
+Ctrl+F opent hetzelfde venster om te zoeken: typ een paar woorden, en de lijst laat zien wat je
+kunt zeggen, met de sneltoets erbij. Met Tab ga je naar de lijst, met Enter voer je het uit.
+
+Eigen opdrachten leren: menu Help, Mijn eigen opdrachten. Eén per regel, links wat jij zegt,
+rechts wat het programma al kent. Bijvoorbeeld:
+  knal hem eruit = bouw een exe
+
+Geen AI: het programma kent vaste woorden per opdracht. Snapt het je niet, dan zegt het dat.

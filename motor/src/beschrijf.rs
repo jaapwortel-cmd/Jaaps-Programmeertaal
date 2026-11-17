@@ -114,6 +114,7 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 TabelActie::Inlezen(p) => format!("lees de tabel {} in uit het CSV-bestand {}.", tabel, uitdrukking(p)),
             },
             Soort::BeginOpname => "begin met opnemen van de microfoon.".into(),
+            Soort::Opdrachtvak => "maak een opdrachtvak: een tekstvak Opdracht en een knop Doe het. Daar typ of dicteer je wat het programma moet doen; je knoppen, menuregels en eigen zinnen werken daar.".into(),
             Soort::Wacht(u) => format!("wacht {} seconden.", uitdrukking(u)),
             Soort::StartProgramma(u) => format!("start het programma {}.", uitdrukking(u)),
             Soort::OpenBestand(u) => format!("open {} met het programma dat erbij hoort.", uitdrukking(u)),

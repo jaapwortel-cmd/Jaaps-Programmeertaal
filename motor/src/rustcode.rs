@@ -373,6 +373,10 @@ impl<'a> Maker<'a> {
                     let programma = matches!(o.soort, Soort::StartProgramma(_));
                     self.regel(diepte, &format!("{{ let w = {}; s.open(w, {}, {})?; }}", w, programma, r));
                 }
+                Soort::Opdrachtvak => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, "s.opdrachtvak();");
+                }
                 Soort::BeginOpname => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.begin_opname({})?;", r));

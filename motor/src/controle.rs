@@ -490,6 +490,11 @@ impl<'a> Controle<'a> {
                     }
                 }
                 Soort::BeginOpname => {}
+                Soort::Opdrachtvak => {
+                    if in_knop {
+                        self.meld(Melding::fout(r, "Een opdrachtvak maak je in het venster zelf, niet binnen een knop."));
+                    }
+                }
                 Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => {
                     let mut namen = Vec::new();
                     u.namen(&mut namen);
@@ -946,6 +951,16 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
             continue;
         }
         if knoppen.iter().any(|(n, _)| n.to_lowercase() == naam.to_lowercase()) {
+            continue;
+        }
+        if naam.starts_with("zeg: ") {
+            if !p.alle().iter().any(|o| matches!(o.soort, Soort::Opdrachtvak)) {
+                let nieuw = "Geef mijn programma een opdrachtvak".to_string();
+                c.meld(Melding::vraag(*regel, "Je beschrijft wat een zin doet, maar je programma heeft nog geen opdrachtvak om die zin in te typen.").met_voorstel(
+                    format!("Zal ik een opdrachtvak maken, met de regel: {}?", nieuw),
+                    Wijziging::VoegInVoor { regel: *regel, nieuw },
+                ));
+            }
             continue;
         }
         let lijkt_op = knoppen
