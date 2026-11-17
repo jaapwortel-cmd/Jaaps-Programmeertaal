@@ -1,0 +1,14 @@
+[package]
+name = "motor"
+description = "De motor van Jaap's Programmeertaal: leest Nederlandse zinnen, controleert ze en voert ze uit. Zonder AI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# De motor gebruikt GEEN andere pakketten. Alleen de standaard Rust-bibliotheek.
+[dependencies]
+
+[[bin]]
+name = "jaaptaal"
+path = "src/bin/jaaptaal.rs"

@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["motor", "scherm", "editor", "uitvoerder"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Jaap Wortel"]
+
+# Vaste bouwmethode: klein en snel. Zo meten we ook de groottes.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
