@@ -1,0 +1,5 @@
+Maak een venster met als titel Begroeting
+Maak een knop met als naam Welkom
+Als ik op de knop Welkom druk
+Toon de tekst Hallo
+Einde van de knop

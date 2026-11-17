@@ -221,9 +221,9 @@ mod tests {
     #[test]
     fn knippen() {
         let s = splits("Toon \"Hallo daar\" en dan x,").unwrap();
-        assert_eq!(s.len(), 4);
+        assert_eq!(s.len(), 5);
         assert_eq!(s[1], Stuk::Tekst("Hallo daar".into()));
-        assert_eq!(s[3], Stuk::Woord("x".into()));
+        assert_eq!(s[4], Stuk::Woord("x".into()));
         assert!(splits("Toon \"open").is_err());
     }
 

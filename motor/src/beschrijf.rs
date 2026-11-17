@@ -1,0 +1,91 @@
+//! Vertelt in gewone taal wat de motor van je zinnen heeft gemaakt.
+
+use crate::getallen;
+use crate::taal::*;
+
+fn uitdrukking(u: &Uitdrukking) -> String {
+    match u {
+        Uitdrukking::Vast(Waarde::Getal(g)) => format!("het getal {}", getallen::schrijf(*g)),
+        Uitdrukking::Vast(Waarde::Tekst(t)) => format!("de tekst \"{}\"", t),
+        Uitdrukking::Vast(Waarde::Waarheid(true)) => "waar".into(),
+        Uitdrukking::Vast(Waarde::Waarheid(false)) => "niet waar".into(),
+        Uitdrukking::Naam(n) => format!("wat er in {} staat", n),
+        Uitdrukking::Negatief(a) => format!("min {}", uitdrukking(a)),
+        Uitdrukking::Bewerking(a, t, b) => {
+            let woord = match t {
+                Teken::EnDan => "met daarachter",
+                t => t.woord(),
+            };
+            format!("({} {} {})", uitdrukking(a), woord, uitdrukking(b))
+        }
+    }
+}
+
+fn voorwaarde(v: &Voorwaarde) -> String {
+    match v {
+        Voorwaarde::Vergelijk(a, verg, b) => format!("{} {} {}", uitdrukking(a), verg.woorden(), uitdrukking(b)),
+        Voorwaarde::IsWaar(a) => format!("{} waar is", uitdrukking(a)),
+    }
+}
+
+fn lijst(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
+    let insp = "    ".repeat(diepte);
+    for o in l {
+        let r = o.regel;
+        let zin = match &o.soort {
+            Soort::Opmerking(t) => format!("een opmerking die niets doet: {}", t),
+            Soort::MaakVenster { titel } => format!("maak een venster. De titel is: {}.", titel),
+            Soort::MaakKnop { naam } => format!("maak een knop in het laatste venster. De naam is: {}.", naam),
+            Soort::Toon(u) => format!("toon {}.", uitdrukking(u)),
+            Soort::Onthoud { naam, waarde, .. } => format!("onthoud {} onder de naam {}.", uitdrukking(waarde), naam),
+            Soort::Verander { naam, waarde } => format!("verander {} in {}.", naam, uitdrukking(waarde)),
+            Soort::TelOp { naam, waarde } => format!("tel {} op bij {}.", uitdrukking(waarde), naam),
+            Soort::TrekAf { naam, waarde } => format!("trek {} af van {}.", uitdrukking(waarde), naam),
+            Soort::BijKnop { naam, blok, einde } => {
+                uit.push(format!("{}Regel {}: als iemand op de knop {} drukt, doe dan dit:", insp, r, naam));
+                lijst(blok, diepte + 1, uit);
+                uit.push(format!("{}Regel {}: einde van wat de knop {} doet.", insp, einde, naam));
+                continue;
+            }
+            Soort::Als { voorwaarde: v, dan, anders, anders_regel, einde } => {
+                uit.push(format!("{}Regel {}: kijk of {}. Zo ja, doe dan dit:", insp, r, voorwaarde(v)));
+                lijst(dan, diepte + 1, uit);
+                if let Some(a) = anders_regel {
+                    uit.push(format!("{}Regel {}: zo nee, doe dan dit:", insp, a));
+                    lijst(anders, diepte + 1, uit);
+                }
+                uit.push(format!("{}Regel {}: einde van de keuze.", insp, einde));
+                continue;
+            }
+            Soort::Herhaal { aantal, blok, einde } => {
+                uit.push(format!("{}Regel {}: doe dit {} keer:", insp, r, uitdrukking(aantal)));
+                lijst(blok, diepte + 1, uit);
+                uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
+                continue;
+            }
+            Soort::HerhaalZolang { voorwaarde: v, hoogstens, blok, einde } => {
+                uit.push(format!(
+                    "{}Regel {}: doe dit zolang {}, maar hoogstens {} keer:",
+                    insp,
+                    r,
+                    voorwaarde(v),
+                    uitdrukking(hoogstens)
+                ));
+                lijst(blok, diepte + 1, uit);
+                uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
+                continue;
+            }
+        };
+        uit.push(format!("{}Regel {}: {}", insp, r, zin));
+    }
+}
+
+/// Een beschrijving in gewone taal, één regel per opdracht.
+pub fn beschrijf(p: &Programma) -> String {
+    let mut uit = vec!["Zo begrijp ik je programma:".to_string()];
+    if p.opdrachten.is_empty() {
+        uit.push("Er staan nog geen opdrachten in.".into());
+    }
+    lijst(&p.opdrachten, 0, &mut uit);
+    uit.join("\n")
+}
