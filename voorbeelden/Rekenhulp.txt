@@ -1,0 +1,20 @@
+Opmerking: een rekenhulp. Typ twee getallen en druk op Optellen.
+Maak een venster met als titel Rekenhulp
+Maak een tekstvak met als naam Eerste getal
+Maak een tekstvak met als naam Tweede getal
+Maak een uitklaplijst met als naam Som
+Voeg de keuze plus toe aan de uitklaplijst Som
+Voeg de keuze keer toe aan de uitklaplijst Som
+Maak een knop met als naam Uitrekenen
+Maak een label met als naam Antwoord
+Als ik op de knop Uitrekenen druk
+Onthoud a is het getal in het tekstvak Eerste getal
+Onthoud b is het getal in het tekstvak Tweede getal
+Als de keuze in de uitklaplijst Som is "keer"
+Onthoud uitkomst is a keer b
+Anders
+Onthoud uitkomst is a plus b
+Einde als
+Zet "De uitkomst is" en dan uitkomst in het label Antwoord
+Toon "De uitkomst is" en dan uitkomst
+Einde van de knop

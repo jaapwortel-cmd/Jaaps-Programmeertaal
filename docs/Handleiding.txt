@@ -114,6 +114,53 @@ Einde van de knop
 Ook goed: Als ik op de knop Welkom klik. En: Einde knop.
 In zo'n blok mag je ook een nieuw venster maken. Zo kun je meerdere vensters hebben.
 
+4.2b Tekstvakken, labels, selectievakjes en keuzelijsten
+
+Deze onderdelen komen, net als knoppen, in het laatste venster. Ze staan onder elkaar.
+Een tekstvak en een keuzelijst krijgen hun naam erboven, zodat de schermlezer die voorleest.
+
+Maak een tekstvak met als naam Naam
+Maak een groot tekstvak met als naam Verhaal        (meer regels, zoals een kladblok)
+Maak een label met als naam Antwoord                (een stukje tekst dat je kunt veranderen)
+Maak een selectievakje met als naam Geluid aan      (een vakje dat aan of uit staat)
+Maak een keuzelijst met als naam Kleur              (een lijst waaruit je kiest)
+Maak een uitklaplijst met als naam Maat             (een lijst die openklapt, ook wel combobox)
+
+Keuzes toevoegen:
+Voeg de keuze Rood toe aan de keuzelijst Kleur
+Voeg Groot toe aan de uitklaplijst Maat
+De eerste keuze is meteen gekozen.
+
+Iets in een tekstvak of label zetten:
+Zet de tekst Hallo in het label Antwoord
+Zet "De uitkomst is" en dan uitkomst in het label Antwoord
+Maak het tekstvak Naam leeg
+
+Een selectievakje aan- of uitzetten:
+Vink het selectievakje Geluid aan aan
+Vink het selectievakje Geluid aan uit
+(Het eerste "aan" hoort hier bij de naam "Geluid aan".)
+
+De focus ergens neerzetten:
+Zet de focus op het tekstvak Naam
+
+Lezen wat er staat (bijvoorbeeld als iemand op een knop drukt):
+de tekst in het tekstvak Naam
+wat er in het tekstvak Naam staat
+het getal in het tekstvak Leeftijd      (de tekst als getal: dan kun je ermee rekenen)
+de keuze in de keuzelijst Kleur
+het selectievakje Geluid aan            (waar of niet waar)
+
+Voorbeelden:
+Toon de tekst in het tekstvak Naam
+Onthoud leeftijd is het getal in het tekstvak Leeftijd
+Als het selectievakje Geluid aan is aangevinkt
+Als het tekstvak Naam is leeg
+Als de keuze in de keuzelijst Kleur is "Rood"
+
+Staat er in een tekstvak geen getal, terwijl je om een getal vraagt? Dan hoor je dat, met het regelnummer.
+Het voorbeeld Rekenhulp.txt in de map voorbeelden laat alles samen zien.
+
 4.3 Tekst tonen
 
 Toon de tekst Hallo
@@ -323,7 +370,7 @@ pas daarna wordt het echte bestand vervangen.
 --------------------
 
 Dit staat op de wensenlijst, maar zit nog niet in deze versie:
-- tekstvakken, lijsten, selectievakjes, tabellen, menu's en werkbalken in je eigen programma;
+- tabellen, menu's en werkbalken in je eigen programma;
 - kleuren en lay-out kiezen;
 - geluid, muziek, opnemen;
 - afbeeldingen, QR-codes en streepjescodes;

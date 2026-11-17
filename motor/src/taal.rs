@@ -37,6 +37,9 @@ pub enum Uitdrukking {
     Vast(Waarde),
     /// Een naam van iets dat je hebt onthouden (altijd in kleine letters).
     Naam(String),
+    /// Wat er in een onderdeel van het scherm staat (tekstvak, label, selectievakje, keuzelijst).
+    /// `als_getal`: de tekst als getal lezen ("het getal in het tekstvak Leeftijd").
+    Onderdeel { naam: String, als_getal: bool },
     Bewerking(Box<Uitdrukking>, Teken, Box<Uitdrukking>),
     Negatief(Box<Uitdrukking>),
 }
@@ -45,7 +48,7 @@ impl Uitdrukking {
     /// Alle namen die in deze uitdrukking worden gebruikt.
     pub fn namen(&self, uit: &mut Vec<String>) {
         match self {
-            Uitdrukking::Vast(_) => {}
+            Uitdrukking::Vast(_) | Uitdrukking::Onderdeel { .. } => {}
             Uitdrukking::Naam(n) => uit.push(n.clone()),
             Uitdrukking::Bewerking(a, _, b) => {
                 a.namen(uit);
@@ -121,8 +124,45 @@ pub enum Soort {
     Als { voorwaarde: Voorwaarde, dan: Vec<Opdracht>, anders: Vec<Opdracht>, anders_regel: Option<usize>, einde: usize },
     Herhaal { aantal: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
     HerhaalZolang { voorwaarde: Voorwaarde, hoogstens: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
+    /// Een tekstvak, label, selectievakje of keuzelijst in het laatste venster.
+    MaakOnderdeel { soort: OnderdeelSoort, naam: String },
+    /// Een keuze toevoegen aan een keuzelijst of uitklaplijst.
+    VoegKeuzeToe { keuze: Uitdrukking, lijst: String },
+    /// Tekst in een tekstvak of label zetten.
+    ZetIn { waarde: Uitdrukking, naam: String },
+    /// Een selectievakje aan- of uitvinken.
+    Vink { naam: String, aan: bool },
+    /// De focus op een onderdeel zetten.
+    Focus { naam: String },
     /// Een zin die het installatiebestand beschrijft. Doet niets als het programma draait.
     Installatie(InstallatieZin),
+}
+
+/// De soorten onderdelen die je in een venster kunt zetten.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum OnderdeelSoort {
+    Tekstvak,
+    GrootTekstvak,
+    Label,
+    Selectievakje,
+    Keuzelijst,
+    Uitklaplijst,
+}
+
+impl OnderdeelSoort {
+    pub fn woord(self) -> &'static str {
+        match self {
+            OnderdeelSoort::Tekstvak => "tekstvak",
+            OnderdeelSoort::GrootTekstvak => "groot tekstvak",
+            OnderdeelSoort::Label => "label",
+            OnderdeelSoort::Selectievakje => "selectievakje",
+            OnderdeelSoort::Keuzelijst => "keuzelijst",
+            OnderdeelSoort::Uitklaplijst => "uitklaplijst",
+        }
+    }
+    pub fn nummer(self) -> u8 {
+        self as u8
+    }
 }
 
 /// Wie het programma mag installeren.

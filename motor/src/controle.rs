@@ -54,6 +54,30 @@ struct Controle<'a> {
     /// (naam, regel, staat los in het programma)
     onthoud: Vec<(String, usize, bool)>,
     al_gemeld: HashSet<(usize, String)>,
+    /// (naam, soort, regel) van elk onderdeel op het scherm.
+    onderdelen: Vec<(String, OnderdeelSoort, usize)>,
+}
+
+fn onderdelen_in(u: &Uitdrukking, uit: &mut Vec<(String, bool)>) {
+    match u {
+        Uitdrukking::Onderdeel { naam, als_getal } => uit.push((naam.clone(), *als_getal)),
+        Uitdrukking::Bewerking(a, _, b) => {
+            onderdelen_in(a, uit);
+            onderdelen_in(b, uit);
+        }
+        Uitdrukking::Negatief(a) => onderdelen_in(a, uit),
+        _ => {}
+    }
+}
+
+fn onderdelen_in_voorwaarde(v: &Voorwaarde, uit: &mut Vec<(String, bool)>) {
+    match v {
+        Voorwaarde::Vergelijk(a, _, b) => {
+            onderdelen_in(a, uit);
+            onderdelen_in(b, uit);
+        }
+        Voorwaarde::IsWaar(a) => onderdelen_in(a, uit),
+    }
 }
 
 impl<'a> Controle<'a> {
@@ -63,6 +87,12 @@ impl<'a> Controle<'a> {
             Uitdrukking::Vast(Waarde::Tekst(_)) => Ok(Type::Tekst),
             Uitdrukking::Vast(Waarde::Waarheid(_)) => Ok(Type::Waarheid),
             Uitdrukking::Naam(n) => Ok(self.types.get(n).map(|t| t.0).unwrap_or(Type::Onbekend)),
+            Uitdrukking::Onderdeel { als_getal: true, .. } => Ok(Type::Getal),
+            Uitdrukking::Onderdeel { naam, .. } => Ok(match self.onderdeel_soort(naam) {
+                Some(OnderdeelSoort::Selectievakje) => Type::Waarheid,
+                Some(_) => Type::Tekst,
+                None => Type::Onbekend,
+            }),
             Uitdrukking::Negatief(a) => {
                 let t = self.type_van(a)?;
                 if matches!(t, Type::Tekst | Type::Waarheid) {
@@ -91,6 +121,56 @@ impl<'a> Controle<'a> {
                 }
                 Ok(Type::Getal)
             }
+        }
+    }
+
+    fn onderdeel_soort(&self, naam: &str) -> Option<OnderdeelSoort> {
+        self.onderdelen.iter().find(|(n, _, _)| n.to_lowercase() == naam.to_lowercase()).map(|o| o.1)
+    }
+
+    /// Bestaat het onderdeel, en is het van een soort die hier past?
+    fn controleer_onderdeel(&mut self, regel: usize, naam: &str, toegestaan: &[OnderdeelSoort], wat: &str) {
+        if !self.al_gemeld.insert((regel, format!("onderdeel:{}", naam.to_lowercase()))) {
+            return;
+        }
+        match self.onderdeel_soort(naam) {
+            Some(soort) if toegestaan.is_empty() || toegestaan.contains(&soort) => {}
+            Some(soort) => self.meld(Melding::fout(
+                regel,
+                format!("{} is een {}. {}", naam, soort.woord(), wat),
+            )),
+            None => {
+                let tekst = format!("Er is geen tekstvak, label, selectievakje of keuzelijst met de naam {}.", naam);
+                let lijkt_op = self
+                    .onderdelen
+                    .iter()
+                    .map(|o| o.0.clone())
+                    .filter(|n| tekst::mag_tikfout_zijn(&naam.to_lowercase(), &n.to_lowercase()))
+                    .min_by_key(|n| tekst::afstand(naam, n));
+                let regeltekst = tekst::normaliseer(self.regels.get(regel - 1).copied().unwrap_or(""));
+                let m = match lijkt_op {
+                    Some(goed) if regeltekst.contains(naam) => {
+                        let nieuw = regeltekst.replacen(naam, &goed, 1);
+                        Melding::vraag(regel, tekst).met_voorstel(
+                            format!("Bedoel je {}? Dan wordt de regel: {}", goed, nieuw),
+                            Wijziging::VervangRegel { regel, nieuw },
+                        )
+                    }
+                    _ => Melding::vraag(regel, format!("{} Welk onderdeel bedoel je? Maak het eerst, bijvoorbeeld met: Maak een tekstvak met als naam {}.", tekst, naam)),
+                };
+                self.meld(m);
+            }
+        }
+    }
+
+    fn controleer_onderdelen_in(&mut self, regel: usize, lijst: Vec<(String, bool)>) {
+        for (naam, als_getal) in lijst {
+            let toegestaan: &[OnderdeelSoort] = if als_getal {
+                &[OnderdeelSoort::Tekstvak, OnderdeelSoort::GrootTekstvak, OnderdeelSoort::Label]
+            } else {
+                &[]
+            };
+            self.controleer_onderdeel(regel, &naam, toegestaan, "Daar kan ik geen getal uit lezen.");
         }
     }
 
@@ -164,6 +244,9 @@ impl<'a> Controle<'a> {
     }
 
     fn controleer_voorwaarde(&mut self, regel: usize, v: &Voorwaarde, in_knop: bool) {
+        let mut od = Vec::new();
+        onderdelen_in_voorwaarde(v, &mut od);
+        self.controleer_onderdelen_in(regel, od);
         let mut namen = Vec::new();
         v.namen(&mut namen);
         self.controleer_namen(regel, namen, in_knop, None);
@@ -216,7 +299,46 @@ impl<'a> Controle<'a> {
             let r = o.regel;
             match &o.soort {
                 Soort::Opmerking(_) | Soort::MaakVenster { .. } | Soort::MaakKnop { .. } | Soort::Installatie(_) => {}
+                Soort::MaakOnderdeel { .. } => {}
+                Soort::VoegKeuzeToe { keuze, lijst } => {
+                    let mut namen = Vec::new();
+                    keuze.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    let mut od = Vec::new();
+                    onderdelen_in(keuze, &mut od);
+                    self.controleer_onderdelen_in(r, od);
+                    self.controleer_onderdeel(
+                        r,
+                        lijst,
+                        &[OnderdeelSoort::Keuzelijst, OnderdeelSoort::Uitklaplijst],
+                        "Een keuze toevoegen kan alleen bij een keuzelijst of een uitklaplijst.",
+                    );
+                }
+                Soort::ZetIn { waarde, naam } => {
+                    let mut namen = Vec::new();
+                    waarde.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    let mut od = Vec::new();
+                    onderdelen_in(waarde, &mut od);
+                    self.controleer_onderdelen_in(r, od);
+                    if let Err(t) = self.type_van(waarde) {
+                        self.meld(Melding::fout(r, t));
+                    }
+                    self.controleer_onderdeel(
+                        r,
+                        naam,
+                        &[OnderdeelSoort::Tekstvak, OnderdeelSoort::GrootTekstvak, OnderdeelSoort::Label],
+                        "Tekst erin zetten kan alleen bij een tekstvak of een label.",
+                    );
+                }
+                Soort::Vink { naam, .. } => {
+                    self.controleer_onderdeel(r, naam, &[OnderdeelSoort::Selectievakje], "Aan- en uitvinken kan alleen bij een selectievakje.")
+                }
+                Soort::Focus { naam } => self.controleer_onderdeel(r, naam, &[], ""),
                 Soort::Toon(u) => {
+                    let mut od = Vec::new();
+                    onderdelen_in(u, &mut od);
+                    self.controleer_onderdelen_in(r, od);
                     let mut namen = Vec::new();
                     u.namen(&mut namen);
                     self.controleer_namen(r, namen, in_knop, Some(u));
@@ -225,6 +347,9 @@ impl<'a> Controle<'a> {
                     }
                 }
                 Soort::Onthoud { naam, waarde, .. } | Soort::Verander { naam, waarde } => {
+                    let mut od = Vec::new();
+                    onderdelen_in(waarde, &mut od);
+                    self.controleer_onderdelen_in(r, od);
                     let mut namen = Vec::new();
                     waarde.namen(&mut namen);
                     self.controleer_namen(r, namen, in_knop, None);
@@ -311,7 +436,21 @@ fn vervang_naam(regel: &str, oud: &str, nieuw: &str) -> Option<String> {
 }
 
 pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
-    let mut c = Controle { regels, meldingen: Vec::new(), types: HashMap::new(), onthoud: Vec::new(), al_gemeld: HashSet::new() };
+    let mut c = Controle {
+        regels,
+        meldingen: Vec::new(),
+        types: HashMap::new(),
+        onthoud: Vec::new(),
+        al_gemeld: HashSet::new(),
+        onderdelen: p
+            .alle()
+            .iter()
+            .filter_map(|o| match &o.soort {
+                Soort::MaakOnderdeel { soort, naam } => Some((naam.clone(), *soort, o.regel)),
+                _ => None,
+            })
+            .collect(),
+    };
 
     // Ronde 1: wat wordt er onthouden, en wat voor soort waarde is het?
     fn verzamel(c: &mut Controle, lijst: &[Opdracht], los: bool) {
@@ -372,6 +511,14 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
             _ => None,
         })
         .collect();
+    let mut op_scherm: Vec<(String, usize)> = alle
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::MaakKnop { naam } | Soort::MaakOnderdeel { naam, .. } => Some((naam.clone(), o.regel)),
+            _ => None,
+        })
+        .collect();
+    op_scherm.sort_by_key(|x| x.1);
     let acties: Vec<(String, usize)> = alle
         .iter()
         .filter_map(|o| match &o.soort {
@@ -380,22 +527,22 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
         })
         .collect();
 
-    if let Some((naam, regel)) = knoppen.iter().find(|(_, r)| !vensters.iter().any(|v| v < r)) {
+    if let Some((naam, regel)) = op_scherm.iter().find(|(_, r)| !vensters.iter().any(|v| v < r)) {
         let nieuw = "Maak een venster met als titel Mijn programma".to_string();
         c.meld(
-            Melding::vraag(*regel, format!("Je maakt de knop {}, maar er is nog geen venster om hem in te zetten.", naam))
+            Melding::vraag(*regel, format!("Je maakt {}, maar er is nog geen venster om het in te zetten.", naam))
                 .met_voorstel(
                     format!("Zal ik er eerst een venster voor maken, met de regel: {}?", nieuw),
                     Wijziging::VoegInVoor { regel: *regel, nieuw },
                 ),
         );
     }
-    for (i, (naam, regel)) in knoppen.iter().enumerate() {
-        if let Some((_, eerste)) = knoppen[..i].iter().find(|(n, _)| n.to_lowercase() == naam.to_lowercase()) {
+    for (i, (naam, regel)) in op_scherm.iter().enumerate() {
+        if let Some((_, eerste)) = op_scherm[..i].iter().find(|(n, _)| n.to_lowercase() == naam.to_lowercase()) {
             c.meld(Melding::vraag(
                 *regel,
                 format!(
-                    "Er is al een knop met de naam {}, op regel {}. Twee knoppen met dezelfde naam kan ik niet uit elkaar houden. Welke naam moet deze knop krijgen?",
+                    "Er is al een onderdeel met de naam {}, op regel {}. Twee onderdelen met dezelfde naam kan ik niet uit elkaar houden. Welke naam moet dit krijgen?",
                     naam, eerste
                 ),
             ));

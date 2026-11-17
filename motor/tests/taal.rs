@@ -279,7 +279,7 @@ fn onbekende_zin_geeft_vraag_en_geen_gok() {
 
 #[test]
 fn nog_niet_gebouwd_wordt_eerlijk_gezegd() {
-    let m = eerste_melding("Maak een tekstvak met als naam Naam\n");
+    let m = eerste_melding("Maak een tabel met als naam Uren\n");
     assert!(m.tekst.contains("nog niet"));
 }
 

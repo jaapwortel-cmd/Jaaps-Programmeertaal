@@ -72,6 +72,17 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 - `Maak een knop met als naam Welkom` (ook: `met de naam`)
 - `Als ik op de knop Welkom druk` ... `Einde van de knop` (ook: `klik`, `Einde knop`)
 
+**Tekstvakken, labels, selectievakjes en keuzelijsten**
+- `Maak een tekstvak met als naam Naam`, `Maak een groot tekstvak met als naam Verhaal`
+- `Maak een label met als naam Antwoord`, `Maak een selectievakje met als naam Geluid aan`
+- `Maak een keuzelijst met als naam Kleur`, `Maak een uitklaplijst met als naam Maat`
+- `Voeg de keuze Rood toe aan de keuzelijst Kleur`
+- `Zet de tekst Hallo in het label Antwoord`, `Maak het tekstvak Naam leeg`, `Zet de focus op het tekstvak Naam`
+- `Vink het selectievakje Geluid aan aan` (of `uit`)
+- Lezen: `de tekst in het tekstvak Naam`, `het getal in het tekstvak Leeftijd`, `de keuze in de keuzelijst Kleur`, `het selectievakje Geluid aan`
+- Kiezen: `Als het selectievakje Geluid aan is aangevinkt`, `Als het tekstvak Naam is leeg`
+- Voorbeeld: `voorbeelden/Rekenhulp.txt` (twee getallen, plus of keer, uitkomst in een label)
+
 **Tekst tonen**
 - `Toon de tekst Hallo`
 - `Toon teller`, `Toon de waarde van teller`, `Toon de uitkomst van 3 plus 4`
@@ -156,7 +167,7 @@ Uitvoeren (met Rust op de computer):
 cargo test --workspace
 ```
 
-Uitslag in deze sessie (Linux): 56 tests, allemaal geslaagd.
+Uitslag in deze sessie (Linux): 65 tests, allemaal geslaagd.
 
 **De opdrachtregel** (`jaaptaal.exe`, staat ook in de installatie):
 
@@ -165,7 +176,7 @@ jaaptaal controleer programma.txt
 jaaptaal beschrijf programma.txt
 jaaptaal rust programma.txt
 jaaptaal bouw programma.txt Programma.exe
-jaaptaal proef programma.txt --druk Welkom
+jaaptaal proef programma.txt --typ "Naam=Jaap" --kies "Kleur=Rood" --vink "Geluid aan" --druk Welkom
 jaaptaal installatie programma.txt "Programma installatie.exe"
 ```
 
@@ -190,7 +201,7 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **De taal**: lijsten met meerdere waarden; eigen stukjes met een naam, invoer en uitkomst; twee voorwaarden met "en" of "of"; Engelse opdrachten en vertalen naar het Engels; het onthouden van jouw eigen formuleringen (zelflerend).
 
-**Scherm**: tekstvakken, labels, keuzelijsten, comboboxen, selectievakjes, tabellen, menu's, werkbalken, een tekstverwerker, kleuren, zelf een lay-out kiezen, een lay-outvoorstel, vooraf vertellen wat er op het scherm staat, eigen sneltoetsen en tabvolgorde, aanpassen aan schermgrootte.
+**Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), kleuren, zelf een lay-out kiezen, een lay-outvoorstel, vooraf vertellen wat er op het scherm staat, eigen sneltoetsen en tabvolgorde, aanpassen aan schermgrootte.
 
 **Geluid**: geluiden, mono/stereo/3D, opnemen, muziekspelers, audio-editor.
 

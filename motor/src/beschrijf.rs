@@ -10,6 +10,8 @@ fn uitdrukking(u: &Uitdrukking) -> String {
         Uitdrukking::Vast(Waarde::Waarheid(true)) => "waar".into(),
         Uitdrukking::Vast(Waarde::Waarheid(false)) => "niet waar".into(),
         Uitdrukking::Naam(n) => format!("wat er in {} staat", n),
+        Uitdrukking::Onderdeel { naam, als_getal: false } => format!("wat er in het onderdeel {} staat", naam),
+        Uitdrukking::Onderdeel { naam, als_getal: true } => format!("het getal in het onderdeel {}", naam),
         Uitdrukking::Negatief(a) => format!("min {}", uitdrukking(a)),
         Uitdrukking::Bewerking(a, t, b) => {
             let woord = match t {
@@ -34,6 +36,13 @@ fn lijst(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
         let r = o.regel;
         let zin = match &o.soort {
             Soort::Opmerking(t) => format!("een opmerking die niets doet: {}", t),
+            Soort::MaakOnderdeel { soort, naam } => {
+                format!("maak een {} in het laatste venster. De naam is: {}.", soort.woord(), naam)
+            }
+            Soort::VoegKeuzeToe { keuze, lijst } => format!("voeg {} toe aan de keuzelijst {}.", uitdrukking(keuze), lijst),
+            Soort::ZetIn { waarde, naam } => format!("zet {} in het onderdeel {}.", uitdrukking(waarde), naam),
+            Soort::Vink { naam, aan } => format!("vink het selectievakje {} {}.", naam, if *aan { "aan" } else { "uit" }),
+            Soort::Focus { naam } => format!("zet de focus op het onderdeel {}.", naam),
             Soort::Installatie(z) => match z {
                 InstallatieZin::Naam(n) => format!("het installatiebestand heet: {} installatie.exe.", n),
                 InstallatieZin::Versie(v) => format!("de versie is {}.", v),

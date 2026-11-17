@@ -39,30 +39,33 @@ jobs:
       - name: Rust klaarzetten (vaste versie)
         shell: powershell
         run: |
-          rustup toolchain install $env:RUST_VERSIE --profile minimal
-          rustup default $env:RUST_VERSIE
+          cmd /c "rustup toolchain install $env:RUST_VERSIE --profile minimal 2>&1"
+          cmd /c "rustup default $env:RUST_VERSIE 2>&1"
           rustc --version
 
       - name: Alle tests (motor, zinnen, foutmeldingen, geen AI)
         shell: powershell
         run: |
-          cargo test --workspace 2>&1 | Tee-Object -FilePath tests.txt
-          if ($LASTEXITCODE) { throw 'Tests mislukt.' }
+          # Via cmd: PowerShell 5 ziet de voortgang van cargo (op stderr) anders als fout.
+          cmd /c "cargo test --workspace > tests.txt 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content tests.txt | Write-Host
+          if ($code) { throw 'Tests mislukt.' }
           "## Tests" | Add-Content $env:GITHUB_STEP_SUMMARY
           Select-String -Path tests.txt -Pattern '^test result' | ForEach-Object { '- ' + $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Editor en jaaptaal bouwen (release)
         shell: powershell
         run: |
-          cargo build --release -p editor -p motor
+          cmd /c "cargo build --release -p editor -p motor 2>&1"
           if ($LASTEXITCODE) { throw 'Bouwen mislukt.' }
 
       - name: Rust-compiler voor in het programma klaarmaken
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          rustup toolchain install "$env:RUST_VERSIE-x86_64-pc-windows-gnu" --profile minimal --force-non-host
-          $bron = Join-Path (rustup show home) "toolchains\$env:RUST_VERSIE-x86_64-pc-windows-gnu"
+          cmd /c "rustup toolchain install $env:RUST_VERSIE-x86_64-pc-windows-gnu --profile minimal --force-non-host 2>&1"
+          $bron = Join-Path (cmd /c "rustup show home 2>nul") "toolchains\$env:RUST_VERSIE-x86_64-pc-windows-gnu"
           $app = New-Item -ItemType Directory -Path 'installatiemap' -Force
           $rust = Join-Path $app.FullName 'rust'
           New-Item -ItemType Directory -Path $rust -Force | Out-Null
@@ -189,6 +192,6 @@ jobs:
         run: |
           $setup = "Jaaps Programmeertaal $env:VERSIE installatie.exe"
           $notities = "Proefversie $env:VERSIE, gebouwd van $env:GITHUB_SHA.`n`n" + ((Get-Content 'groottes.txt') -join "`n")
-          gh release delete proef --yes --cleanup-tag 2>$null
+          cmd /c "gh release delete proef --yes --cleanup-tag 2>nul"
           gh release create proef $setup 'groottes.txt' --prerelease --title "Proefversie $env:VERSIE" --notes $notities --target $env:GITHUB_SHA
           if ($LASTEXITCODE) { throw 'Uitgave maken mislukt.' }

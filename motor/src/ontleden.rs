@@ -59,12 +59,13 @@ const WOORDENLIJST: &[&str] = &[
     "zolang", "hoogstens", "einde", "opmerking", "druk", "klik", "plus", "min", "gedeeld", "door", "groter", "kleiner",
     "dan", "gelijk", "aan", "minstens", "waar", "niet", "herhaling", "keuze", "waarde", "uitkomst", "een", "de", "het",
     "ik", "in", "installatiebestand", "installatie", "snelkoppeling", "bureaublad", "startmenu", "beheerdersrechten",
-    "versie", "maker", "voeg", "toe", "bestand", "licentie", "staat",
+    "versie", "maker", "voeg", "toe", "bestand", "licentie", "staat", "tekstvak", "label", "selectievakje", "keuzelijst",
+    "uitklaplijst", "vink", "aan", "uit", "focus", "groot", "leeg", "aangevinkt", "keuze", "getal",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "tekstvak", "label", "lijst", "keuzelijst", "combobox", "selectievakje", "vinkje", "tabel", "menu", "werkbalk",
+    "lijst", "tabel", "menu", "werkbalk",
     "afbeelding", "plaatje", "foto", "geluid", "map", "bestand", "tekstverwerker", "qr-code", "streepjescode",
 ];
 
@@ -138,8 +139,45 @@ pub(crate) fn naam(s: &[Stuk]) -> Result<String, String> {
     Ok(delen.join(" "))
 }
 
+pub(crate) fn is_onderdeelwoord(w: &str) -> bool {
+    matches!(w, "tekstvak" | "invulvak" | "label" | "selectievakje" | "vinkje" | "keuzevakje" | "keuzelijst" | "uitklaplijst" | "combobox" | "keuzemenu")
+}
+
+/// "de tekst in het tekstvak Naam", "het getal in het tekstvak Leeftijd", "het selectievakje Geluid", ...
+fn onderdeel_operand(s: &[Stuk]) -> Option<Uitdrukking> {
+    let mut s = s;
+    if klein(s, s.len().wrapping_sub(1)) == "staat" && begint(s, &["wat", "er"]) {
+        s = &s[..s.len() - 1];
+    }
+    let voorvoegsels: &[(&[&str], bool)] = &[
+        (&["de", "tekst", "in"], false),
+        (&["de", "keuze", "in"], false),
+        (&["het", "getal", "in"], true),
+        (&["wat", "er", "in"], false),
+        (&[], false),
+    ];
+    for (voor, als_getal) in voorvoegsels {
+        if !begint(s, voor) {
+            continue;
+        }
+        let mut r = &s[voor.len()..];
+        if matches!(klein(r, 0).as_str(), "het" | "de") {
+            r = &r[1..];
+        }
+        if matches!(klein(r, 0).as_str(), "grote" | "groot") {
+            r = &r[1..];
+        }
+        if r.len() >= 2 && is_onderdeelwoord(&klein(r, 0)) {
+            return Some(Uitdrukking::Onderdeel { naam: rest_tekst(&r[1..]), als_getal: *als_getal });
+        }
+    }
+    None
+}
+
 fn operand(s: &[Stuk], negatief: bool) -> Result<Uitdrukking, String> {
-    let u = if let [Stuk::Tekst(t)] = s {
+    let u = if let Some(o) = onderdeel_operand(s) {
+        o
+    } else if let [Stuk::Tekst(t)] = s {
         Uitdrukking::Vast(Waarde::Tekst(t.clone()))
     } else if s.iter().all(|x| matches!(x, Stuk::Woord(_))) {
         let woorden: Vec<String> = s.iter().filter_map(|x| x.klein()).collect();
@@ -269,6 +307,20 @@ pub(crate) fn voorwaarde(s: &[Stuk]) -> Result<Voorwaarde, String> {
     if s.is_empty() {
         return Err("Waar moet ik op letten? Schrijf bijvoorbeeld: Als teller is groter dan 5.".into());
     }
+    // "het selectievakje Geluid is aangevinkt", "het tekstvak Naam is leeg" (ook met "niet").
+    let laatste = klein(s, s.len() - 1);
+    if matches!(laatste.as_str(), "aangevinkt" | "leeg") {
+        let mut r: Vec<Stuk> = s[..s.len() - 1].iter().filter(|x| x.klein().as_deref() != Some("is")).cloned().collect();
+        let niet = r.last().and_then(|x| x.klein()).as_deref() == Some("niet");
+        if niet {
+            r.pop();
+        }
+        if let Some(o) = onderdeel_operand(&r) {
+            let doel = if laatste == "leeg" { Waarde::Tekst(String::new()) } else { Waarde::Waarheid(true) };
+            let verg = if niet { Vergelijking::NietGelijk } else { Vergelijking::Gelijk };
+            return Ok(Voorwaarde::Vergelijk(o, verg, Uitdrukking::Vast(doel)));
+        }
+    }
     // Zoek eerst een vergelijking met woorden. Het woord "is" mag overal staan:
     // "x is groter dan 5", "x groter is dan 5" en "x groter dan 5 is" betekenen hetzelfde.
     let zonder_is: Vec<Stuk> = s.iter().filter(|x| x.klein().as_deref() != Some("is")).cloned().collect();
@@ -313,7 +365,8 @@ fn met_als_titel(s: &[Stuk], i: usize, woorden: &[&str], wat: &str, voorbeeld: &
             match wat {
                 "venster" => "het venster",
                 "installatie" => "het installatiebestand",
-                _ => "de knop",
+                "knop" => "de knop",
+                ander => ander,
             },
             voorbeeld
         ))
@@ -439,6 +492,13 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     let n = |r: &[Stuk]| naam(r).map_err(fout);
 
     match w0.as_str() {
+        "maak" if matches!(klein(&s, 1).as_str(), "het" | "de")
+            && klein(&s, s.len() - 1) == "leeg"
+            && s.len() >= 5
+            && is_onderdeelwoord(&klein(&s, 2)) =>
+        {
+            Ok(Vorm::Los(Soort::ZetIn { waarde: Uitdrukking::Vast(Waarde::Tekst(String::new())), naam: rest_tekst(&s[3..s.len() - 1]) }))
+        }
         "maak" => {
             let mut i = 1;
             if is_lidwoord(&klein(&s, i)) {
@@ -451,6 +511,30 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 "installatiebestand" | "installatie" | "installatieprogramma" => Ok(Vorm::Los(Soort::Installatie(
                     InstallatieZin::Naam(met_als_titel(&s, i + 1, &["naam", "titel"], "installatie", "Maak een installatiebestand met als naam Begroeting")?),
                 ))),
+                "groot" | "grote" if klein(&s, i + 1) == "tekstvak" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::GrootTekstvak,
+                    naam: met_als_titel(&s, i + 2, &["naam", "titel"], "het tekstvak", "Maak een groot tekstvak met als naam Verhaal")?,
+                })),
+                "tekstvak" | "invulvak" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::Tekstvak,
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel"], "het tekstvak", "Maak een tekstvak met als naam Naam")?,
+                })),
+                "label" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::Label,
+                    naam: met_als_titel(&s, i + 1, &["naam", "tekst", "titel"], "het label", "Maak een label met als naam Antwoord")?,
+                })),
+                "selectievakje" | "vinkje" | "keuzevakje" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::Selectievakje,
+                    naam: met_als_titel(&s, i + 1, &["naam", "tekst", "titel"], "het selectievakje", "Maak een selectievakje met als naam Geluid aan")?,
+                })),
+                "keuzelijst" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::Keuzelijst,
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel"], "de keuzelijst", "Maak een keuzelijst met als naam Kleur")?,
+                })),
+                "uitklaplijst" | "combobox" | "keuzemenu" => Ok(Vorm::Los(Soort::MaakOnderdeel {
+                    soort: OnderdeelSoort::Uitklaplijst,
+                    naam: met_als_titel(&s, i + 1, &["naam", "titel"], "de uitklaplijst", "Maak een uitklaplijst met als naam Kleur")?,
+                })),
                 "knop" => Ok(Vorm::Los(Soort::MaakKnop {
                     naam: met_als_titel(&s, i + 1, &["naam", "tekst", "titel"], "knop", "Maak een knop met als naam Welkom")?,
                 })),
@@ -465,6 +549,9 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             let r = &s[1..];
             if r.is_empty() {
                 return Err(fout("Wat moet ik tonen? Schrijf bijvoorbeeld: Toon de tekst Hallo."));
+            }
+            if onderdeel_operand(r).is_some() {
+                return Ok(Vorm::Los(Soort::Toon(u(r)?)));
             }
             let tekst_na = if begint(r, &["de", "tekst"]) {
                 Some(&r[2..])
@@ -523,6 +610,31 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         "de" | "het" if matches!(klein(&s, 1).as_str(), "installatie" | "versie" | "maker" | "programma" | "licentie") => {
             installatie_zin(&s)
         }
+        "voeg" if (1..s.len()).any(|i| matches!(klein(&s, i).as_str(), "keuzelijst" | "uitklaplijst" | "combobox" | "keuzemenu")) => {
+            let Some(t) = zoek(&s, &["toe", "aan"], 1) else {
+                return Err(fout("Schrijf het zo: Voeg de keuze Rood toe aan de keuzelijst Kleur."));
+            };
+            let mut b = 1;
+            while b < t && matches!(klein(&s, b).as_str(), "de" | "het" | "keuze") {
+                b += 1;
+            }
+            let w = &s[b..t];
+            if w.is_empty() {
+                return Err(fout("Welke keuze? Schrijf bijvoorbeeld: Voeg de keuze Rood toe aan de keuzelijst Kleur."));
+            }
+            let keuze = if matches!(w[0], Stuk::Tekst(_)) && w.len() > 1 {
+                u(w)?
+            } else {
+                Uitdrukking::Vast(Waarde::Tekst(rest_tekst(w)))
+            };
+            let Some(l) = (t + 2..s.len()).find(|&i| matches!(klein(&s, i).as_str(), "keuzelijst" | "uitklaplijst" | "combobox" | "keuzemenu")) else {
+                return Err(fout("Aan welke keuzelijst? Schrijf bijvoorbeeld: ... toe aan de keuzelijst Kleur."));
+            };
+            if l + 1 >= s.len() {
+                return Err(fout("Aan welke keuzelijst? Schrijf bijvoorbeeld: ... toe aan de keuzelijst Kleur."));
+            }
+            Ok(Vorm::Los(Soort::VoegKeuzeToe { keuze, lijst: rest_tekst(&s[l + 1..]) }))
+        }
         "voeg" => {
             // Voeg het bestand X toe aan de installatie
             let Some(t) = zoek(&s, &["toe"], 1) else {
@@ -539,6 +651,57 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 return Err(fout("Waaraan moet ik het bestand toevoegen? Schrijf: ... toe aan de installatie."));
             }
             Ok(Vorm::Los(Soort::Installatie(InstallatieZin::Bestand(rest_tekst(&s[b..t])))))
+        }
+        "zet" if zoek(&s, &["focus"], 1).is_some() => {
+            let Some(p) = (2..s.len()).find(|&i| is_onderdeelwoord(&klein(&s, i))) else {
+                return Err(fout("Waar moet de focus naartoe? Schrijf bijvoorbeeld: Zet de focus op het tekstvak Naam."));
+            };
+            if p + 1 >= s.len() {
+                return Err(fout("Op welk onderdeel? Schrijf bijvoorbeeld: Zet de focus op het tekstvak Naam."));
+            }
+            Ok(Vorm::Los(Soort::Focus { naam: rest_tekst(&s[p + 1..]) }))
+        }
+        "zet" if (1..s.len()).any(|i| klein(&s, i) == "in" && is_onderdeelwoord(&klein(&s, i + 2))) => {
+            let p = (1..s.len()).find(|&i| klein(&s, i) == "in" && is_onderdeelwoord(&klein(&s, i + 2))).unwrap();
+            if p + 3 >= s.len() {
+                return Err(fout("In welk onderdeel? Schrijf bijvoorbeeld: Zet de tekst Hallo in het label Antwoord."));
+            }
+            let naam = rest_tekst(&s[p + 3..]);
+            let mut w = &s[1..p];
+            let letterlijk = if begint(w, &["de", "tekst"]) {
+                w = &w[2..];
+                true
+            } else if begint(w, &["tekst"]) {
+                w = &w[1..];
+                true
+            } else {
+                false
+            };
+            if w.is_empty() {
+                return Err(fout("Wat moet erin komen? Schrijf bijvoorbeeld: Zet de tekst Hallo in het label Antwoord."));
+            }
+            let waarde = if letterlijk && !(matches!(w[0], Stuk::Tekst(_)) && w.len() > 1) {
+                Uitdrukking::Vast(Waarde::Tekst(rest_tekst(w)))
+            } else {
+                u(w)?
+            };
+            Ok(Vorm::Los(Soort::ZetIn { waarde, naam }))
+        }
+        "vink" => {
+            let laatste = klein(&s, s.len() - 1);
+            let aan = match laatste.as_str() {
+                "aan" => true,
+                "uit" => false,
+                _ => return Err(fout("Schrijf het zo: Vink het selectievakje Geluid aan. Of: ... uit.")),
+            };
+            let mut b = 1;
+            while b < s.len() - 1 && matches!(klein(&s, b).as_str(), "het" | "de" | "selectievakje" | "vinkje" | "keuzevakje") {
+                b += 1;
+            }
+            if b >= s.len() - 1 {
+                return Err(fout("Welk selectievakje? Schrijf bijvoorbeeld: Vink het selectievakje Geluid aan."));
+            }
+            Ok(Vorm::Los(Soort::Vink { naam: rest_tekst(&s[b..s.len() - 1]), aan }))
         }
         "verander" | "zet" => {
             let scheiding: &[&str] = if w0 == "zet" { &["op"] } else { &["in", "naar"] };

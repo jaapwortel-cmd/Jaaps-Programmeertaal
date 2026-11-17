@@ -43,6 +43,7 @@ impl<'a> Maker<'a> {
                 let i = self.naam_nr(n);
                 format!("s.lees({}, {})?", i, r)
             }
+            Uitdrukking::Onderdeel { naam, als_getal } => format!("s.waarde_van({}, {}, {})?", rust_tekst(naam), als_getal, r),
             Uitdrukking::Negatief(a) => {
                 let a = self.uitdrukking(a, r);
                 format!("negatief({}, {})?", a, r)
@@ -111,6 +112,28 @@ impl<'a> Maker<'a> {
                 Soort::MaakKnop { naam } => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.knop({});", rust_tekst(naam)));
+                }
+                Soort::MaakOnderdeel { soort, naam } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.onderdeel({}, {});", soort.nummer(), rust_tekst(naam)));
+                }
+                Soort::VoegKeuzeToe { keuze, lijst } => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(keuze, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.voeg_keuze({}, w, {})?; }}", u, rust_tekst(lijst), r));
+                }
+                Soort::ZetIn { waarde, naam } => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(waarde, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.zet_in({}, w, {})?; }}", u, rust_tekst(naam), r));
+                }
+                Soort::Vink { naam, aan } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.vink({}, {}, {})?;", rust_tekst(naam), aan, r));
+                }
+                Soort::Focus { naam } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.focus({}, {})?;", rust_tekst(naam), r));
                 }
                 Soort::Toon(u) => {
                     self.opmerking(diepte, r);

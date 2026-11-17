@@ -202,7 +202,77 @@ impl Staat {
         let actie = self.acties.iter().position(|a| a.to_lowercase() == naam.to_lowercase());
         self.scherm.knop(naam, actie);
     }
+    fn onderdeel(&mut self, soort: u8, naam: &str) {
+        self.scherm.onderdeel(soort, naam);
+    }
+    fn zoek(&self, naam: &str, r: usize) -> R<usize> {
+        match self.scherm.onderdelen.iter().position(|o| o.naam.to_lowercase() == naam.to_lowercase()) {
+            Some(i) => Ok(i),
+            None => fout(r, format!("Het onderdeel {} is er (nog) niet. Is het venster waar het in staat al gemaakt?", naam)),
+        }
+    }
+    fn waarde_van(&mut self, naam: &str, als_getal: bool, r: usize) -> R<W> {
+        let i = self.zoek(naam, r)?;
+        let w = self.scherm.lees(i);
+        if !als_getal {
+            return Ok(w);
+        }
+        let t = w.tekst();
+        let schoon: String = t.trim().replace(' ', "").replace('.', "").replace(',', ".");
+        match schoon.parse::<f64>() {
+            Ok(g) if g.is_finite() && !t.trim().is_empty() => Ok(W::G(g)),
+            _ => {
+                if t.trim().is_empty() {
+                    fout(r, format!("In {} staat nog niets. Daar moet een getal in.", naam))
+                } else {
+                    fout(r, format!("In {} staat geen getal, maar: {}", naam, t.trim()))
+                }
+            }
+        }
+    }
+    fn zet_in(&mut self, naam: &str, w: W, r: usize) -> R<()> {
+        let i = self.zoek(naam, r)?;
+        if !matches!(self.scherm.onderdelen[i].soort, 0 | 1 | 2) {
+            return fout(r, format!("In {} kan geen tekst. Dat kan alleen bij een tekstvak of een label.", naam));
+        }
+        self.scherm.zet_tekst(i, &w.tekst());
+        Ok(())
+    }
+    fn voeg_keuze(&mut self, naam: &str, w: W, r: usize) -> R<()> {
+        let i = self.zoek(naam, r)?;
+        if !matches!(self.scherm.onderdelen[i].soort, 4 | 5) {
+            return fout(r, format!("{} is geen keuzelijst.", naam));
+        }
+        self.scherm.voeg_keuze(i, &w.tekst());
+        Ok(())
+    }
+    fn vink(&mut self, naam: &str, aan: bool, r: usize) -> R<()> {
+        let i = self.zoek(naam, r)?;
+        if self.scherm.onderdelen[i].soort != 3 {
+            return fout(r, format!("{} is geen selectievakje.", naam));
+        }
+        self.scherm.vink(i, aan);
+        Ok(())
+    }
+    fn focus(&mut self, naam: &str, r: usize) -> R<()> {
+        let i = self.zoek(naam, r)?;
+        self.scherm.focus(i);
+        Ok(())
+    }
 }
+
+/// Een onderdeel op het scherm. Soort: 0 tekstvak, 1 groot tekstvak, 2 label, 3 selectievakje, 4 keuzelijst, 5 uitklaplijst.
+struct Ond {
+    soort: u8,
+    naam: String,
+    tekst: String,
+    aan: bool,
+    keuzes: Vec<String>,
+    gekozen: Option<usize>,
+    h: usize,
+}
+
+const SOORT_WOORD: [&str; 6] = ["tekstvak", "groot tekstvak", "label", "selectievakje", "keuzelijst", "uitklaplijst"];
 
 type Hoofd = fn(&mut Staat) -> R<()>;
 type BijKnop = fn(&mut Staat, usize) -> R<()>;
@@ -214,13 +284,37 @@ fn foutzin(f: &Fout) -> String {
 // ---------------------------------------------------------------------
 // Tekst-stand: voor proeven en voor computers zonder Windows.
 // ---------------------------------------------------------------------
-fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], hoofd: Hoofd, bij_knop: BijKnop, drukken: Vec<String>) {
+fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], hoofd: Hoofd, bij_knop: BijKnop, stappen: Vec<(String, String)>) {
     let mut s = Staat { waarden: vec![None; namen.len()], namen, acties, stappen: 0, scherm: Scherm::tekst() };
     if let Err(f) = hoofd(&mut s) {
         println!("{}", foutzin(&f));
         std::process::exit(1);
     }
-    for naam in drukken {
+    for (soort, waarde) in stappen {
+        let (naam, inhoud) = waarde.split_once('=').map(|(a, b)| (a.to_string(), b.to_string())).unwrap_or((waarde.clone(), String::new()));
+        if soort != "--druk" {
+            let Some(i) = s.scherm.onderdelen.iter().position(|o| o.naam.to_lowercase() == naam.to_lowercase()) else {
+                println!("Er is geen onderdeel met de naam {}.", naam);
+                continue;
+            };
+            match soort.as_str() {
+                "--typ" => {
+                    println!("[typ in {}] {}", naam, inhoud);
+                    s.scherm.onderdelen[i].tekst = inhoud;
+                }
+                "--vink" => {
+                    println!("[vink aan] {}", naam);
+                    s.scherm.onderdelen[i].aan = true;
+                }
+                _ => {
+                    let o = &mut s.scherm.onderdelen[i];
+                    o.gekozen = o.keuzes.iter().position(|k| k.to_lowercase() == inhoud.to_lowercase());
+                    println!("[kies in {}] {}", naam, inhoud);
+                }
+            }
+            continue;
+        }
+        let naam = waarde;
         println!("[druk op] {}", naam);
         let knop = s.scherm.knoppen.iter().find(|k| k.0.to_lowercase() == naam.to_lowercase()).map(|k| k.1);
         match knop {
@@ -241,16 +335,16 @@ fn start(namen: &'static [&'static str], acties: &'static [&'static str], hoofd:
     let args: Vec<String> = std::env::args().skip(1).collect();
     let tekststand = args.iter().any(|a| a == "--tekst") || !cfg!(windows);
     if tekststand {
-        let mut drukken = Vec::new();
+        let mut stappen = Vec::new();
         let mut i = 0;
         while i < args.len() {
-            if args[i] == "--druk" && i + 1 < args.len() {
-                drukken.push(args[i + 1].clone());
+            if matches!(args[i].as_str(), "--druk" | "--typ" | "--vink" | "--kies") && i + 1 < args.len() {
+                stappen.push((args[i].clone(), args[i + 1].clone()));
                 i += 1;
             }
             i += 1;
         }
-        start_tekst(namen, acties, hoofd, bij_knop, drukken);
+        start_tekst(namen, acties, hoofd, bij_knop, stappen);
         return;
     }
     #[cfg(windows)]
@@ -264,6 +358,7 @@ struct Scherm {
     tekststand: bool,
     /// (naam, actie) van elke knop, in volgorde.
     knoppen: Vec<(String, Option<usize>)>,
+    onderdelen: Vec<Ond>,
     uitvoer: Vec<String>,
     #[cfg(windows)]
     win: win::WinScherm,
@@ -274,10 +369,77 @@ impl Scherm {
         Scherm {
             tekststand: true,
             knoppen: Vec::new(),
+            onderdelen: Vec::new(),
             uitvoer: Vec::new(),
             #[cfg(windows)]
             win: win::WinScherm::default(),
         }
+    }
+    fn onderdeel(&mut self, soort: u8, naam: &str) {
+        let mut o = Ond { soort, naam: naam.to_string(), tekst: String::new(), aan: false, keuzes: Vec::new(), gekozen: None, h: 0 };
+        if soort == 2 {
+            o.tekst = naam.to_string();
+        }
+        if self.tekststand {
+            println!("[{}] {}", SOORT_WOORD[soort as usize], naam);
+        } else {
+            #[cfg(windows)]
+            {
+                o.h = self.win.onderdeel(soort, naam);
+            }
+        }
+        self.onderdelen.push(o);
+    }
+    fn lees(&self, i: usize) -> W {
+        let o = &self.onderdelen[i];
+        if !self.tekststand {
+            #[cfg(windows)]
+            return win::lees(o);
+        }
+        match o.soort {
+            3 => W::B(o.aan),
+            4 | 5 => W::T(o.gekozen.and_then(|k| o.keuzes.get(k).cloned()).unwrap_or_default()),
+            _ => W::T(o.tekst.clone()),
+        }
+    }
+    fn zet_tekst(&mut self, i: usize, t: &str) {
+        let o = &mut self.onderdelen[i];
+        o.tekst = t.to_string();
+        if self.tekststand {
+            println!("[{} {}] {}", SOORT_WOORD[o.soort as usize], o.naam, t);
+            return;
+        }
+        #[cfg(windows)]
+        win::zet_tekst(o.h, t);
+    }
+    fn voeg_keuze(&mut self, i: usize, t: &str) {
+        let o = &mut self.onderdelen[i];
+        o.keuzes.push(t.to_string());
+        if o.gekozen.is_none() {
+            o.gekozen = Some(0);
+        }
+        if !self.tekststand {
+            #[cfg(windows)]
+            win::voeg_keuze(o.h, o.soort, t, o.keuzes.len() == 1);
+        }
+    }
+    fn vink(&mut self, i: usize, aan: bool) {
+        let o = &mut self.onderdelen[i];
+        o.aan = aan;
+        if self.tekststand {
+            println!("[selectievakje {}] {}", o.naam, if aan { "aan" } else { "uit" });
+            return;
+        }
+        #[cfg(windows)]
+        win::vink(o.h, aan);
+    }
+    fn focus(&mut self, i: usize) {
+        if self.tekststand {
+            println!("[focus] {}", self.onderdelen[i].naam);
+            return;
+        }
+        #[cfg(windows)]
+        win::focus(self.onderdelen[i].h);
     }
     fn toon(&mut self, t: &str) {
         if self.tekststand {
@@ -393,6 +555,9 @@ mod win {
         fn GetClientRect(h: HWND, r: *mut RECT) -> i32;
         fn MoveWindow(h: HWND, x: i32, y: i32, w: i32, hh: i32, repaint: i32) -> i32;
         fn GetWindow(h: HWND, cmd: u32) -> HWND;
+        fn SetWindowTextW(h: HWND, text: *const u16) -> i32;
+        fn GetWindowTextW(h: HWND, buf: *mut u16, max: i32) -> i32;
+        fn GetWindowTextLengthW(h: HWND) -> i32;
     }
 
     #[link(name = "kernel32")]
@@ -438,6 +603,24 @@ mod win {
     const SWP_NOZORDER: u32 = 0x0004;
     const LOGPIXELSY: i32 = 90;
     const KNOP_ID: usize = 1000;
+    const WS_BORDER: u32 = 0x0080_0000;
+    const ES_AUTOHSCROLL: u32 = 0x0080;
+    const ES_WANTRETURN: u32 = 0x1000;
+    const BS_AUTOCHECKBOX: u32 = 0x0003;
+    const LBS_NOTIFY: u32 = 0x0001;
+    const CBS_DROPDOWNLIST: u32 = 0x0003;
+    const BM_GETCHECK: u32 = 0x00F0;
+    const BM_SETCHECK: u32 = 0x00F1;
+    const LB_ADDSTRING: u32 = 0x0180;
+    const LB_SETCURSEL: u32 = 0x0186;
+    const LB_GETCURSEL: u32 = 0x0188;
+    const LB_GETTEXT: u32 = 0x0189;
+    const LB_GETTEXTLEN: u32 = 0x018A;
+    const CB_ADDSTRING: u32 = 0x0143;
+    const CB_GETCURSEL: u32 = 0x0147;
+    const CB_GETLBTEXT: u32 = 0x0148;
+    const CB_GETLBTEXTLEN: u32 = 0x0149;
+    const CB_SETCURSEL: u32 = 0x014E;
 
     fn w(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -448,12 +631,15 @@ mod win {
         static BIJ_KNOP: Cell<Option<BijKnop>> = Cell::new(None);
         static OPEN: Cell<usize> = Cell::new(0);
         static KNOP_HWNDS: RefCell<Vec<HWND>> = RefCell::new(Vec::new());
+        static UITVOER_VAK: Cell<HWND> = Cell::new(std::ptr::null_mut());
     }
 
     #[derive(Default)]
     pub(super) struct WinScherm {
         pub(super) vensters: Vec<HWND>,
-        knoppen_per_venster: Vec<usize>,
+        /// Per venster: waar het volgende onderdeel komt, en of er al iets de focus heeft.
+        volgende_y: Vec<i32>,
+        heeft_focus: Vec<bool>,
         pub(super) klik_venster: Option<HWND>,
         lettertype: Option<HANDLE>,
         schaal: f32,
@@ -513,41 +699,153 @@ mod win {
                 );
                 OPEN.with(|o| o.set(o.get() + 1));
                 self.vensters.push(h);
-                self.knoppen_per_venster.push(0);
+                self.volgende_y.push(20);
+                self.heeft_focus.push(false);
                 SetForegroundWindow(h);
                 SetFocus(h);
             }
         }
 
-        pub(super) fn knop(&mut self, naam: &str, nummer: usize) {
-            let Some(&venster) = self.vensters.last() else { return };
-            let plek = *self.knoppen_per_venster.last().unwrap();
+        /// Zet een Windows-onderdeel onder het vorige in het laatste venster.
+        fn plaats(&mut self, klasse: &str, tekst: &str, stijl: u32, ex: u32, hoogte: i32, id: usize, focus: bool) -> HWND {
+            let Some(&venster) = self.vensters.last() else { return null_mut() };
+            let y = *self.volgende_y.last().unwrap();
             unsafe {
                 let h = CreateWindowExW(
-                    0,
-                    w("BUTTON").as_ptr(),
-                    w(naam).as_ptr(),
-                    WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                    ex,
+                    w(klasse).as_ptr(),
+                    w(tekst).as_ptr(),
+                    WS_CHILD | WS_VISIBLE | stijl,
                     self.s(20),
-                    self.s(20) + plek as i32 * self.s(64),
+                    y,
                     self.s(400),
-                    self.s(52),
+                    self.s(hoogte),
                     venster,
-                    (KNOP_ID + nummer) as HANDLE,
+                    id as HANDLE,
                     GetModuleHandleW(null()),
                     null_mut(),
                 );
                 if let Some(f) = self.lettertype {
                     SendMessageW(h, WM_SETFONT, f as usize, 1);
                 }
-                KNOP_HWNDS.with(|k| k.borrow_mut().push(h));
-                *self.knoppen_per_venster.last_mut().unwrap() += 1;
-                let aantal = plek as i32 + 1;
-                SetWindowPos(venster, null_mut(), 0, 0, self.s(460), self.s(120) + aantal * self.s(64), SWP_NOMOVE | SWP_NOZORDER);
-                if plek == 0 {
+                let nieuw_y = y + self.s(hoogte) + self.s(12);
+                *self.volgende_y.last_mut().unwrap() = nieuw_y;
+                SetWindowPos(venster, null_mut(), 0, 0, self.s(460), nieuw_y + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                if focus && !*self.heeft_focus.last().unwrap() {
+                    *self.heeft_focus.last_mut().unwrap() = true;
                     SetFocus(h);
                 }
+                h
             }
+        }
+
+        pub(super) fn knop(&mut self, naam: &str, nummer: usize) {
+            if self.vensters.is_empty() {
+                return;
+            }
+            let h = self.plaats("BUTTON", naam, WS_TABSTOP, 0, 52, KNOP_ID + nummer, true);
+            KNOP_HWNDS.with(|k| k.borrow_mut().push(h));
+        }
+
+        /// Maakt een tekstvak, label, selectievakje of keuzelijst. Geeft het Windows-onderdeel terug.
+        pub(super) fn onderdeel(&mut self, soort: u8, naam: &str) -> usize {
+            if self.vensters.is_empty() {
+                return 0;
+            }
+            // Een tekstvak of lijst krijgt een label erboven: zo leest de schermlezer de naam voor.
+            let label = |s: &mut Self| {
+                s.plaats("STATIC", &format!("{}:", naam), 0, 0, 30, 0, false);
+            };
+            let h = match soort {
+                0 => {
+                    label(self);
+                    self.plaats("EDIT", "", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE, 38, 0, true)
+                }
+                1 => {
+                    label(self);
+                    self.plaats(
+                        "EDIT",
+                        "",
+                        WS_TABSTOP | WS_BORDER | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
+                        WS_EX_CLIENTEDGE,
+                        200,
+                        0,
+                        true,
+                    )
+                }
+                2 => self.plaats("STATIC", naam, 0, 0, 34, 0, false),
+                3 => self.plaats("BUTTON", naam, WS_TABSTOP | BS_AUTOCHECKBOX, 0, 36, 0, true),
+                4 => {
+                    label(self);
+                    self.plaats("LISTBOX", "", WS_TABSTOP | WS_BORDER | WS_VSCROLL | LBS_NOTIFY, 0, 160, 0, true)
+                }
+                _ => {
+                    label(self);
+                    let h = self.plaats("COMBOBOX", "", WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, 0, 240, 0, true);
+                    // De open lijst is 240 hoog, het dichte vak maar 40: schuif de volgende plek terug.
+                    *self.volgende_y.last_mut().unwrap() -= self.s(200);
+                    h
+                }
+            };
+            h as usize
+        }
+    }
+
+    fn tekst_van(h: HWND) -> String {
+        unsafe {
+            let n = GetWindowTextLengthW(h);
+            let mut buf = vec![0u16; n as usize + 1];
+            let m = GetWindowTextW(h, buf.as_mut_ptr(), buf.len() as i32);
+            String::from_utf16_lossy(&buf[..m.max(0) as usize])
+        }
+    }
+
+    pub(super) fn lees(o: &Ond) -> W {
+        let h = o.h as HWND;
+        unsafe {
+            match o.soort {
+                3 => W::B(SendMessageW(h, BM_GETCHECK, 0, 0) == 1),
+                4 | 5 => {
+                    let (cur, len, get) = if o.soort == 4 { (LB_GETCURSEL, LB_GETTEXTLEN, LB_GETTEXT) } else { (CB_GETCURSEL, CB_GETLBTEXTLEN, CB_GETLBTEXT) };
+                    let i = SendMessageW(h, cur, 0, 0);
+                    if i < 0 {
+                        return W::T(String::new());
+                    }
+                    let n = SendMessageW(h, len, i as usize, 0).max(0) as usize;
+                    let mut buf = vec![0u16; n + 1];
+                    SendMessageW(h, get, i as usize, buf.as_mut_ptr() as isize);
+                    W::T(String::from_utf16_lossy(&buf[..n]))
+                }
+                _ => W::T(tekst_van(h).replace("\r\n", "\n")),
+            }
+        }
+    }
+
+    pub(super) fn zet_tekst(h: usize, t: &str) {
+        unsafe {
+            SetWindowTextW(h as HWND, w(&t.replace("\r\n", "\n").replace('\n', "\r\n")).as_ptr());
+        }
+    }
+
+    pub(super) fn voeg_keuze(h: usize, soort: u8, t: &str, eerste: bool) {
+        let (voeg, kies) = if soort == 4 { (LB_ADDSTRING, LB_SETCURSEL) } else { (CB_ADDSTRING, CB_SETCURSEL) };
+        unsafe {
+            SendMessageW(h as HWND, voeg, 0, w(t).as_ptr() as isize);
+            if eerste {
+                SendMessageW(h as HWND, kies, 0, 0);
+            }
+        }
+    }
+
+    pub(super) fn vink(h: usize, aan: bool) {
+        unsafe {
+            SendMessageW(h as HWND, BM_SETCHECK, aan as usize, 0);
+        }
+    }
+
+    pub(super) fn focus(h: usize) {
+        unsafe {
+            SetFocus(h as HWND);
         }
     }
 
@@ -585,14 +883,11 @@ mod win {
                 }
             }
             WM_SIZE => {
-                let kind = GetWindow(h, GW_CHILD);
-                if !kind.is_null() && GetWindow(kind, 2).is_null() {
-                    // Eén kind (het uitvoervak): laat het het hele venster vullen.
+                let vak = UITVOER_VAK.with(|u| u.get());
+                if !vak.is_null() && GetAncestor(vak, GA_ROOT) == h {
                     let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                     GetClientRect(h, &mut r);
-                    if KNOP_HWNDS.with(|k| !k.borrow().contains(&kind)) {
-                        MoveWindow(kind, 0, 0, r.right, r.bottom, 1);
-                    }
+                    MoveWindow(vak, 0, 0, r.right, r.bottom, 1);
                 }
             }
             WM_CLOSE => {
@@ -646,6 +941,7 @@ mod win {
                 GetModuleHandleW(null()),
                 null_mut(),
             );
+            UITVOER_VAK.with(|u| u.set(vak));
             let dc = GetDC(null_mut());
             let dpi = GetDeviceCaps(dc, LOGPIXELSY);
             ReleaseDC(null_mut(), dc);
@@ -686,7 +982,7 @@ mod win {
             namen,
             acties,
             stappen: 0,
-            scherm: Scherm { tekststand: false, knoppen: Vec::new(), uitvoer: Vec::new(), win: WinScherm::default() },
+            scherm: Scherm { tekststand: false, knoppen: Vec::new(), onderdelen: Vec::new(), uitvoer: Vec::new(), win: WinScherm::default() },
         };
         if let Err(f) = hoofd(&mut staat) {
             foutmelding(staat.scherm.win.actief(), &foutzin(&f));

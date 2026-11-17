@@ -4,7 +4,7 @@
 //!   jaaptaal beschrijf  programma.txt
 //!   jaaptaal rust       programma.txt
 //!   jaaptaal bouw       programma.txt uit.exe [--snel]
-//!   jaaptaal proef      programma.txt [--druk Knopnaam]...
+//!   jaaptaal proef      programma.txt [--typ "Naam=Jaap"] [--vink Naam] [--kies "Lijst=Keuze"] [--druk Knopnaam]...
 //!   jaaptaal installatie programma.txt "Naam installatie.exe"
 
 use std::path::{Path, PathBuf};
@@ -129,8 +129,8 @@ fn main() {
             let mut extra = vec!["--tekst".to_string()];
             let mut i = 2;
             while i < args.len() {
-                if args[i] == "--druk" && i + 1 < args.len() {
-                    extra.push("--druk".into());
+                if matches!(args[i].as_str(), "--druk" | "--typ" | "--vink" | "--kies") && i + 1 < args.len() {
+                    extra.push(args[i].clone());
                     extra.push(args[i + 1].clone());
                     i += 1;
                 }
