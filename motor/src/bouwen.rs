@@ -57,6 +57,14 @@ fn is_ingebouwd(rustc: &Path) -> bool {
 /// Bouwt Rust-code tot een programma. `werkmap` is een map voor tijdelijke bestanden.
 pub fn bouw(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path) -> Result<Verslag, String> {
     let begin = Instant::now();
+    // Een pad zonder map hoort bij de map waar je nu bent, niet bij de werkmap.
+    let uit_volledig;
+    let uit = if uit.is_absolute() {
+        uit
+    } else {
+        uit_volledig = std::env::current_dir().map(|d| d.join(uit)).unwrap_or_else(|_| uit.to_path_buf());
+        uit_volledig.as_path()
+    };
     std::fs::create_dir_all(werkmap).map_err(|e| format!("Ik kan de werkmap {} niet maken: {}", werkmap.display(), e))?;
     let bron = werkmap.join("programma.rs");
     std::fs::write(&bron, code).map_err(|e| format!("Ik kan {} niet schrijven: {}", bron.display(), e))?;
