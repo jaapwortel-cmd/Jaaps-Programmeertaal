@@ -1101,6 +1101,7 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         {
             Ok(Vorm::Los(Soort::ZetIn { waarde: Uitdrukking::Vast(Waarde::Tekst(String::new())), naam: rest_tekst(&s[3..s.len() - 1]) }))
         }
+        "geef" | "maak" if zoek(&s, &["opdrachtvak"], 1).is_some() => Ok(Vorm::Los(Soort::Opdrachtvak)),
         "maak" => {
             let mut i = 1;
             if is_lidwoord(&klein(&s, i)) {
@@ -1197,7 +1198,6 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::LeesVoor(spreektekst(r)?)))
         }
         "stop" if zoek(&s, &["voorlezen"], 1).is_some() => Ok(Vorm::Los(Soort::StopVoorlezen)),
-        "geef" | "maak" if zoek(&s, &["opdrachtvak"], 1).is_some() => Ok(Vorm::Los(Soort::Opdrachtvak)),
         "als" if matches!(klein(&s, 1).as_str(), "ik" | "je" | "iemand") && matches!(klein(&s, 2).as_str(), "zeg" | "typ" | "zegt" | "typt") => {
             // Als ik zeg "maak het donker"
             let zin = match s.get(3) {
