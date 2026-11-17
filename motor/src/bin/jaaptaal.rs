@@ -5,6 +5,7 @@
 //!   jaaptaal rust       programma.txt
 //!   jaaptaal bouw       programma.txt uit.exe [--snel]
 //!   jaaptaal proef      programma.txt [--druk Knopnaam]...
+//!   jaaptaal installatie programma.txt "Naam installatie.exe"
 
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command};
@@ -18,6 +19,7 @@ fn uitleg() -> ! {
     eprintln!("  jaaptaal rust <programma.txt>");
     eprintln!("  jaaptaal bouw <programma.txt> <uit.exe> [--snel]");
     eprintln!("  jaaptaal proef <programma.txt> [--druk Knopnaam]...");
+    eprintln!("  jaaptaal installatie <programma.txt> <installatie.exe>");
     exit(2)
 }
 
@@ -96,6 +98,25 @@ fn main() {
                     exit(1)
                 }
             }
+        }
+        "installatie" => {
+            let Some(uit) = args.get(2) else { uitleg() };
+            let bronmap = Path::new(&args[1]).parent().map(|p| p.to_path_buf());
+            let werk = std::env::temp_dir().join(format!("jaaptaal-installatie-{}", std::process::id()));
+            match motor::installatie::bouw(&bron, bronmap.as_deref(), Path::new(uit), &rustc(), &werk) {
+                Ok(v) => println!(
+                    "Klaar: {} ({} bytes, {}), gebouwd in {:.1} seconden.",
+                    uit,
+                    v.grootte,
+                    bouwen::grootte_in_woorden(v.grootte),
+                    v.duur.as_secs_f64()
+                ),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    exit(1)
+                }
+            }
+            let _ = std::fs::remove_dir_all(&werk);
         }
         "proef" => {
             let code = code_of_stop(&bron);

@@ -99,6 +99,24 @@ jobs:
           Get-Content 'begroeting-uit.txt' | Write-Host
           if (-not (Select-String -Path 'begroeting-uit.txt' -Pattern 'Hallo' -Quiet)) { throw 'Begroeting.exe zegt geen Hallo.' }
           "BOUWTIJD=$([math]::Round($tijd.TotalSeconds, 1))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # Een installatiebestand voor het voorbeeld, met licentie: bouwen, stil installeren, proberen en verwijderen.
+          & $j installatie 'voorbeelden\Begroeting met installatie.txt' 'Begroeting installatie.exe' | Write-Host
+          if (-not (Test-Path 'Begroeting installatie.exe')) { throw 'Het installatiebestand is niet gemaakt.' }
+          $doel = Join-Path $env:RUNNER_TEMP 'begroeting-proef'
+          $p = Start-Process -FilePath '.\Begroeting installatie.exe' -ArgumentList @('--stil', '--voor-mij', '--map', "`"$doel`"") -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw 'Stil installeren van Begroeting mislukt.' }
+          foreach ($f in @('Begroeting.exe', 'Licentie.txt', 'Begroeting uitleg.txt', 'Verwijderen.exe')) {
+            if (-not (Test-Path (Join-Path $doel $f))) { throw "Na installeren staat $f er niet." }
+          }
+          Get-Content (Join-Path $doel 'Licentie.txt') | Write-Host
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'Begroeting.lnk'
+          if (-not (Test-Path $lnk)) { throw 'De snelkoppeling in het startmenu ontbreekt.' }
+          $p = Start-Process -FilePath (Join-Path $doel 'Verwijderen.exe') -ArgumentList @('--verwijder', '--stil') -PassThru -Wait
+          Start-Sleep -Seconds 8
+          if (Test-Path $doel) { throw 'Na verwijderen staat de map er nog.' }
+          if (Test-Path $lnk) { throw 'Na verwijderen staat de snelkoppeling er nog.' }
+          Write-Host 'Installatiebestand van het voorbeeld: bouwen, installeren en verwijderen goed.'
+          "INSTALLGROOTTE=$((Get-Item 'Begroeting installatie.exe').Length)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Proefstart van de editor (moet opstarten en netjes afsluiten)
         shell: powershell
@@ -130,7 +148,8 @@ jobs:
             "- jaaptaal.exe (opdrachtregel): $jt bytes ($(MB $jt) MB)",
             "- Map rust (de ingebouwde Rust-compiler): $rust bytes ($(MB $rust) MB)",
             "- Gebouwd voorbeeld Begroeting.exe (opt-level s): $prog bytes ($(MB $prog) MB)",
-            "- Bouwtijd van Begroeting.exe op deze computer: $env:BOUWTIJD seconden"
+            "- Bouwtijd van Begroeting.exe op deze computer: $env:BOUWTIJD seconden",
+            "- Installatiebestand van het voorbeeld (Begroeting installatie.exe): $env:INSTALLGROOTTE bytes"
           )
           $regels | Write-Host
           $regels | Add-Content $env:GITHUB_STEP_SUMMARY

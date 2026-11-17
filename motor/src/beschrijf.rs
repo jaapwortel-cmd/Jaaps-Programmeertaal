@@ -34,6 +34,21 @@ fn lijst(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
         let r = o.regel;
         let zin = match &o.soort {
             Soort::Opmerking(t) => format!("een opmerking die niets doet: {}", t),
+            Soort::Installatie(z) => match z {
+                InstallatieZin::Naam(n) => format!("het installatiebestand heet: {} installatie.exe.", n),
+                InstallatieZin::Versie(v) => format!("de versie is {}.", v),
+                InstallatieZin::Maker(m) => format!("de maker is {}.", m),
+                InstallatieZin::Bureaublad => "bij het installeren komt er een snelkoppeling op het bureaublad.".into(),
+                InstallatieZin::Startmenu => "bij het installeren komt er een snelkoppeling in het startmenu.".into(),
+                InstallatieZin::Rechten(Rechten::MetEnZonder) => {
+                    "installeren mag voor jezelf (zonder beheerdersrechten) of voor iedereen (met beheerdersrechten).".into()
+                }
+                InstallatieZin::Rechten(Rechten::AlleenZonder) => "installeren gaat alleen voor jezelf, zonder beheerdersrechten.".into(),
+                InstallatieZin::Rechten(Rechten::AlleenMet) => "installeren gaat voor iedereen, met beheerdersrechten.".into(),
+                InstallatieZin::Bestand(b) => format!("het bestand {} gaat mee in de installatie.", b),
+                InstallatieZin::LicentieRegel(t) => format!("in de licentie staat: {}", t),
+                InstallatieZin::LicentieBestand(b) => format!("de licentie staat in het bestand {}.", b),
+            },
             Soort::MaakVenster { titel } => format!("maak een venster. De titel is: {}.", titel),
             Soort::MaakKnop { naam } => format!("maak een knop in het laatste venster. De naam is: {}.", naam),
             Soort::Toon(u) => format!("toon {}.", uitdrukking(u)),

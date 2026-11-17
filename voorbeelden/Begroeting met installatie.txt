@@ -1,0 +1,17 @@
+Opmerking: het voorbeeld Begroeting, met een installatiebestand en een licentie.
+Maak een venster met als titel Begroeting
+Maak een knop met als naam Welkom
+Als ik op de knop Welkom druk
+Toon de tekst Hallo
+Einde van de knop
+
+Maak een installatiebestand met als naam Begroeting
+De versie is 1.0
+De maker is Jaap Wortel
+Zet een snelkoppeling in het startmenu
+Zet een snelkoppeling op het bureaublad
+De installatie mag met en zonder beheerdersrechten
+Voeg het bestand Begroeting uitleg.txt toe aan de installatie
+In de licentie staat: Je mag dit programma gratis gebruiken.
+In de licentie staat: Je mag het programma niet verkopen.
+In de licentie staat: Je gebruikt het programma op eigen risico.

@@ -58,7 +58,8 @@ const WOORDENLIJST: &[&str] = &[
     "naar", "zet", "op", "tel", "bij", "trek", "af", "van", "verhoog", "verlaag", "anders", "herhaal", "keer", "maal",
     "zolang", "hoogstens", "einde", "opmerking", "druk", "klik", "plus", "min", "gedeeld", "door", "groter", "kleiner",
     "dan", "gelijk", "aan", "minstens", "waar", "niet", "herhaling", "keuze", "waarde", "uitkomst", "een", "de", "het",
-    "ik", "in",
+    "ik", "in", "installatiebestand", "installatie", "snelkoppeling", "bureaublad", "startmenu", "beheerdersrechten",
+    "versie", "maker", "voeg", "toe", "bestand", "licentie", "staat",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
@@ -309,7 +310,11 @@ fn met_als_titel(s: &[Stuk], i: usize, woorden: &[&str], wat: &str, voorbeeld: &
         fout(format!(
             "Welke {} moet {} krijgen? Schrijf bijvoorbeeld: {}.",
             woorden[0],
-            if wat == "venster" { "het venster" } else { "de knop" },
+            match wat {
+                "venster" => "het venster",
+                "installatie" => "het installatiebestand",
+                _ => "de knop",
+            },
             voorbeeld
         ))
     };
@@ -358,6 +363,43 @@ fn is_knop_regel(s: &[Stuk]) -> Option<usize> {
     Some(knop)
 }
 
+fn installatie_zin(s: &[Stuk]) -> Result<Vorm, RegelFout> {
+    let tweede = klein(s, 1);
+    let na_is = || zoek(s, &["is"], 2).map(|p| rest_tekst(&s[p + 1..])).filter(|t| !t.is_empty());
+    let zin = match tweede.as_str() {
+        "versie" => InstallatieZin::Versie(na_is().ok_or_else(|| fout("Welke versie? Schrijf bijvoorbeeld: De versie is 1.0."))?),
+        "maker" => InstallatieZin::Maker(na_is().ok_or_else(|| fout("Wie is de maker? Schrijf bijvoorbeeld: De maker is Jaap Wortel."))?),
+        "programma" if klein(s, 2) == "heeft" && klein(s, 3) == "versie" && s.len() > 4 => {
+            InstallatieZin::Versie(rest_tekst(&s[4..]))
+        }
+        "licentie" => {
+            let Some(p) = zoek(s, &["bestand"], 2) else {
+                return Err(fout("Schrijf het zo: De licentie staat in het bestand Licentie.txt. Of: In de licentie staat: (jouw tekst)."));
+            };
+            if p + 1 >= s.len() {
+                return Err(fout("Welk bestand? Schrijf bijvoorbeeld: De licentie staat in het bestand Licentie.txt."));
+            }
+            InstallatieZin::LicentieBestand(rest_tekst(&s[p + 1..]))
+        }
+        "installatie" => {
+            let heeft = |w: &str| zoek(s, &[w], 2).is_some();
+            if !heeft("beheerdersrechten") {
+                return Err(fout("Schrijf het zo: De installatie mag met en zonder beheerdersrechten. Of: alleen zonder, of: alleen met beheerdersrechten."));
+            }
+            let r = if heeft("met") && heeft("zonder") {
+                Rechten::MetEnZonder
+            } else if heeft("zonder") {
+                Rechten::AlleenZonder
+            } else {
+                Rechten::AlleenMet
+            };
+            InstallatieZin::Rechten(r)
+        }
+        _ => return Err(onbekend()),
+    };
+    Ok(Vorm::Los(Soort::Installatie(zin)))
+}
+
 /// Ontleedt één (genormaliseerde) regel.
 pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     let laag = norm.to_lowercase();
@@ -372,6 +414,20 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     }
     if laag.starts_with("//") || laag.starts_with('#') {
         return Ok(Vorm::Los(Soort::Opmerking(norm.trim_start_matches(['/', '#', ' ']).to_string())));
+    }
+
+    if laag.starts_with("in de licentie staat") {
+        let mut tekst = norm["in de licentie staat".len()..].trim_start_matches([':', ' ']).trim().to_string();
+        if tekst.len() >= 2 && tekst.starts_with('"') && tekst.ends_with('"') {
+            tekst = tekst[1..tekst.len() - 1].to_string();
+        }
+        if tekst.is_empty() {
+            return Err(fout("Wat staat er in de licentie? Schrijf bijvoorbeeld: In de licentie staat: Je mag dit programma gratis gebruiken."));
+        }
+        if !tekst.ends_with(['.', '!', '?', ':']) {
+            tekst.push('.');
+        }
+        return Ok(Vorm::Los(Soort::Installatie(InstallatieZin::LicentieRegel(tekst))));
     }
 
     let s = tekst::splits(norm).map_err(fout)?;
@@ -392,6 +448,9 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 "venster" | "scherm" => Ok(Vorm::Los(Soort::MaakVenster {
                     titel: met_als_titel(&s, i + 1, &["titel", "naam"], "venster", "Maak een venster met als titel Begroeting")?,
                 })),
+                "installatiebestand" | "installatie" | "installatieprogramma" => Ok(Vorm::Los(Soort::Installatie(
+                    InstallatieZin::Naam(met_als_titel(&s, i + 1, &["naam", "titel"], "installatie", "Maak een installatiebestand met als naam Begroeting")?),
+                ))),
                 "knop" => Ok(Vorm::Los(Soort::MaakKnop {
                     naam: met_als_titel(&s, i + 1, &["naam", "tekst", "titel"], "knop", "Maak een knop met als naam Welkom")?,
                 })),
@@ -451,6 +510,35 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 return Err(fout(format!("Wat moet ik onthouden bij {}? Schrijf bijvoorbeeld: Onthoud {} is 0.", nm, nm)));
             }
             Ok(Vorm::Los(Soort::Onthoud { naam: nm, waarde: u(waarde_deel)?, bron: bron_tekst(waarde_deel) }))
+        }
+        "zet" if zoek(&s, &["snelkoppeling"], 1).is_some() => {
+            if zoek(&s, &["bureaublad"], 1).is_some() {
+                Ok(Vorm::Los(Soort::Installatie(InstallatieZin::Bureaublad)))
+            } else if zoek(&s, &["startmenu"], 1).is_some() {
+                Ok(Vorm::Los(Soort::Installatie(InstallatieZin::Startmenu)))
+            } else {
+                Err(fout("Waar moet de snelkoppeling komen? Schrijf: Zet een snelkoppeling op het bureaublad, of: Zet een snelkoppeling in het startmenu."))
+            }
+        }
+        "de" | "het" if matches!(klein(&s, 1).as_str(), "installatie" | "versie" | "maker" | "programma" | "licentie") => {
+            installatie_zin(&s)
+        }
+        "voeg" => {
+            // Voeg het bestand X toe aan de installatie
+            let Some(t) = zoek(&s, &["toe"], 1) else {
+                return Err(fout("Schrijf het zo: Voeg het bestand Handleiding.txt toe aan de installatie."));
+            };
+            let mut b = 1;
+            while b < t && matches!(klein(&s, b).as_str(), "het" | "de" | "een" | "bestand") {
+                b += 1;
+            }
+            if b >= t {
+                return Err(fout("Welk bestand? Schrijf bijvoorbeeld: Voeg het bestand Handleiding.txt toe aan de installatie."));
+            }
+            if zoek(&s, &["installatie"], t).is_none() && zoek(&s, &["installatiebestand"], t).is_none() {
+                return Err(fout("Waaraan moet ik het bestand toevoegen? Schrijf: ... toe aan de installatie."));
+            }
+            Ok(Vorm::Los(Soort::Installatie(InstallatieZin::Bestand(rest_tekst(&s[b..t])))))
         }
         "verander" | "zet" => {
             let scheiding: &[&str] = if w0 == "zet" { &["op"] } else { &["in", "naar"] };

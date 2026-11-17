@@ -7,6 +7,9 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   laten zien wat er van je zinnen wordt gemaakt (F6), de Rust-code laten zien (Shift+F6) en een .exe bouwen (F8).
 - De Rust-compiler zit in het programma (map rust). Je hoeft niets apart te installeren.
 - Zinnen voor vensters, knoppen, tekst tonen, onthouden, veranderen, rekenen, vergelijken, kiezen en herhalen met een grens.
+- Een installatiebestand voor je eigen programma (Ctrl+F8), beschreven met zinnen: naam, versie, maker,
+  snelkoppelingen, met of zonder beheerdersrechten, extra bestanden.
+- Een eigen licentie, met zinnen of uit een tekstbestand. Bij het installeren moet je akkoord gaan.
 - Foutmeldingen en vragen met regelnummer. Bij een tikfout een voorstel dat je met ja of nee beantwoordt.
 - Handleiding met F1, sluiten met Escape.
 - Geen AI: alleen vaste, ingebouwde regels.

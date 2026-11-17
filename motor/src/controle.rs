@@ -215,7 +215,7 @@ impl<'a> Controle<'a> {
         for o in lijst {
             let r = o.regel;
             match &o.soort {
-                Soort::Opmerking(_) | Soort::MaakVenster { .. } | Soort::MaakKnop { .. } => {}
+                Soort::Opmerking(_) | Soort::MaakVenster { .. } | Soort::MaakKnop { .. } | Soort::Installatie(_) => {}
                 Soort::Toon(u) => {
                     let mut namen = Vec::new();
                     u.namen(&mut namen);
@@ -439,7 +439,83 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
         c.meld(m);
     }
 
+    controleer_installatie(&mut c, p);
+
     // Ronde 2: elke opdracht nalopen.
     c.controleer_lijst(&p.opdrachten, false);
     c.meldingen
+}
+
+/// Controleert de zinnen over het installatiebestand en de licentie.
+fn controleer_installatie(c: &mut Controle, p: &Programma) {
+    let los: Vec<usize> = p.opdrachten.iter().map(|o| o.regel).collect();
+    let zinnen: Vec<(usize, &InstallatieZin)> = p
+        .alle()
+        .into_iter()
+        .filter_map(|o| match &o.soort {
+            Soort::Installatie(z) => Some((o.regel, z)),
+            _ => None,
+        })
+        .collect();
+    for (r, _) in &zinnen {
+        if !los.contains(r) {
+            c.meld(Melding::fout(*r, "Zinnen over de installatie en de licentie moeten los staan, niet binnen een keuze, herhaling of knop."));
+        }
+    }
+    let Some(&(eerste, _)) = zinnen.first() else { return };
+    let namen: Vec<usize> = zinnen.iter().filter(|(_, z)| matches!(z, InstallatieZin::Naam(_))).map(|(r, _)| *r).collect();
+    if namen.is_empty() {
+        let nieuw = "Maak een installatiebestand met als naam Mijn programma".to_string();
+        c.meld(
+            Melding::vraag(eerste, "Je beschrijft de installatie, maar het installatiebestand heeft nog geen naam.").met_voorstel(
+                format!("Zal ik erboven zetten: {}?", nieuw),
+                Wijziging::VoegInVoor { regel: eerste, nieuw },
+            ),
+        );
+    }
+    let dubbel = |c: &mut Controle, wat: &str, regels: Vec<usize>| {
+        if regels.len() > 1 {
+            c.meld(Melding::vraag(
+                regels[1],
+                format!(
+                    "Je beschrijft {} twee keer: op regel {} en op regel {}. Dat spreekt elkaar tegen. Welke bedoel je? Haal de andere weg.",
+                    wat, regels[0], regels[1]
+                ),
+            ));
+        }
+    };
+    let regels_van = |f: &dyn Fn(&InstallatieZin) -> bool| -> Vec<usize> {
+        zinnen.iter().filter(|(_, z)| f(z)).map(|(r, _)| *r).collect()
+    };
+    dubbel(c, "de naam van het installatiebestand", namen.clone());
+    dubbel(c, "de versie", regels_van(&|z| matches!(z, InstallatieZin::Versie(_))));
+    dubbel(c, "de maker", regels_van(&|z| matches!(z, InstallatieZin::Maker(_))));
+    dubbel(c, "het licentiebestand", regels_van(&|z| matches!(z, InstallatieZin::LicentieBestand(_))));
+    let rechten: Vec<(usize, Rechten)> = zinnen
+        .iter()
+        .filter_map(|(r, z)| match z {
+            InstallatieZin::Rechten(x) => Some((*r, *x)),
+            _ => None,
+        })
+        .collect();
+    if rechten.len() > 1 && rechten.iter().any(|(_, x)| *x != rechten[0].1) {
+        c.meld(Melding::vraag(
+            rechten[1].0,
+            format!(
+                "Regel {} en regel {} zeggen iets anders over de beheerdersrechten. Dat spreekt elkaar tegen. Welke bedoel je?",
+                rechten[0].0, rechten[1].0
+            ),
+        ));
+    }
+    let tekstregels = regels_van(&|z| matches!(z, InstallatieZin::LicentieRegel(_)));
+    let bestand = regels_van(&|z| matches!(z, InstallatieZin::LicentieBestand(_)));
+    if let (Some(t), Some(b)) = (tekstregels.first(), bestand.first()) {
+        c.meld(Melding::vraag(
+            *t.max(b),
+            format!(
+                "Je schrijft de licentie op regel {} zelf, en op regel {} zeg je dat hij in een bestand staat. Welke van de twee bedoel je?",
+                t, b
+            ),
+        ));
+    }
 }

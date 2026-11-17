@@ -16,6 +16,7 @@ pub mod bestand;
 pub mod bouwen;
 mod controle;
 pub mod getallen;
+pub mod installatie;
 pub mod melding;
 mod ontleden;
 pub mod rustcode;

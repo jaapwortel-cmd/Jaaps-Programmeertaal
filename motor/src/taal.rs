@@ -121,6 +121,35 @@ pub enum Soort {
     Als { voorwaarde: Voorwaarde, dan: Vec<Opdracht>, anders: Vec<Opdracht>, anders_regel: Option<usize>, einde: usize },
     Herhaal { aantal: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
     HerhaalZolang { voorwaarde: Voorwaarde, hoogstens: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
+    /// Een zin die het installatiebestand beschrijft. Doet niets als het programma draait.
+    Installatie(InstallatieZin),
+}
+
+/// Wie het programma mag installeren.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Rechten {
+    /// Alleen voor jezelf (geen beheerder nodig) of voor iedereen (wel beheerder nodig). Je kiest bij het installeren.
+    MetEnZonder,
+    /// Alleen voor jezelf, zonder beheerdersrechten.
+    AlleenZonder,
+    /// Voor alle gebruikers, met beheerdersrechten.
+    AlleenMet,
+}
+
+/// De zinnen waarmee je het installatiebestand beschrijft.
+#[derive(Clone, Debug, PartialEq)]
+pub enum InstallatieZin {
+    Naam(String),
+    Versie(String),
+    Maker(String),
+    Bureaublad,
+    Startmenu,
+    Rechten(Rechten),
+    Bestand(String),
+    /// Een regel tekst van de licentie.
+    LicentieRegel(String),
+    /// De licentie staat in een eigen tekstbestand.
+    LicentieBestand(String),
 }
 
 /// Een heel programma.

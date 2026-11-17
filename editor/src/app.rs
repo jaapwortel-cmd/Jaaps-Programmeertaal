@@ -26,6 +26,7 @@ const ID_BESCHRIJF: u16 = 203;
 const ID_RUSTCODE: u16 = 204;
 const ID_PROBEER: u16 = 205;
 const ID_BOUW_EXE: u16 = 206;
+const ID_INSTALLATIE: u16 = 207;
 const ID_WELKE_REGEL: u16 = 301;
 const ID_NAAR_MELDINGEN: u16 = 302;
 const ID_HANDLEIDING: u16 = 401;
@@ -58,6 +59,7 @@ enum Klaar {
     Uitvoeren(Result<PathBuf, String>),
     Probeer(Result<String, String>),
     Exe(Result<(PathBuf, bouwen::Verslag), String>),
+    Installatie(Result<(PathBuf, bouwen::Verslag), String>),
 }
 
 static KLAAR: Mutex<Option<Klaar>> = Mutex::new(None);
@@ -444,6 +446,51 @@ fn bouw_exe() {
     start_klus(move || Klaar::Exe(bouwen::bouw(&code, &uit, &rustc, Stand::Klein, &werkmap()).map(|v| (uit, v))));
 }
 
+fn bouw_installatie() {
+    let Some(mut bron) = controleer_met_vragen(true) else { return };
+    let mut uitslag = motor::lees(&bron);
+    if motor::installatie::uit_programma(&uitslag.programma).is_none() {
+        let naam = PAD
+            .with(|p| p.borrow().as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().to_string()))
+            .unwrap_or_else(|| "Mijn programma".into());
+        let regels = format!(
+            "Maak een installatiebestand met als naam {}\nZet een snelkoppeling in het startmenu\nDe installatie mag met en zonder beheerdersrechten",
+            naam
+        );
+        let vraag = format!(
+            "Je programma heeft nog geen beschrijving van het installatiebestand. Zal ik deze drie regels onderaan toevoegen?\n\n{}\n\nJe kunt ze daarna zelf aanpassen. Ook een licentie kun je beschrijven, zie de handleiding (F1).",
+            regels
+        );
+        if melding(&vraag, MB_YESNO | MB_ICONQUESTION) != IDYES {
+            return;
+        }
+        let mut nieuw = editor_tekst().trim_end().to_string();
+        nieuw.push_str("\n\n");
+        nieuw.push_str(&regels);
+        nieuw.push('\n');
+        vervang_editor_tekst(&nieuw);
+        let Some(b) = controleer_met_vragen(true) else { return };
+        bron = b;
+        uitslag = motor::lees(&bron);
+    }
+    let Some(inst) = motor::installatie::uit_programma(&uitslag.programma) else { return };
+    let Some(rustc) = rustc_of_melding() else { return };
+    let bronmap = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.parent().map(|m| m.to_path_buf())));
+    if bronmap.is_none() && (!inst.bestanden.is_empty() || inst.licentie_bestand.is_some()) {
+        melding("Je installatie gebruikt een eigen bestand. Sla je programma eerst op (Ctrl+S) in de map waar dat bestand staat.", MB_ICONINFORMATION);
+        return;
+    }
+    let standaard = format!("{} installatie.exe", motor::installatie::bestandsnaam(&inst.naam));
+    let Some(uit) = bestandskeuze(true, &standaard, "Installatiebestand (*.exe)|*.exe", "exe", "Waar moet het installatiebestand komen?") else {
+        return;
+    };
+    zet_meldingen("Bezig met het bouwen van je programma en het installatiebestand. Dit kan even duren.");
+    start_klus(move || {
+        let werk = werkmap().join("installatie");
+        Klaar::Installatie(motor::installatie::bouw(&bron, bronmap.as_deref(), &uit, &rustc, &werk).map(|v| (uit, v)))
+    });
+}
+
 fn klus_klaar() {
     BEZIG.with(|b| b.set(false));
     let Some(k) = KLAAR.lock().unwrap().take() else { return };
@@ -472,6 +519,19 @@ fn klus_klaar() {
             );
             zet_meldingen(&tekst);
             melding(&tekst, MB_ICONINFORMATION);
+        }
+        Klaar::Installatie(Ok((pad, verslag))) => {
+            let tekst = format!(
+                "Klaar. Het installatiebestand staat in {}. Het is {} groot. Geef dit bestand aan iemand, of start het zelf om je programma te installeren.",
+                pad.display(),
+                bouwen::grootte_in_woorden(verslag.grootte)
+            );
+            zet_meldingen(&tekst);
+            melding(&tekst, MB_ICONINFORMATION);
+        }
+        Klaar::Installatie(Err(e)) => {
+            zet_meldingen(&e);
+            melding(&format!("Het installatiebestand is niet gemaakt. {}", e.lines().next().unwrap_or("")), MB_ICONERROR);
         }
         Klaar::Uitvoeren(Err(e)) | Klaar::Probeer(Err(e)) | Klaar::Exe(Err(e)) => {
             zet_meldingen(&e);
@@ -579,6 +639,7 @@ fn opdracht(id: u16) {
         ID_UITVOEREN => uitvoeren(),
         ID_PROBEER => probeer(),
         ID_BOUW_EXE => bouw_exe(),
+        ID_INSTALLATIE => bouw_installatie(),
         ID_BESCHRIJF => {
             let bron = editor_tekst();
             let u = motor::lees(&bron);
@@ -712,6 +773,7 @@ fn maak_menu() -> HANDLE {
         voeg(prog, ID_RUSTCODE, "Laat de &Rust-code zien\tShift+F6");
         streep(prog);
         voeg(prog, ID_BOUW_EXE, "Bouw een .&exe-bestand...\tF8");
+        voeg(prog, ID_INSTALLATIE, "Bouw een &installatiebestand...\tCtrl+F8");
         AppendMenuW(balk, MF_POPUP, prog as usize, w("&Programma").as_ptr());
 
         let ga = CreatePopupMenu();
@@ -742,6 +804,7 @@ fn maak_sneltoetsen() -> HANDLE {
         toets(FSHIFT, VK_F1 + 5, ID_RUSTCODE),
         toets(0, VK_F1 + 6, ID_CONTROLEER),
         toets(0, VK_F1 + 7, ID_BOUW_EXE),
+        toets(FCONTROL, VK_F1 + 7, ID_INSTALLATIE),
         toets(0, VK_F1 + 8, ID_PROBEER),
     ];
     unsafe { CreateAcceleratorTableW(lijst.as_ptr(), lijst.len() as i32) }

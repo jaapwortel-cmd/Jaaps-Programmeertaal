@@ -45,6 +45,7 @@ F9              Alleen deze regel proberen (of de regels die je hebt geselecteer
 F6              Laat zien wat ik van je zinnen maak, in gewone taal
 Shift+F6        Laat de Rust-code zien die van je zinnen is gemaakt
 F8              Bouw een .exe-bestand
+Ctrl+F8         Bouw een installatiebestand voor je programma (met licentie, als je die beschrijft)
 Ctrl+L          Op welke regel sta ik? Het programma zegt het regelnummer en wat er op die regel staat.
 F4              Naar het vak Meldingen
 Tab             Wisselen tussen het vak Opdrachten en het vak Meldingen
@@ -242,15 +243,83 @@ Het .exe-bestand werkt zonder Jaap's Programmeertaal. Je kunt het aan anderen ge
 Het werkt op Windows 10 en Windows 11, 64-bits.
 
 
-9. Bestanden
-------------
+9. Een installatiebestand maken
+-------------------------------
+
+Je kunt je programma ook in een installatiebestand zetten. Dat bestand kun je aan iemand geven.
+Die persoon start het, en dan wordt je programma op zijn of haar computer geïnstalleerd,
+met snelkoppelingen en een vermelding bij Apps in Windows. Verwijderen kan daar ook weer.
+Jaap's Programmeertaal is daar niet voor nodig.
+
+Je beschrijft de installatie met deze zinnen. Zet ze los in je programma, niet in een blok.
+Ze doen niets als je programma draait.
+
+Maak een installatiebestand met als naam Begroeting
+De versie is 1.0
+De maker is Jaap Wortel
+Zet een snelkoppeling in het startmenu
+Zet een snelkoppeling op het bureaublad
+De installatie mag met en zonder beheerdersrechten
+Voeg het bestand Uitleg.txt toe aan de installatie
+
+Alleen de eerste zin is nodig. De rest mag je weglaten.
+
+Over de beheerdersrechten kun je kiezen uit drie zinnen:
+De installatie mag met en zonder beheerdersrechten
+   Bij het installeren is de vraag: alleen voor jou (geen beheerder nodig),
+   of voor alle gebruikers van de computer (wel beheerder nodig).
+De installatie mag alleen zonder beheerdersrechten
+   Altijd alleen voor jou.
+De installatie mag alleen met beheerdersrechten
+   Altijd voor alle gebruikers. Windows vraagt dan om toestemming.
+
+Een extra bestand, zoals Uitleg.txt, moet in dezelfde map staan als je programma.
+Sla je programma dus eerst op. Je mag ook het hele pad schrijven.
+
+Druk daarna op Ctrl+F8. Heeft je programma nog geen installatiezinnen? Dan vraagt het programma
+of het drie regels onderaan mag zetten. Daarna kies je waar het installatiebestand moet komen.
+Het heet bijvoorbeeld: Begroeting installatie.exe.
+
+Wat iemand hoort bij het installeren:
+1. Wil je Begroeting installeren? Ja of Nee.
+2. De licentie, met de vraag: Ga je akkoord? Alleen bij Ja gaat het verder.
+3. Voor wie wil je installeren? (Alleen als je met en zonder beheerdersrechten hebt gekozen.)
+4. Klaar, met de vraag of het programma nu moet starten.
+
+Verwijderen gaat via Instellingen, Apps, of via Verwijderen.exe in de map van het programma.
+
+
+10. Een eigen licentie schrijven
+--------------------------------
+
+Een licentie zegt wat iemand met je programma mag. Je schrijft hem zelf, regel voor regel:
+
+In de licentie staat: Je mag dit programma gratis gebruiken.
+In de licentie staat: Je mag het programma niet verkopen.
+In de licentie staat: Je gebruikt het programma op eigen risico.
+
+Of je zet de licentie in een eigen tekstbestand, in dezelfde map als je programma:
+
+De licentie staat in het bestand Licentie.txt
+
+Kies één van de twee manieren. Gebruik je ze allebei, dan vraagt het programma welke je bedoelt.
+
+Bovenaan de licentie zet het programma zelf: Licentie van (naam), versie (versie). Gemaakt door (maker).
+Bij het installeren wordt de licentie voorgelezen. Alleen bij Ja gaat de installatie door.
+De licentie komt ook als Licentie.txt in de map van het geïnstalleerde programma.
+
+Let op: het programma controleert niet of je licentie juridisch klopt. Dat is jouw eigen tekst.
+
+
+11. Bestanden
+-------------
 
 Je programma is een gewoon tekstbestand (TXT). Je kunt het ook in Kladblok schrijven
 en dan openen met Ctrl+O. Opslaan gebeurt veilig: eerst in een tijdelijk bestand,
 pas daarna wordt het echte bestand vervangen.
 
 
-10. Wat nog niet kan
+12. Wat nog niet kan
 --------------------
 
 Dit staat op de wensenlijst, maar zit nog niet in deze versie:

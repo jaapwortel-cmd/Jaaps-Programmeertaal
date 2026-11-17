@@ -103,7 +103,7 @@ impl<'a> Maker<'a> {
             let r = o.regel;
             match &o.soort {
                 Soort::BijKnop { .. } => {}
-                Soort::Opmerking(_) => self.opmerking(diepte, r),
+                Soort::Opmerking(_) | Soort::Installatie(_) => self.opmerking(diepte, r),
                 Soort::MaakVenster { titel } => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.venster({});", rust_tekst(titel)));

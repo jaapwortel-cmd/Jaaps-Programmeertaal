@@ -1,0 +1,4 @@
+Begroeting
+
+Druk op de knop Welkom. Dan hoor je Hallo.
+Sluit het venster met Escape.
