@@ -43,17 +43,10 @@ const MAAK: &[&str] = &["maak", "maken", "inbouwen", "bouwen", "toevoegen", "heb
 
 /// Wat de taal nog niet kan (staat op de wensenlijst), met een eerlijke uitleg.
 const NOG_NIET: &[(&[&str], &str)] = &[
-    (&["gemaximaliseerd", "maximaal", "schermvullend", "volledig scherm"], "Een venster dat meteen schermvullend start"),
-    (&["vraag bij afsluiten", "vragen bij afsluiten", "zeker weet", "wil je stoppen", "wil je afsluiten"], "Een vraag als je het programma afsluit"),
-    (&["maar een keer open", "maar één keer open", "maar 1 keer open", "twee keer open", "één keer open"], "Ervoor zorgen dat je programma maar één keer open kan"),
-    (&["reservekopie", "back-up", "backup", "reservekopieën"], "Vanzelf reservekopieën maken"),
     (&["donkere stand", "donker thema", "hoog contrast", "dark mode"], "Een donkere stand of hoog contrast (wel kan: Geef het venster de kleur donkerblauw)"),
-    (&["tooltip", "tooltips", "zwevende tip"], "Tips die verschijnen als je met de muis ergens op staat"),
     (&["spraakherkenning", "dicteren", "whisper", "uitschrijven"], "Spraakherkenning in je eigen programma (dicteren in Jaap's Programmeertaal zelf kan wel, met je eigen dicteerprogramma)"),
     (&["taalmodel", "kunstmatige intelligentie", " ai ", "chatgpt", "claude", "llm"], "AI of een taalmodel: dat zit bewust niet in Jaap's Programmeertaal"),
-    (&["qr", "streepjescode", "barcode"], "QR-codes en streepjescodes"),
     (&["3d", "driedimensionaal"], "3D-geluid of 3D-beeld"),
-    (&["radiostudio", "radio maken", "uitzending"], "Een hele radiostudio in één keer (je kunt hem wel stap voor stap bouwen met knoppen, geluid en tabellen)"),
     (&["audio editor", "audio-editor", "geluid bewerken", "knippen in geluid"], "Geluid bewerken (knippen, plakken, effecten)"),
     (&["mailen", "e-mail versturen", "mail versturen", "smtp", "outlook"], "E-mail versturen vanuit je programma"),
     (&["netwerk", "andere computer", "op afstand"], "Verbinding tussen computers"),
@@ -164,6 +157,42 @@ pub fn begrijp(zin: &str) -> Option<Voorstel> {
                 "{}: dat kan Jaap's Programmeertaal nog niet. Ik kan het op je wensenlijst zetten.",
                 wat
             )));
+        }
+    }
+
+    // Dingen die nu ook kunnen.
+    let regel = |r: &str, u: &str| Some(Voorstel::Regels { regels: vec![r.to_string()], uitleg: u.to_string() });
+    if ["gemaximaliseerd", "schermvullend", "maximaal", "volledig scherm"].iter().any(|w| t.contains(w)) {
+        return regel("Het venster start schermvullend", "Het venster start schermvullend.");
+    }
+    if t.contains(" afsluiten ") && (t.contains(" vraag") || t.contains(" zeker ")) {
+        return regel("Vraag bij afsluiten \"Weet je zeker dat je wilt afsluiten?\"", "Bij afsluiten komt eerst een vraag met Ja en Nee.");
+    }
+    if ["een keer open", "één keer open", "1 keer open", "twee keer open"].iter().any(|w| t.contains(w)) {
+        return regel("Mijn programma mag maar één keer open zijn", "Je programma kan maar één keer tegelijk open zijn.");
+    }
+    if heeft(&t, "reservekopie") || heeft(&t, "back-up") || heeft(&t, "backup") || heeft(&t, "reservekopieën") {
+        return Some(match tekst::normaliseer(zin).split_whitespace().find(|w| w.contains('.') && w.len() > 4 && !w.ends_with('.')) {
+            Some(b) => Voorstel::Regels { regels: vec![format!("Maak een reservekopie van het bestand {}", b)], uitleg: "Er komt een reservekopie in de map Reservekopieën; de laatste 10 blijven.".into() },
+            None => Voorstel::Vraag("Van welk bestand moet ik een reservekopie maken? Zeg bijvoorbeeld: maak een reservekopie van notities.txt.".into()),
+        });
+    }
+    if heeft(&t, "qr-code") || heeft(&t, "qr") || heeft(&t, "qrcode") {
+        return Some(Voorstel::Uitleg("Een QR-code maak je zo: Maak een QR-code van \"https://www.voorbeeld.nl\" in het bestand qr.png. Daarna kun je hem tonen: Maak een afbeelding van het bestand qr.png met de beschrijving QR-code naar mijn website. QR-codes lezen kan nog niet.".into()));
+    }
+    if heeft(&t, "internetradio") || heeft(&t, "radiozender") || heeft(&t, "radio") && !heeft(&t, "radiostudio") {
+        if let Some((naam, _, _)) = crate::taal::ZENDERS.iter().find(|(n, _, _)| t.contains(&format!(" {} ", n.to_lowercase()))) {
+            return regel(&format!("Speel de radiozender {}", naam), &format!("Je programma speelt {}.", naam));
+        }
+        return Some(Voorstel::Uitleg("Een internetradio maak je zo: Speel de radiozender NPO Radio 2 (of een andere naam, of: met het adres https://...), en: Stop de radio. Zet ze achter knoppen, zoals in het voorbeeld Mijn radio.txt. Op een website: Zet een radiospeler met de zender NPO Radio 2.".into()));
+    }
+    if heeft(&t, "website") || heeft(&t, "webpagina") || heeft(&t, "site") || heeft(&t, "homepage") {
+        return Some(Voorstel::Uitleg("Een website maak je met een nieuw programma dat begint met: Maak een website met als titel ... Daarna: Maak een pagina met als naam Home, Zet een kop \"...\", Zet de tekst \"...\", Zet een link naar ..., Zet een afbeelding ... met de beschrijving ..., Zet een radiospeler met de zender .... Met F5 gaat hij open in Firefox. Zie het voorbeeld Mijn radiosite (website).txt.".into()));
+    }
+    if heeft(&t, "tip") || heeft(&t, "tooltip") {
+        if let Some(knop) = naam_na(zin, "knop") {
+            let tip = zin.split('"').nth(1).unwrap_or("Uitleg over deze knop").to_string();
+            return regel(&format!("Geef de knop {} de tip \"{}\"", knop, tip), "De knop krijgt een tip.");
         }
     }
 
@@ -346,9 +375,12 @@ mod tests {
 
     #[test]
     fn eerlijk_wat_nog_niet_kan() {
-        assert!(matches!(begrijp("het venster moet gemaximaliseerd starten"), Some(Voorstel::NogNiet(_))));
-        assert!(matches!(begrijp("vraag bij afsluiten of ik het zeker weet"), Some(Voorstel::NogNiet(_))));
-        assert!(matches!(begrijp("maak een radiostudio zoals RadioBoss"), Some(Voorstel::NogNiet(_))));
+        assert!(matches!(begrijp("het venster moet gemaximaliseerd starten"), Some(Voorstel::Regels { .. })));
+        assert!(matches!(begrijp("vraag bij afsluiten of ik het zeker weet"), Some(Voorstel::Regels { .. })));
+        assert!(matches!(begrijp("ik wil een internetradio bouwen"), Some(Voorstel::Uitleg(_))));
+        assert!(matches!(begrijp("zet radio 538 aan"), Some(Voorstel::Regels { .. })));
+        assert!(matches!(begrijp("ik wil een website bouwen"), Some(Voorstel::Uitleg(_))));
+        assert!(matches!(begrijp("ik wil 3d beelden maken"), Some(Voorstel::NogNiet(_))));
         assert!(matches!(begrijp("geen Edge gebruiken"), Some(Voorstel::NogNiet(_))));
         assert_eq!(begrijp("bananen zijn geel"), None);
     }

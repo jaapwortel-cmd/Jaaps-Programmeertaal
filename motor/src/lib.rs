@@ -28,6 +28,7 @@ pub mod rustcode;
 pub mod scherm;
 pub mod taal;
 pub mod tekst;
+pub mod website;
 pub mod wensen;
 
 pub use melding::{pas_toe, Melding, Soort as MeldingSoort, Voorstel, Wijziging};
@@ -63,6 +64,10 @@ pub fn lees_met(bron: &str, eigen_woorden: &[(String, String)]) -> Uitslag {
 /// Leest een programma met jouw eigen woorden én je eigen zinnen uit een bibliotheek
 /// (de tekst van "Mijn eigen zinnen", met regels zoals: Nieuwe zin: Begroet [wie] ...).
 pub fn lees_eigen(bron: &str, eigen_woorden: &[(String, String)], bibliotheek: &str) -> Uitslag {
+    if website::is_website(bron) {
+        let (_, meldingen) = website::lees(bron);
+        return Uitslag { programma: taal::Programma { opdrachten: Vec::new() }, meldingen };
+    }
     let regels: Vec<&str> = bron.lines().collect();
     let (programma, mut meldingen) = ontleden::lees_programma_eigen(bron, eigen_woorden, bibliotheek);
     if meldingen.is_empty() {

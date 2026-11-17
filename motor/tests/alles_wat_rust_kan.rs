@@ -281,3 +281,25 @@ fn zelfde_programma_niet_opnieuw_bouwen() {
     assert_eq!(String::from_utf8_lossy(&uit.stdout).trim(), "2");
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn venstergedrag_en_reservekopie() {
+    let m = map("gedrag");
+    std::fs::write(m.join("notities.txt"), "hallo").unwrap();
+    let bron = "Maak een venster met als titel Notities\nHet venster start schermvullend\nVraag bij afsluiten \"Wil je echt stoppen?\"\nMijn programma mag maar één keer open zijn\nMaak een knop met als naam Opslaan\nGeef de knop Opslaan de tip \"Bewaart je werk\"\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let uit = voer_uit(bron, &m);
+    for d in ["[schermvullend]", "[vraag bij afsluiten] Wil je echt stoppen?", "[maar één keer open]", "[tip bij Opslaan] Bewaart je werk"] {
+        assert!(uit.contains(d), "{} ontbreekt in {}", d, uit);
+    }
+    assert!(!lees("Maak een venster met als titel A\nGeef de knop Weg de tip \"x\"\n").is_goed());
+    // Reservekopieën: na 12 keer blijven er 10.
+    let mut b = String::new();
+    for _ in 0..12 {
+        b.push_str("Maak een reservekopie van het bestand notities.txt\n");
+    }
+    voer_uit(&b, &m);
+    let n = std::fs::read_dir(m.join("Reservekopieën")).unwrap().count();
+    assert_eq!(n, 10);
+    let _ = std::fs::remove_dir_all(&m);
+}

@@ -650,8 +650,53 @@ fn start_klus(klus: impl FnOnce() -> Klaar + Send + 'static) -> bool {
     true
 }
 
+/// Firefox zoeken (Jaap wil geen Edge). Geeft het pad, of None.
+fn firefox() -> Option<PathBuf> {
+    let mut plekken = Vec::new();
+    for var in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"] {
+        if let Some(m) = std::env::var_os(var) {
+            plekken.push(PathBuf::from(&m).join("Mozilla Firefox").join("firefox.exe"));
+        }
+    }
+    plekken.into_iter().find(|p| p.is_file())
+}
+
+/// Een website bouwen in een map en openen in Firefox.
+fn website_maken(bron: &str, map: &Path) {
+    let (w, meldingen) = motor::website::lees(bron);
+    if !meldingen.is_empty() {
+        return;
+    }
+    let bronmap = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.parent().map(|m| m.to_path_buf())));
+    match motor::website::maak(&w, map, bronmap.as_deref()) {
+        Err(e) => {
+            melding(&format!("De website maken is niet gelukt: {}", e), MB_ICONERROR);
+        }
+        Ok(waarschuwingen) => {
+            let index = map.join("index.html");
+            let mut tekst = format!("De website staat in {}. Hij gaat open in Firefox.", map.display());
+            if !waarschuwingen.is_empty() {
+                tekst.push_str(&format!(" Let op: {}", waarschuwingen.join(" ")));
+            }
+            let gestart = match firefox() {
+                Some(f) => Command::new(f).arg(&index).spawn().is_ok(),
+                None => {
+                    tekst = format!("De website staat in {}. Firefox heb ik niet gevonden; open index.html zelf met je browser.", map.display());
+                    false
+                }
+            };
+            let _ = gestart;
+            zet_meldingen(&tekst);
+        }
+    }
+}
+
 fn uitvoeren() {
     let Some(bron) = controleer_met_vragen(true) else { return };
+    if motor::website::is_website(&bron) {
+        website_maken(&bron, &werkmap().join("website"));
+        return;
+    }
     let Some(rustc) = rustc_of_melding() else { return };
     let code = rust_code(&bron).expect("gecontroleerd");
     let bronmap = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.parent().map(|m| m.to_path_buf())));
@@ -748,6 +793,13 @@ fn certificaat_klaar(bron: &str) -> Result<Option<String>, ()> {
 
 fn bouw_exe() {
     let Some(bron) = controleer_met_vragen(true) else { return };
+    if motor::website::is_website(&bron) {
+        // Een website wordt geen exe, maar een map met pagina's.
+        let (w, _) = motor::website::lees(&bron);
+        let map = mijn_programmas().join(format!("{} website", w.titel));
+        website_maken(&bron, &map);
+        return;
+    }
     let Some(rustc) = rustc_of_melding() else { return };
     let standaard = PAD
         .with(|p| p.borrow().as_ref().and_then(|p| p.file_stem()).map(|n| format!("{}.exe", n.to_string_lossy())))
@@ -1064,6 +1116,10 @@ fn opdracht(id: u16) {
                     }
                 }
             }
+        }
+        ID_BESCHRIJF if motor::website::is_website(&editor_tekst()) => {
+            let (w, _) = motor::website::lees(&editor_tekst());
+            tekstvenster("Wat er op je website komt", &motor::website::beschrijf(&w), false);
         }
         ID_BESCHRIJF => {
             let bron = editor_tekst();

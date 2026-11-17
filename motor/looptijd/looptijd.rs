@@ -724,6 +724,59 @@ fn maak_qr(waarde: W, pad: W, r: usize) -> R<()> {
     std::fs::write(&p, qr_png(&rooster, 8)).or_else(|e| fout(r, format!("Ik kan {} niet schrijven: {}", p.display(), e)))
 }
 
+/// Een radiozender opzoeken bij radio-browser.info (de meest beluisterde met deze naam).
+fn zoek_zender(naam: &str) -> Option<String> {
+    let codeer = |t: &str| -> String {
+        t.bytes().map(|b| if b.is_ascii_alphanumeric() { (b as char).to_string() } else { format!("%{:02X}", b) }).collect()
+    };
+    for server in ["https://de1.api.radio-browser.info", "https://nl1.api.radio-browser.info", "https://at1.api.radio-browser.info"] {
+        for soort in ["bynameexact", "byname"] {
+            let adres = format!("{}/json/stations/{}/{}?hidebroken=true&order=clickcount&reverse=true&limit=1", server, soort, codeer(naam));
+            let Ok(data) = internet("GET", &adres, None) else { continue };
+            let tekst = String::from_utf8_lossy(&data).to_string();
+            if let Some(p) = tekst.find("\"url_resolved\":\"") {
+                let rest = &tekst[p + 16..];
+                if let Some(e) = rest.find('"') {
+                    let u = rest[..e].replace("\\/", "/");
+                    if u.starts_with("http") {
+                        return Some(u);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Een reservekopie in de map Reservekopieën naast het bestand, met datum en tijd. De laatste 10 blijven.
+fn reservekopie(p: W, r: usize) -> R<()> {
+    let pad = volledig_pad(&p);
+    if !pad.is_file() {
+        return fout(r, format!("Het bestand {} bestaat niet, dus ik kan er geen reservekopie van maken.", pad.display()));
+    }
+    let map = pad.parent().map(|m| m.join("Reservekopieën")).unwrap_or_else(|| "Reservekopieën".into());
+    std::fs::create_dir_all(&map).or_else(|e| fout(r, format!("Ik kan de map {} niet maken: {}", map.display(), e)))?;
+    let stam = pad.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let ext = pad.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let (j, m, d, u, mi, se) = nu();
+    let mut doel = map.join(format!("{} {:04}-{:02}-{:02} {:02}.{:02}.{:02}{}", stam, j, m, d, u, mi, se, ext));
+    let mut n = 2;
+    while doel.exists() {
+        doel = map.join(format!("{} {:04}-{:02}-{:02} {:02}.{:02}.{:02} ({}){}", stam, j, m, d, u, mi, se, n, ext));
+        n += 1;
+    }
+    std::fs::copy(&pad, &doel).or_else(|e| fout(r, format!("De reservekopie is niet gelukt: {}", e)))?;
+    // De oudste weg, zodat er hoogstens 10 zijn.
+    let mut kopieen: Vec<std::path::PathBuf> = std::fs::read_dir(&map)
+        .map(|l| l.flatten().map(|e| e.path()).filter(|x| x.file_name().map_or(false, |f| { let f = f.to_string_lossy(); f.starts_with(&format!("{} ", stam)) && f.ends_with(&ext) })).collect())
+        .unwrap_or_default();
+    kopieen.sort();
+    while kopieen.len() > 10 {
+        let _ = std::fs::remove_file(kopieen.remove(0));
+    }
+    Ok(())
+}
+
 /// Waar een geluid klinkt, in woorden (zelfde als in de motor).
 fn richting_naam(r: u8) -> String {
     let (h, d, v) = (r % 3, (r / 3) % 3, r / 9);
@@ -1305,6 +1358,8 @@ fn zip(inpakken: bool, map: W, z: W, r: usize) -> R<()> {
 }
 
 thread_local! {
+    /// De radio die nu speelt (een proces op de achtergrond).
+    static RADIO: std::cell::RefCell<Option<std::process::Child>> = const { std::cell::RefCell::new(None) };
     /// Het volume (0 tot 100) voor geluid en voorlezen.
     static VOLUME: std::cell::Cell<u32> = std::cell::Cell::new(100);
 }
@@ -1788,6 +1843,70 @@ impl Staat {
             }
         }
         Ok(())
+    }
+    /// Internetradio: een zender spelen (via Windows Media Player op de achtergrond) of stoppen.
+    fn radio(&mut self, adres: Option<W>, naam: &str, r: usize) -> R<()> {
+        RADIO.with(|p| {
+            if let Some(mut kind) = p.borrow_mut().take() {
+                let _ = kind.kill();
+            }
+        });
+        let Some(a) = adres else {
+            if self.scherm.tekststand {
+                println!("[radio uit]");
+            }
+            return Ok(());
+        };
+        let mut adres = a.tekst();
+        if let Some(naam) = adres.strip_prefix("zoek:").map(|x| x.to_string()) {
+            if self.scherm.tekststand && std::env::var("JAAPTAAL_NIET_ZOEKEN").is_ok() {
+                println!("[radio zoeken] {}", naam);
+                return Ok(());
+            }
+            adres = zoek_zender(&naam).ok_or(()).or_else(|_| fout(r, format!("De zender {} kan ik niet vinden op internet (radio-browser.info). Klopt de naam? Of gebruik het adres: Speel de radiozender met het adres https://...", naam)))?;
+        }
+        if !adres.starts_with("http://") && !adres.starts_with("https://") {
+            return fout(r, format!("{} is geen internetadres van een radiozender.", adres));
+        }
+        if self.scherm.tekststand {
+            println!("[radio] {} ({})", if naam.is_empty() { &adres } else { naam }, adres);
+            return Ok(());
+        }
+        // Windows Media Player speelt de stream; hij stopt vanzelf als dit programma stopt.
+        let script = format!(
+            "$p=New-Object -ComObject WMPlayer.OCX; $p.settings.volume={}; $p.URL='{}'; $p.controls.play(); while(Get-Process -Id {} -ErrorAction SilentlyContinue){{Start-Sleep -Milliseconds 500}}",
+            VOLUME.with(|v| v.get()),
+            adres.replace('\'', "''"),
+            std::process::id()
+        );
+        let mut cmd = std::process::Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000);
+        }
+        match cmd.spawn() {
+            Ok(kind) => {
+                RADIO.with(|p| *p.borrow_mut() = Some(kind));
+                Ok(())
+            }
+            Err(e) => fout(r, format!("De radio kan niet starten: {}", e)),
+        }
+    }
+    /// Schermvullend, vraag bij afsluiten, maar één keer open, tip bij een knop.
+    fn scherm_gedrag(&mut self, soort: u8, a: &str, b: &str) {
+        if self.scherm.tekststand {
+            match soort {
+                0 => println!("[schermvullend]"),
+                1 => println!("[vraag bij afsluiten] {}", a),
+                2 => println!("[maar één keer open]"),
+                _ => println!("[tip bij {}] {}", a, b),
+            }
+            return;
+        }
+        #[cfg(windows)]
+        self.scherm.win.gedrag(soort, a, b);
     }
     /// Een werkbalk: knoppen naast elkaar.
     fn werkbalk(&mut self, namen: &[&str]) {
@@ -2634,6 +2753,7 @@ mod win {
         fn PostQuitMessage(code: i32);
         fn MessageBoxW(h: HWND, text: *const u16, title: *const u16, kind: u32) -> i32;
         fn GetForegroundWindow() -> HWND;
+        fn IsZoomed(h: HWND) -> i32;
         fn SendMessageW(h: HWND, m: u32, w: usize, l: isize) -> isize;
         fn PostMessageW(h: HWND, m: u32, w: usize, l: isize) -> i32;
         fn SetFocus(h: HWND) -> HWND;
@@ -3223,6 +3343,77 @@ mod win {
         k.0 as u32 | (k.1 as u32) << 8 | (k.2 as u32) << 16
     }
 
+    thread_local! {
+        pub(super) static AFSLUITVRAAG: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateMutexW(attr: *const c_void, eigenaar: i32, naam: *const u16) -> HANDLE;
+        fn GetLastError() -> u32;
+    }
+
+    impl WinScherm {
+        /// 0 schermvullend, 1 vraag bij afsluiten, 2 maar één keer open, 3 tip bij een knop.
+        pub(super) fn gedrag(&mut self, soort: u8, a: &str, b: &str) {
+            unsafe {
+                match soort {
+                    0 => {
+                        if let Some(&v) = self.vensters.last() {
+                            ShowWindow(v, 3); // SW_MAXIMIZE
+                        }
+                    }
+                    1 => AFSLUITVRAAG.with(|v| *v.borrow_mut() = Some(a.to_string())),
+                    2 => {
+                        let naam = format!("JaapsProgrammeertaal-{}", if super::PROGRAMMANAAM.is_empty() { "programma" } else { super::PROGRAMMANAAM });
+                        CreateMutexW(null(), 0, w(&naam).as_ptr());
+                        if GetLastError() == 183 {
+                            MessageBoxW(null_mut(), w("Dit programma is al open. Kijk in de taakbalk (Windows-toets plus T).").as_ptr(), w("Al open").as_ptr(), 0x40);
+                            std::process::exit(0);
+                        }
+                    }
+                    _ => {
+                        // Een tip (tooltip) bij de knop met deze naam.
+                        let knop = KNOP_HWNDS.with(|k| {
+                            k.borrow().iter().copied().find(|&h| {
+                                let mut buf = [0u16; 256];
+                                let n = GetWindowTextW(h, buf.as_mut_ptr(), 256);
+                                String::from_utf16_lossy(&buf[..n.max(0) as usize]).to_lowercase().starts_with(&a.to_lowercase())
+                            })
+                        });
+                        let (Some(knop), Some(&venster)) = (knop, self.vensters.last()) else { return };
+                        #[repr(C)]
+                        struct TOOLINFOW {
+                            grootte: u32,
+                            vlaggen: u32,
+                            hwnd: HWND,
+                            id: usize,
+                            rect: [i32; 4],
+                            inst: HANDLE,
+                            tekst: *const u16,
+                            lparam: isize,
+                            reserve: *mut c_void,
+                        }
+                        let tip = CreateWindowExW(0x8, w("tooltips_class32").as_ptr(), null(), 0x80000000 | 0x01 | 0x02, 0, 0, 0, 0, venster, null_mut(), GetModuleHandleW(null()), null_mut());
+                        let tekst = w(b);
+                        let info = TOOLINFOW {
+                            grootte: std::mem::size_of::<TOOLINFOW>() as u32,
+                            vlaggen: 0x01 | 0x10,
+                            hwnd: venster,
+                            id: knop as usize,
+                            rect: [0; 4],
+                            inst: null_mut(),
+                            tekst: tekst.as_ptr(),
+                            lparam: 0,
+                            reserve: null_mut(),
+                        };
+                        SendMessageW(tip, 0x0432, 0, &info as *const TOOLINFOW as isize);
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn vraag_ja_nee(tekst: &str) -> bool {
         unsafe { MessageBoxW(GetForegroundWindow(), w(tekst).as_ptr(), w("Vraag").as_ptr(), 0x4 | 0x20 | MB_SETFOREGROUND) == 6 }
     }
@@ -3416,7 +3607,9 @@ mod win {
                     None => *self.volgende_y.last_mut().unwrap() = nieuw_y,
                 }
                 let breed = self.breedte.iter().find(|b| b.0 == venster).map_or(self.s(460), |b| b.1.max(self.s(460)));
-                SetWindowPos(venster, null_mut(), 0, 0, breed, hoogste + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                if IsZoomed(venster) == 0 {
+                    SetWindowPos(venster, null_mut(), 0, 0, breed, hoogste + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                }
                 let op_ander_tabblad = tab.map_or(false, |t| t.0 != 0);
                 if focus && !op_ander_tabblad && !*self.heeft_focus.last().unwrap() {
                     *self.heeft_focus.last_mut().unwrap() = true;
@@ -3481,7 +3674,9 @@ mod win {
                 let breed = (self.s(40) + namen.len() as i32 * (breedte + self.s(8))).max(self.s(460));
                 self.breedte.retain(|b| b.0 != venster);
                 self.breedte.push((venster, breed));
-                SetWindowPos(venster, null_mut(), 0, 0, breed, nieuw_y + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                if IsZoomed(venster) == 0 {
+                    SetWindowPos(venster, null_mut(), 0, 0, breed, nieuw_y + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                }
             }
         }
 
@@ -4015,6 +4210,13 @@ mod win {
                 }
             }
             WM_CLOSE => {
+                // Vraag bij afsluiten: alleen bij het laatste venster.
+                let vraag = AFSLUITVRAAG.with(|v| v.borrow().clone());
+                if let Some(v) = vraag {
+                    if OPEN.with(|o| o.get()) <= 1 && MessageBoxW(h, w(&v).as_ptr(), w("Afsluiten").as_ptr(), 0x4 | 0x20) != 6 {
+                        return 0;
+                    }
+                }
                 DestroyWindow(h);
                 return 0;
             }

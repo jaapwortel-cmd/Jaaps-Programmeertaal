@@ -1,0 +1,13 @@
+Opmerking: Een voorbeeld van een website. Druk F5: hij gaat open in Firefox. F8 bewaart hem in Documenten.
+Maak een website met als titel Mijn radiosite
+Maak een pagina met als naam Home
+Zet een kop "Welkom op mijn radiosite"
+Zet de tekst "Hier luister je naar mijn favoriete zenders."
+Zet een radiospeler met de zender NPO Radio 2
+Zet een radiospeler met de zender Radio Duivenstraat
+Zet een link naar de pagina Over mij met de tekst "Lees meer over mij"
+Maak een pagina met als naam Over mij
+Zet een kop "Over mij"
+Zet de tekst "Ik maak radio en programma's die goed werken met een schermlezer."
+Zet een lijst met "Radio", "Programma's" en "Muziek"
+Zet een e-mailadres info@voorbeeld.nl

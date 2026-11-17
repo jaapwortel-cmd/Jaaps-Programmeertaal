@@ -42,4 +42,11 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   "ga maar verder", "zet er een knop Opslaan bij". Zoeken in wat je kunt zeggen (Ctrl+F).
   Eigen opdrachten, een wensenlijst, en het versienummer ophogen.
 - Een opdrachtvak in je eigen programma's (alleen als je erom vraagt), met eigen zinnen: Als ik zeg "...".
+- Word- en PDF-bestanden lezen. Geluid links, rechts, achter, voor, boven en onder je. Een werkbalk.
+  QR-codes maken. Internetradio (47 zenders, andere opzoeken op internet). Schermvullend starten, een vraag
+  bij afsluiten, maar één keer open, tips bij knoppen, reservekopieën (10 bewaren).
+- Websites maken met zinnen (Maak een website met als titel ...), met een radiospeler; F5 opent hem in Firefox.
+- Uit Bouwmaatje: een vraag als een sneltoets botst met de schermlezer, en tips voor braille.
+- Sneller: hetzelfde programma wordt niet opnieuw gebouwd.
+- Je zinnen tegen Claude Code en de wensen uit het opdrachtbestand staan als voorbeelden in het programma.
 - Geen AI: alleen vaste, ingebouwde regels.

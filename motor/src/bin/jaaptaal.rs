@@ -73,6 +73,30 @@ fn main() {
                 println!("{}", m);
             }
         }
+        "website" => {
+            // jaaptaal website programma.txt map
+            let (w, meldingen) = motor::website::lees(&bron);
+            for m in &meldingen {
+                println!("{}", m);
+            }
+            if !meldingen.is_empty() {
+                exit(1);
+            }
+            let map = std::path::PathBuf::from(args.get(2).cloned().unwrap_or_else(|| format!("{} website", w.titel)));
+            let bronmap = std::path::Path::new(&args[1]).parent().map(|p| p.to_path_buf());
+            match motor::website::maak(&w, &map, bronmap.as_deref()) {
+                Ok(waarschuwingen) => {
+                    for x in waarschuwingen {
+                        println!("Let op: {}", x);
+                    }
+                    println!("De website staat in {}. Open index.html in je browser.", map.display());
+                }
+                Err(e) => {
+                    println!("{}", e);
+                    exit(1);
+                }
+            }
+        }
         "scherm" => {
             let u = motor::lees(&bron);
             println!("{}", motor::scherm::beschrijf_scherm(&u.programma));

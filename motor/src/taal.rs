@@ -327,6 +327,12 @@ pub enum Soort {
     Wacht(Uitdrukking),
     /// Een vak waarin je in gewone zinnen zegt wat het programma moet doen.
     Opdrachtvak,
+    /// Hoe het venster zich gedraagt: schermvullend, vraag bij afsluiten, maar één keer open, tip bij een knop.
+    Venstergedrag(Gedrag),
+    /// Een internetradiozender spelen (naam, adres), of stoppen (None).
+    Radio(Option<(String, Uitdrukking)>),
+    /// Een reservekopie van een bestand (de laatste 10 blijven bewaard).
+    Reservekopie(Uitdrukking),
     /// Een QR-code als PNG-afbeelding.
     QrCode { waarde: Uitdrukking, pad: Uitdrukking },
     /// Een werkbalk: knoppen naast elkaar bovenaan het venster.
@@ -528,7 +534,7 @@ impl Soort {
     pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
-            Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => vec![u],
+            Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
@@ -570,7 +576,7 @@ impl Soort {
     pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
-            Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => vec![u],
+            Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
@@ -659,6 +665,81 @@ impl Programma {
     pub fn heeft_vensters(&self) -> bool {
         self.alle().iter().any(|o| matches!(o.soort, Soort::MaakVenster { .. }))
     }
+}
+
+/// Radiozenders die je bij naam kunt noemen: (naam, adres, andere namen). Overgenomen uit Computerhulp Maatje
+/// (Radio.cs); de NPO-zenders zijn op 17 november 2026 getest. Een zender die hier niet staat, zoekt je
+/// programma op bij radio-browser.info (zoals Jaaps Audio Editor).
+pub const ZENDERS: &[(&str, &str, &str)] = &[
+    ("NPO Radio 1", "https://icecast.omroep.nl/radio1-bb-mp3", "npo radio 1, radio 1, radio een, radio één, npo 1"),
+    ("NPO Radio 2", "https://icecast.omroep.nl/radio2-bb-mp3", "npo radio 2, radio 2, radio twee, npo 2"),
+    ("NPO 3FM", "https://icecast.omroep.nl/3fm-bb-mp3", "npo 3fm, 3fm, 3 fm, drie fm, radio 3, radio drie"),
+    ("NPO Klassiek", "https://icecast.omroep.nl/radio4-bb-mp3", "npo klassiek, radio 4, radio vier, npo radio 4, klassiek"),
+    ("NPO Radio 5", "https://icecast.omroep.nl/radio5-bb-mp3", "npo radio 5, radio 5, radio vijf"),
+    ("FunX", "https://icecast.omroep.nl/funx-bb-mp3", "funx, fun x"),
+    ("Radio 538", "https://22533.live.streamtheworld.com/RADIO538.mp3", "radio 538, 538, vijf drie acht, vijfhonderdachtendertig"),
+    ("Qmusic", "https://icecast-qmusicnl-cdp.triple-it.nl/Qmusic_nl_live.mp3", "qmusic, q music, kju music, q-music"),
+    ("Sky Radio", "https://19993.live.streamtheworld.com/SKYRADIO.mp3", "sky radio, skyradio, sky"),
+    ("Radio 10", "https://19993.live.streamtheworld.com/RADIO10.mp3", "radio 10, radio tien"),
+    ("Radio Veronica", "https://19993.live.streamtheworld.com/VERONICA.mp3", "radio veronica, veronica"),
+    ("100% NL", "https://stream.100p.nl/100pctnl.mp3", "100 nl, 100 procent nl, honderd procent nl, 100 procent nederlands"),
+    ("SLAM!", "https://stream.slam.nl/slam_mp3", "slam, slam fm"),
+    ("BNR Nieuwsradio", "https://stream.bnr.nl/bnr_mp3_128_20", "bnr, bnr nieuwsradio, nieuwsradio"),
+    ("KINK", "https://playerservices.streamtheworld.com/api/livestream-redirect/KINK.mp3", "kink, kink fm"),
+    ("Sublime", "https://playerservices.streamtheworld.com/api/livestream-redirect/SUBLIME.mp3", "sublime, sublime fm"),
+    ("Classic NL", "https://stream.classic.nl/classicnl.mp3", "classic nl, classic n l"),
+    ("Radio 1 (Vlaanderen)", "https://icecast.vrtcdn.be/radio1-high.mp3", "radio 1 vlaanderen, vrt radio 1, belgische radio 1"),
+    ("Radio 2 (Vlaanderen)", "https://icecast.vrtcdn.be/ra2ant-high.mp3", "radio 2 vlaanderen, vrt radio 2, belgische radio 2"),
+    ("Studio Brussel", "https://icecast.vrtcdn.be/stubru-high.mp3", "studio brussel, stubru"),
+    ("MNM", "https://icecast.vrtcdn.be/mnm-high.mp3", "mnm, m n m"),
+    ("Klara", "https://icecast.vrtcdn.be/klara-high.mp3", "klara"),
+    ("Radio Duivenstraat", "https://server-28.stream-server.nl:18816/stream", "radio duivenstraat, duivenstraat, duivenstraat radio, radio duivestraat, duivestraat"),
+    ("NPO 3FM Alternative", "https://icecast.omroep.nl/3fm-alternative-mp3", "npo 3fm alternative, 3fm alternative, 3 fm alternative"),
+    ("NPO Radio 2 Sterren NL", "https://icecast.omroep.nl/radio2-sterrennl-mp3", "npo radio 2 sterren nl, radio 2 sterren nl, sterren nl, sterren"),
+    ("538 Hitzone", "https://playerservices.streamtheworld.com/api/livestream-redirect/TLPSTR11.mp3", "538 hitzone, hitzone"),
+    ("538 Non-Stop", "https://playerservices.streamtheworld.com/api/livestream-redirect/TLPSTR09.mp3", "538 non stop, 538 nonstop"),
+    ("538 Top 50", "https://playerservices.streamtheworld.com/api/livestream-redirect/TLPSTR13.mp3", "538 top 50, top 50"),
+    ("Qmusic Non-Stop", "https://icecast-qmusicnl-cdp.triple-it.nl/Qmusic_nl_nonstop_96.mp3", "qmusic non stop, qmusic nonstop, q music non stop"),
+    ("Qmusic Foute Uur", "https://icecast-qmusicnl-cdp.triple-it.nl/Qmusic_nl_fouteuur.mp3", "qmusic foute uur, foute uur, q music foute uur"),
+    ("Joe", "https://stream.joe.nl/joe/mp3", "joe, joe fm, radio joe"),
+    ("OOG Radio", "http://opml.radiotime.com/Tune.ashx?id=s8895&formats=mp3,aac", "oog radio, oog, radio oog"),
+    ("Zwaluw Radio", "tunein:zwaluw radio", "zwaluw radio, zwaluw, radio zwaluw, de zwaluw, zwaluwradio, swallow radio, swallow"),
+    ("Arrow Bluesbox Radio", "https://playerservices.streamtheworld.com/api/livestream-redirect/ARROWBLUESBOX.mp3", "arrow bluesbox radio, arrow bluesbox, bluesbox, arrow blues"),
+    ("Capital London", "https://media-ice.musicradio.com/CapitalMP3", "capital london, capital fm, capital"),
+    ("Capital XTRA", "https://media-ice.musicradio.com/CapitalXTRALondonMP3", "capital xtra, capital extra"),
+    ("Heart London", "https://media-ice.musicradio.com/HeartLondonMP3", "heart london"),
+    ("Heart UK", "https://media-ice.musicradio.com/HeartUKMP3", "heart uk, heart"),
+    ("Smooth UK", "https://media-ice.musicradio.com/SmoothUKMP3", "smooth uk, smooth radio, smooth"),
+    ("Classic FM", "https://media-ice.musicradio.com/ClassicFMMP3", "classic fm, classicfm"),
+    ("Classic FM Calm", "https://media-ice.musicradio.com/ClassicFMCalmMP3", "classic fm calm"),
+    ("Classic FM Movies", "https://media-ice.musicradio.com/ClassicFMMoviesMP3", "classic fm movies"),
+    ("LBC London", "https://media-ice.musicradio.com/LBCLondonMP3", "lbc london, lbc"),
+    ("LBC News", "https://media-ice.musicradio.com/LBCNewsLondonMP3", "lbc news"),
+    ("Radio X UK", "https://media-ice.musicradio.com/RadioXUKMP3", "radio x uk, radio x"),
+    ("Big Top 40", "https://media-ice.musicradio.com/BigTop40V1MP3", "big top 40, top 40"),
+    ("Gold", "https://media-ice.musicradio.com/GoldMP3", "gold radio, gold"),
+];
+
+fn schoon(t: &str) -> String {
+    let t: String = t.to_lowercase().chars().map(|c| if c.is_alphanumeric() || c == '%' { c } else { ' ' }).collect();
+    t.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Zoekt een zender bij naam ("radio 2", "NPO Radio 2", "3FM", "qmusic").
+pub fn zender(naam: &str) -> Option<(&'static str, &'static str)> {
+    let n = schoon(naam);
+    ZENDERS
+        .iter()
+        .find(|(z, _, a)| schoon(z) == n || a.split(',').any(|x| schoon(x) == n))
+        .map(|(z, u, _)| (*z, *u))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Gedrag {
+    Schermvullend,
+    VraagBijAfsluiten(String),
+    MaarEenKeerOpen,
+    Tip { knop: String, tekst: String },
 }
 
 /// Waar een geluid klinkt, in woorden. 0 = gewoon. Links/rechts (1, 2), achter/voor (×3), boven/onder (×9).

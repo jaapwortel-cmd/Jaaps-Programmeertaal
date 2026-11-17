@@ -490,6 +490,23 @@ impl<'a> Controle<'a> {
                     }
                 }
                 Soort::BeginOpname => {}
+                Soort::Venstergedrag(Gedrag::Tip { knop, .. }) => {
+                    let bestaat = self.programma.alle().iter().any(|o| match &o.soort {
+                        Soort::MaakKnop { naam } => naam.to_lowercase() == knop.to_lowercase(),
+                        Soort::Werkbalk(n) => n.iter().any(|x| x.to_lowercase() == knop.to_lowercase()),
+                        _ => false,
+                    });
+                    if !bestaat {
+                        self.meld(Melding::vraag(r, format!("Er is geen knop met de naam {}. Welke knop moet deze tip krijgen?", knop)));
+                    }
+                }
+                Soort::Venstergedrag(_) => {}
+                Soort::Radio(_) => {}
+                Soort::Reservekopie(p) => {
+                    let mut namen = Vec::new();
+                    p.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                }
                 Soort::QrCode { waarde, pad } => {
                     for u in [waarde, pad] {
                         let mut namen = Vec::new();

@@ -373,6 +373,32 @@ impl<'a> Maker<'a> {
                     let programma = matches!(o.soort, Soort::StartProgramma(_));
                     self.regel(diepte, &format!("{{ let w = {}; s.open(w, {}, {})?; }}", w, programma, r));
                 }
+                Soort::Venstergedrag(g) => {
+                    self.opmerking(diepte, r);
+                    let regel = match g {
+                        Gedrag::Schermvullend => "s.scherm_gedrag(0, \"\", \"\");".to_string(),
+                        Gedrag::VraagBijAfsluiten(v) => format!("s.scherm_gedrag(1, {}, \"\");", rust_tekst(v)),
+                        Gedrag::MaarEenKeerOpen => "s.scherm_gedrag(2, \"\", \"\");".to_string(),
+                        Gedrag::Tip { knop, tekst } => format!("s.scherm_gedrag(3, {}, {});", rust_tekst(knop), rust_tekst(tekst)),
+                    };
+                    self.regel(diepte, &regel);
+                }
+                Soort::Radio(z) => {
+                    self.opmerking(diepte, r);
+                    let regel = match z {
+                        None => format!("s.radio(None, \"\", {})?;", r),
+                        Some((naam, u)) => {
+                            let a = self.uitdrukking(u, r);
+                            format!("{{ let a = {}; s.radio(Some(a), {}, {})?; }}", a, rust_tekst(naam), r)
+                        }
+                    };
+                    self.regel(diepte, &regel);
+                }
+                Soort::Reservekopie(p) => {
+                    self.opmerking(diepte, r);
+                    let p = self.uitdrukking(p, r);
+                    self.regel(diepte, &format!("{{ let p = {}; reservekopie(p, {})?; }}", p, r));
+                }
                 Soort::QrCode { waarde, pad } => {
                     self.opmerking(diepte, r);
                     let w = self.uitdrukking(waarde, r);

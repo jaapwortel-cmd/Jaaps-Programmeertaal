@@ -948,6 +948,62 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         }
         return Ok(Vorm::Los(Soort::Installatie(InstallatieZin::PrivacyRegel(tekst))));
     }
+    // Internetradio.
+    if laag == "stop de radio" || laag == "zet de radio uit" || laag == "stop de radiozender" {
+        return Ok(Vorm::Los(Soort::Radio(None)));
+    }
+    if laag.starts_with("speel de radiozender") || laag.starts_with("zet de radiozender") || laag.starts_with("speel de radio ") || laag.starts_with("zet de radio aan op") {
+        let woorden = ["speel de radiozender met het adres", "speel de radiozender", "zet de radiozender", "speel de radio", "zet de radio aan op"];
+        let b = woorden.iter().find(|w| laag.starts_with(**w)).unwrap();
+        let rest = norm[b.len()..].trim().trim_end_matches(['.', '!']).trim();
+        let rest = if rest.to_lowercase().starts_with("op ") { &rest[3..] } else { rest };
+        if rest.is_empty() {
+            return Err(fout("Welke zender? Schrijf bijvoorbeeld: Speel de radiozender NPO Radio 1. Of: Speel de radiozender met het adres https://..."));
+        }
+        if rest.to_lowercase().starts_with("http") {
+            return Ok(Vorm::Los(Soort::Radio(Some((rest.to_string(), Uitdrukking::Vast(Waarde::Tekst(rest.to_string())))))));
+        }
+        let naam = rest.trim_matches('"');
+        return Ok(Vorm::Los(Soort::Radio(Some(match zender(naam) {
+            Some((naam, adres)) => (naam.to_string(), Uitdrukking::Vast(Waarde::Tekst(adres.into()))),
+            // Niet in de lijst: je programma zoekt de zender op internet op (radio-browser.info).
+            None => (naam.to_string(), Uitdrukking::Vast(Waarde::Tekst(format!("zoek:{}", naam)))),
+        }))));
+    }
+    // Hoe het venster zich gedraagt.
+    let tussen_aanhalingstekens = |t: &str| -> Option<String> {
+        let b = t.find('"')?;
+        let e = t[b + 1..].find('"')?;
+        Some(t[b + 1..b + 1 + e].to_string())
+    };
+    if (laag.contains("schermvullend") || laag.contains("gemaximaliseerd") || laag.contains("maximaal groot")) && laag.contains("venster") {
+        return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::Schermvullend)));
+    }
+    if laag.starts_with("vraag bij afsluiten") || laag.starts_with("vraag bij het afsluiten") || laag.starts_with("vraag als ik afsluit") {
+        let vraag = tussen_aanhalingstekens(norm).unwrap_or_else(|| "Weet je zeker dat je wilt afsluiten?".to_string());
+        return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::VraagBijAfsluiten(vraag))));
+    }
+    if ["maar één keer open", "maar een keer open", "maar 1 keer open", "maar één keer tegelijk open", "maar een keer tegelijk open"].iter().any(|z| laag.contains(z)) {
+        return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::MaarEenKeerOpen)));
+    }
+    if laag.starts_with("geef de knop ") && laag.contains(" de tip ") {
+        let p = laag.find(" de tip ").unwrap();
+        let knop = norm["geef de knop ".len()..p].trim().to_string();
+        let tekst = tussen_aanhalingstekens(&norm[p..]).unwrap_or_else(|| norm[p + " de tip ".len()..].trim().to_string());
+        if knop.is_empty() || tekst.is_empty() {
+            return Err(fout("Schrijf het zo: Geef de knop Opslaan de tip \"Bewaart je werk\"."));
+        }
+        return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::Tip { knop, tekst })));
+    }
+    if laag.starts_with("maak een reservekopie van") {
+        let rest = norm["maak een reservekopie van".len()..].trim();
+        let rest = ["het bestand ", "bestand "].iter().find_map(|b| rest.to_lowercase().starts_with(b).then(|| &rest[b.len()..])).unwrap_or(rest);
+        if rest.is_empty() {
+            return Err(fout("Schrijf het zo: Maak een reservekopie van het bestand notities.txt."));
+        }
+        let stukken = tekst::splits(rest).map_err(fout)?;
+        return Ok(Vorm::Los(Soort::Reservekopie(pad(&stukken).map_err(fout)?)));
+    }
     // "Dit is code voor het programma Rekenhulp": zegt bij welk programma dit bestand hoort.
     if laag.starts_with("dit is code voor") || laag.starts_with("dit is een omschrijving voor") || laag.starts_with("dit is de code voor") {
         return Ok(Vorm::Los(Soort::Opmerking(norm.to_string())));

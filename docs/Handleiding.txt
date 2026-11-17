@@ -600,6 +600,53 @@ Alle woorden van je zin moeten in de opdracht staan; extra woorden zoals "maar" 
 Lijkt het er maar op, dan vraagt je programma: Bedoel je ...? Het gokt niet.
 Alleen programma's met deze zin krijgen een opdrachtvak.
 
+4.7r Word en PDF lezen
+
+Toon de tekst van het Word-bestand brief.docx
+Onthoud inhoud is de tekst van het PDF-bestand folder.pdf
+Een gescande PDF (een plaatje van tekst) en een oud .doc-bestand kan ik niet lezen.
+
+4.7s Geluid uit een richting (stereo en 3D)
+
+Speel het geluid deurbel.wav links
+Speel het geluid deurbel.wav rechts
+Speel het geluid deurbel.wav achter me
+Speel het geluid deurbel.wav boven me
+Speel het geluid deurbel.wav onder me
+Speel het geluid deurbel.wav links achter me     (ook samen: rechts boven me, links onder me, ...)
+Dit werkt met WAV-bestanden (16 bits). Eerlijk: het is eenvoudig gemaakt, zonder echte 3D-techniek
+(HRTF). Links en rechts hoor je goed met een koptelefoon; boven en onder zijn een helderder en een
+doffer geluid. Luister zelf of het genoeg is.
+
+4.7t Werkbalk
+
+Maak een werkbalk met de knoppen Nieuw, Openen en Opslaan
+De knoppen staan naast elkaar bovenaan. Wat ze doen, beschrijf je zoals bij een gewone knop:
+Als ik op de knop Opslaan druk ... Einde van de knop.
+
+4.7u QR-codes
+
+Maak een QR-code van "https://www.voorbeeld.nl" in het bestand qr.png
+Tot 213 tekens. Getest met een echte QR-lezer. QR-codes lezen en streepjescodes kunnen nog niet.
+
+4.7v Internetradio
+
+Speel de radiozender NPO Radio 2
+Speel de radiozender Qmusic                  (47 zenders bij naam, uit Computerhulp Maatje)
+Speel de radiozender Radio Waddenzee         (onbekend? dan zoekt je programma hem op internet)
+Speel de radiozender met het adres https://icecast.omroep.nl/radio1-bb-mp3
+Stop de radio
+De radio speelt via Windows Media Player op de achtergrond en stopt als je programma stopt.
+Zie het voorbeeld Mijn radio.txt.
+
+4.7w Het venster
+
+Het venster start schermvullend
+Vraag bij afsluiten "Wil je echt stoppen?"
+Mijn programma mag maar één keer open zijn
+Geef de knop Opslaan de tip "Bewaart je werk"     (zichtbaar als je met de muis op de knop staat)
+Maak een reservekopie van het bestand notities.txt   (in de map Reservekopieën; de laatste 10 blijven)
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
@@ -871,3 +918,34 @@ rechts wat het programma al kent. Bijvoorbeeld:
   knal hem eruit = bouw een exe
 
 Geen AI: het programma kent vaste woorden per opdracht. Snapt het je niet, dan zegt het dat.
+
+
+15. Een website maken
+---------------------
+
+Begint je programma met "Maak een website", dan wordt het een website in plaats van een
+Windows-programma. Bijvoorbeeld:
+
+Maak een website met als titel Mijn radiosite
+Maak een pagina met als naam Home
+Zet een kop "Welkom op mijn radiosite"
+Zet de tekst "Hier luister je naar mijn favoriete zenders."
+Zet een radiospeler met de zender NPO Radio 2
+Zet een link naar de pagina Over mij met de tekst "Lees meer over mij"
+Zet een link naar https://www.nu.nl met de tekst "Het nieuws"
+Zet een afbeelding foto.jpg met de beschrijving "Jaap in de studio"
+Zet een lijst met "Radio", "Programma's" en "Muziek"
+Zet een e-mailadres info@voorbeeld.nl
+Maak een pagina met als naam Over mij
+Geef de website de kleur donkerblauw
+
+F5: de website gaat open in Firefox (niet in Edge).
+F8: de website komt in Documenten\Jaaps Programmeertaal\<titel> website. Die map kun je op
+je eigen webruimte zetten.
+F6: vertelt wat er op elke pagina staat.
+
+Elke pagina krijgt een menu met alle pagina's, een link "Naar de inhoud", goede kopjes en een
+goed zichtbare focus. Een radiospeler heeft de knoppen Afspelen en Stoppen, en zegt wat hij doet.
+Getest: de radiospeler speelt NPO Radio 2 echt af in een browser.
+
+Een zin die niet bij een website hoort, geeft een vraag. Het programma gokt niet.

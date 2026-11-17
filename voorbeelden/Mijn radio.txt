@@ -1,0 +1,20 @@
+Opmerking: Een eigen internetradio. Kies een zender met een knop.
+Maak een venster met als titel Mijn radio
+Maak een werkbalk met de knoppen Radio 1, Radio 2, 3FM en Stop
+Vraag bij afsluiten "Wil je de radio echt uitzetten?"
+Als ik op de knop Radio 1 druk
+Speel de radiozender NPO Radio 1
+Zeg "Radio 1"
+Einde van de knop
+Als ik op de knop Radio 2 druk
+Speel de radiozender NPO Radio 2
+Zeg "Radio 2"
+Einde van de knop
+Als ik op de knop 3FM druk
+Speel de radiozender NPO 3FM
+Zeg "3FM"
+Einde van de knop
+Als ik op de knop Stop druk
+Stop de radio
+Zeg "De radio is uit"
+Einde van de knop
