@@ -19,6 +19,8 @@ Versie 0.1.0 (proefversie, 17 november 2026)
 - Ondertekenen met een eigen certificaat op je naam, en dat certificaat laten vertrouwen op je computer.
 - Een bestand van elders openen met bovenaan "Dit is code voor het programma ..." of "Dit is een
   omschrijving voor het programma ...": voorlezen en vragen wat ermee moet.
+- Engelse basiszinnen, je programma omzetten naar het Engels (vaste regels), en eigen woorden die
+  het programma onthoudt (zelflerend, zonder AI).
 - Een installatiebestand voor je eigen programma (Ctrl+F8), beschreven met zinnen: naam, versie, maker,
   snelkoppelingen, met of zonder beheerdersrechten, extra bestanden.
 - Een eigen licentie, met zinnen of uit een tekstbestand. Bij het installeren moet je akkoord gaan.

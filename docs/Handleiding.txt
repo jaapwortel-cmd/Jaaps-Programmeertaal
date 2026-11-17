@@ -540,6 +540,33 @@ Het programma zoekt Rekenhulp.txt eerst in dezelfde map als het geopende bestand
 Documenten\Jaaps Programmeertaal. Daar komen je programma's ook standaard als je opslaat.
 
 
+11b. Engels en je eigen woorden
+-------------------------------
+
+Het programma begrijpt ook Engelse zinnen, bijvoorbeeld:
+Make a window with title Greeting
+Make a button named Welcome
+When I press the button Welcome
+Show the text Hello
+End of the button
+Remember counter is 1, Add 2 to counter, If counter is greater than 2, Else, End if,
+Repeat 3 times, End repeat, Comment: ..., Beep.
+Engelse rekenwoorden: plus, minus, times, divided by, and then.
+
+Je programma omzetten naar het Engels: menu Programma, Zet mijn programma om naar het Engels.
+Dat gaat met vaste regels, niet met AI. Titels, namen en tekst tussen aanhalingstekens vertaal ik niet;
+die noem ik in een lijstje, zodat je ze zelf kunt vertalen. Regels die ik nog niet in het Engels kan
+schrijven, noem ik ook.
+
+Je eigen woorden: het programma kan onthouden hoe jij iets zegt. Twee manieren:
+1. Zeg je Ja op een verbetering van een tikfout, dan vraagt het programma of het dat mag onthouden.
+   De volgende keer begrijpt het je meteen.
+2. Zelf schrijven: menu Help, Mijn eigen woorden. Dat opent een tekstbestand in Kladblok.
+   Eén regel per woord: links wat je zegt, rechts wat je bedoelt. Bijvoorbeeld:
+   laat zien = toon
+Het programma gebruikt je eigen woorden alleen als een zin anders niet bekend is.
+
+
 12. Bestanden
 -------------
 
@@ -558,7 +585,7 @@ Dit staat op de wensenlijst, maar zit nog niet in deze versie:
 - afbeeldingen, QR-codes en streepjescodes;
 - internet en netwerk;
 - twee voorwaarden in één keer met "en" of "of";
-- Engelse opdrachten en vertalen;
-- onthouden van jouw eigen formuleringen (zelflerend).
+- Engelse zinnen voor lijsten, stukjes, bestanden, tekstvakken en installatie (de basiszinnen werken wel);
+- tekst tussen aanhalingstekens vertalen.
 
 Als je zo'n zin schrijft, zegt het programma eerlijk dat het dat nog niet kan.

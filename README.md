@@ -164,6 +164,14 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 - Open het met Ctrl+O. Je hoort wat erin staat en kiest: toevoegen als code (en meteen controleren), bewaren als notitie (`Rekenhulp notities.txt`), of gewoon openen.
 - Je programma's staan standaard in `Documenten\Jaaps Programmeertaal`.
 
+**Engels**
+- Engelse basiszinnen werken ook: `Make a window with title Greeting`, `Make a button named Welcome`, `When I press the button Welcome`, `Show the text Hello`, `End of the button`, `Remember x is 1`, `Add 1 to x`, `Subtract 1 from x`, `Change x to 5`, `Set x to 5`, `If x is greater than 2`, `Else`, `End if`, `Repeat 3 times`, `Repeat while ..., at most 100 times`, `End repeat`, `Comment: ...`, `Beep`, `Play the sound ...`.
+- Menu Programma, "Zet mijn programma om naar het Engels": met vaste regels. Titels, namen en tekst tussen aanhalingstekens worden niet vertaald; die krijg je in een lijstje.
+
+**Eigen woorden (zelflerend, zonder AI)**
+- Na een "Ja" op een tikfoutverbetering vraagt het programma of het dat woord mag onthouden.
+- Menu Help, "Mijn eigen woorden": een tekstbestand met regels als `laat zien = toon`.
+
 **Leestekens dicteren**: `aanhalingsteken openen` en `aanhalingsteken sluiten` worden echte aanhalingstekens.
 
 ## 6. Wat er gebeurt als iets niet klopt
@@ -209,7 +217,7 @@ Uitvoeren (met Rust op de computer):
 cargo test --workspace
 ```
 
-Uitslag in deze sessie (Linux): 93 tests (en op Windows ook de test die echt ondertekent), allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
+Uitslag in deze sessie (Linux): 98 tests (en op Windows ook de test die echt ondertekent), allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
 
 **De opdrachtregel** (`jaaptaal.exe`, staat ook in de installatie):
 
@@ -244,7 +252,7 @@ De automatische controle op GitHub (UI Automation, dezelfde techniek als NVDA en
 
 Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo'n zin, dan zegt het programma dat eerlijk.
 
-**De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); twee voorwaarden met "en" of "of"; Engelse opdrachten en vertalen naar het Engels; het onthouden van jouw eigen formuleringen (zelflerend).
+**De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); twee voorwaarden met "en" of "of"; Engelse zinnen voor lijsten, stukjes, bestanden, tekstvakken en installatie; tekst vertalen.
 
 **Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
 

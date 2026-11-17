@@ -67,3 +67,29 @@ pub fn hoort_bij(tekst: &str) -> Option<(bool, String)> {
     }
     None
 }
+
+/// Leest jouw eigen woorden uit een tekst met regels zoals "laat zien = toon".
+/// Lege regels en regels die met # beginnen tellen niet mee.
+pub fn eigen_woorden(tekst: &str) -> Vec<(String, String)> {
+    tekst
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+        .filter_map(|l| l.split_once('='))
+        .map(|(a, b)| (a.trim().to_lowercase(), b.trim().to_string()))
+        .filter(|(a, b)| !a.is_empty() && !b.is_empty())
+        .collect()
+}
+
+/// Voegt een eigen woord toe aan de tekst (als het er nog niet in staat).
+pub fn voeg_eigen_woord_toe(tekst: &str, van: &str, naar: &str) -> String {
+    let van = van.trim().to_lowercase();
+    if eigen_woorden(tekst).iter().any(|(a, _)| *a == van) {
+        return tekst.to_string();
+    }
+    let mut uit = tekst.trim_end().to_string();
+    if !uit.is_empty() {
+        uit.push('\n');
+    }
+    uit.push_str(&format!("{} = {}\n", van, naar.trim()));
+    uit
+}

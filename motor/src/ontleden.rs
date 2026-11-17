@@ -1442,7 +1442,21 @@ pub(crate) fn sluitzin(b: Blok) -> &'static str {
 }
 
 /// Leest het hele programma. Geeft de opdrachten en alle meldingen.
-pub(crate) fn lees_programma(bron: &str) -> (Programma, Vec<Melding>) {
+/// Probeert een onbekende zin op een andere manier: met jouw eigen woorden, of als Engelse zin.
+fn anders_lezen(norm: &str, eigen: &[(String, String)]) -> Option<Vorm> {
+    for (van, naar) in eigen {
+        let nieuw = crate::engels::vervang_woorden(norm, &[(van.as_str(), naar.as_str())]);
+        if nieuw != norm {
+            if let Ok(v) = ontleed_regel(&tekst::normaliseer(&nieuw)) {
+                return Some(v);
+            }
+        }
+    }
+    let nl = crate::engels::naar_nederlands(norm)?;
+    ontleed_regel(&tekst::normaliseer(&nl)).ok()
+}
+
+pub(crate) fn lees_programma_met(bron: &str, eigen: &[(String, String)]) -> (Programma, Vec<Melding>) {
     let mut meldingen = Vec::new();
     let mut stapel = vec![Kader::nieuw(KaderSoort::Hoofd, 0)];
     let regels: Vec<&str> = bron.lines().collect();
@@ -1450,7 +1464,11 @@ pub(crate) fn lees_programma(bron: &str) -> (Programma, Vec<Melding>) {
     for (i, ruw) in regels.iter().enumerate() {
         let nr = i + 1;
         let norm = tekst::normaliseer(ruw);
-        match ontleed_regel(&norm) {
+        let gelezen = match ontleed_regel(&norm) {
+            Err(rf) if rf.onbekend => anders_lezen(&norm, eigen).ok_or(rf),
+            ander => ander,
+        };
+        match gelezen {
             Ok(Vorm::Leeg) => {}
             Ok(Vorm::Los(soort)) => {
                 if matches!(soort, Soort::GeefUitkomst(_)) && !stapel.iter().any(|k| matches!(k.soort, KaderSoort::Stukje(..))) {

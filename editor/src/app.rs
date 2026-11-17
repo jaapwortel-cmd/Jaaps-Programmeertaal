@@ -29,6 +29,8 @@ const ID_PROBEER: u16 = 205;
 const ID_BOUW_EXE: u16 = 206;
 const ID_INSTALLATIE: u16 = 207;
 const ID_VERTROUW: u16 = 209;
+const ID_ENGELS: u16 = 210;
+const ID_EIGEN_WOORDEN: u16 = 211;
 const ID_WELKE_REGEL: u16 = 301;
 const ID_NAAR_MELDINGEN: u16 = 302;
 const ID_HANDLEIDING: u16 = 401;
@@ -65,6 +67,26 @@ enum Klaar {
 }
 
 static KLAAR: Mutex<Option<Klaar>> = Mutex::new(None);
+
+/// Waar jouw eigen woorden staan (zoals "laat zien = toon").
+fn eigen_woorden_pad() -> PathBuf {
+    let basis = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let map = basis.join("Jaaps Programmeertaal");
+    let _ = std::fs::create_dir_all(&map);
+    map.join("Mijn eigen woorden.txt")
+}
+
+fn eigen_woorden() -> Vec<(String, String)> {
+    motor::bestand::lees_txt(&eigen_woorden_pad()).map(|t| motor::bestand::eigen_woorden(&t)).unwrap_or_default()
+}
+
+fn lees(bron: &str) -> motor::Uitslag {
+    motor::lees_met(bron, &eigen_woorden())
+}
+
+fn rust_code(bron: &str) -> Result<String, Vec<Melding>> {
+    motor::rust_code_met(bron, &eigen_woorden())
+}
 
 fn v() -> Vensters {
     V.with(|v| v.get()).expect("vensters")
@@ -394,7 +416,7 @@ fn open_gewoon(pad: &Path) {
 fn controleer_met_vragen(stil_als_goed: bool) -> Option<String> {
     for _ in 0..50 {
         let bron = editor_tekst();
-        let uitslag = motor::lees(&bron);
+        let uitslag = lees(&bron);
         let lijst: Vec<String> = uitslag.meldingen.iter().map(|m| m.volledig()).collect();
         let kop = motor::samenvatting(&uitslag);
         zet_meldingen(&format!("{}\n{}", kop, lijst.join("\n")));
@@ -427,9 +449,11 @@ fn behandel(m: &Melding, aantal: usize) -> bool {
         Some(v) => {
             let tekst = format!("{}{}", m.volledig(), nog);
             if melding(&tekst, MB_YESNO | MB_ICONQUESTION) == IDYES {
+                let oud_regel = editor_tekst().lines().nth(m.regel.saturating_sub(1)).unwrap_or("").to_string();
                 let nieuw = motor::pas_toe(&editor_tekst(), &v.wijziging);
                 vervang_editor_tekst(&nieuw);
                 ga_naar_regel(m.regel);
+                leer_van_verbetering(&oud_regel, &v.wijziging);
                 true
             } else {
                 zet_meldingen(&format!(
@@ -446,6 +470,33 @@ fn behandel(m: &Melding, aantal: usize) -> bool {
             melding(&format!("{}{}", m.volledig(), nog), soort);
             ga_naar_regel(m.regel);
             false
+        }
+    }
+}
+
+/// Was het een tikfout in één woord? Dan vragen of het programma dat woord mag onthouden.
+fn leer_van_verbetering(oud: &str, w: &motor::Wijziging) {
+    let motor::Wijziging::VervangRegel { nieuw, .. } = w else { return };
+    let a: Vec<String> = motor::tekst::normaliseer(oud).split_whitespace().map(|x| x.to_lowercase()).collect();
+    let b: Vec<String> = motor::tekst::normaliseer(nieuw).split_whitespace().map(|x| x.to_lowercase()).collect();
+    if a.len() != b.len() {
+        return;
+    }
+    let verschil: Vec<(String, String)> = a.iter().zip(&b).filter(|(x, y)| x != y).map(|(x, y)| (x.clone(), y.clone())).collect();
+    let [(van, naar)] = verschil.as_slice() else { return };
+    if van.contains('"') || naar.contains('"') {
+        return;
+    }
+    let vraag = format!(
+        "Zal ik onthouden dat je met \"{}\" het woord \"{}\" bedoelt? Dan vraag ik het de volgende keer niet meer. Je kunt dit later zien en veranderen in het menu Help, Mijn eigen woorden.",
+        van, naar
+    );
+    if melding(&vraag, MB_YESNO | MB_ICONQUESTION) == IDYES {
+        let pad = eigen_woorden_pad();
+        let oud = motor::bestand::lees_txt(&pad).unwrap_or_else(|_| "# Mijn eigen woorden: links wat ik zeg, rechts wat ik bedoel.\n".to_string());
+        let nieuw = motor::bestand::voeg_eigen_woord_toe(&oud, van, naar);
+        if motor::bestand::schrijf_txt(&pad, &nieuw).is_ok() {
+            zet_meldingen(&format!("Onthouden: \"{}\" betekent \"{}\". Dit staat in {}.", van, naar, pad.display()));
         }
     }
 }
@@ -486,7 +537,7 @@ fn start_klus(klus: impl FnOnce() -> Klaar + Send + 'static) -> bool {
 fn uitvoeren() {
     let Some(bron) = controleer_met_vragen(true) else { return };
     let Some(rustc) = rustc_of_melding() else { return };
-    let code = motor::rust_code(&bron).expect("gecontroleerd");
+    let code = rust_code(&bron).expect("gecontroleerd");
     zet_meldingen("Bezig met bouwen. Je programma start zo meteen vanzelf.");
     start_klus(move || {
         let map = werkmap();
@@ -516,12 +567,12 @@ fn probeer() {
         .map(|r| r.trim().to_string())
         .collect();
     let met_eerder = format!("{}\n{}", eerder.join("\n"), stuk);
-    let stuk = if !eerder.is_empty() && !motor::lees(&stuk).is_goed() && motor::lees(&met_eerder).is_goed() {
+    let stuk = if !eerder.is_empty() && !lees(&stuk).is_goed() && lees(&met_eerder).is_goed() {
         met_eerder
     } else {
         stuk
     };
-    let uitslag = motor::lees(&stuk);
+    let uitslag = lees(&stuk);
     if let Some(m) = uitslag.meldingen.first() {
         melding(
             &format!("Ik probeer alleen deze regel (of je selectie), los van de rest. {} ", m.volledig().replace(" Antwoord met ja of nee.", "")),
@@ -530,7 +581,7 @@ fn probeer() {
         return;
     }
     let Some(rustc) = rustc_of_melding() else { return };
-    let code = motor::rust_code(&stuk).expect("gecontroleerd");
+    let code = rust_code(&stuk).expect("gecontroleerd");
     start_klus(move || {
         let map = werkmap();
         let exe = map.join("proberen.exe");
@@ -553,7 +604,7 @@ fn probeer() {
 /// Vraagt of er een eigen certificaat mag komen, als het programma wil ondertekenen en het er nog niet is.
 /// Geeft de naam terug als er ondertekend kan worden, of None om zonder te stoppen.
 fn certificaat_klaar(bron: &str) -> Result<Option<String>, ()> {
-    let Some(naam) = motor::installatie::uit_programma(&motor::lees(bron).programma).and_then(|i| i.onderteken) else {
+    let Some(naam) = motor::installatie::uit_programma(&lees(bron).programma).and_then(|i| i.onderteken) else {
         return Ok(None);
     };
     match motor::ondertekenen::heeft_certificaat(&naam) {
@@ -587,7 +638,7 @@ fn bouw_exe() {
         return;
     };
     let Ok(onderteken) = certificaat_klaar(&bron) else { return };
-    let code = motor::rust_code(&bron).expect("gecontroleerd");
+    let code = rust_code(&bron).expect("gecontroleerd");
     zet_meldingen("Bezig met het bouwen van het .exe-bestand. Dit kan even duren.");
     start_klus(move || {
         Klaar::Exe(
@@ -603,7 +654,7 @@ fn bouw_exe() {
 
 fn bouw_installatie() {
     let Some(mut bron) = controleer_met_vragen(true) else { return };
-    let mut uitslag = motor::lees(&bron);
+    let mut uitslag = lees(&bron);
     if motor::installatie::uit_programma(&uitslag.programma).is_none() {
         let naam = PAD
             .with(|p| p.borrow().as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().to_string()))
@@ -626,7 +677,7 @@ fn bouw_installatie() {
         vervang_editor_tekst(&nieuw);
         let Some(b) = controleer_met_vragen(true) else { return };
         bron = b;
-        uitslag = motor::lees(&bron);
+        uitslag = lees(&bron);
     }
     let Some(inst) = motor::installatie::uit_programma(&uitslag.programma) else { return };
     let Some(rustc) = rustc_of_melding() else { return };
@@ -798,8 +849,42 @@ fn opdracht(id: u16) {
         ID_PROBEER => probeer(),
         ID_BOUW_EXE => bouw_exe(),
         ID_INSTALLATIE => bouw_installatie(),
+        ID_ENGELS => {
+            let u = lees(&editor_tekst());
+            if !u.is_goed() {
+                melding("Er zijn nog meldingen. Eerst moet alles kloppen, dan zet ik je programma om naar het Engels.", MB_ICONINFORMATION);
+                controleer_met_vragen(false);
+                return;
+            }
+            let (engels, niet, overgeslagen) = motor::engels::naar_engels(&u.programma);
+            let mut tekst = String::from("Je programma in het Engels. Selecteer alles met Ctrl+A en kopieer het met Ctrl+C.\n\n");
+            tekst.push_str(&engels);
+            if !niet.is_empty() {
+                tekst.push_str("\n\nDeze teksten heb ik niet vertaald (titels, namen en tekst tussen aanhalingstekens). Mijn vaste woordenlijst kan dat niet; vertaal ze zelf als dat nodig is:\n");
+                tekst.push_str(&niet.join("\n"));
+            }
+            if !overgeslagen.is_empty() {
+                tekst.push_str(&format!(
+                    "\n\nDeze regels kan ik nog niet in het Engels schrijven: {}.",
+                    overgeslagen.iter().map(|r| r.to_string()).collect::<Vec<_>>().join(", ")
+                ));
+            }
+            tekstvenster("Je programma in het Engels", &tekst, false);
+        }
+        ID_EIGEN_WOORDEN => {
+            let pad = eigen_woorden_pad();
+            if !pad.exists() {
+                let _ = motor::bestand::schrijf_txt(
+                    &pad,
+                    "# Mijn eigen woorden: links wat ik zeg, rechts wat ik bedoel. Een woord per regel.\n# Voorbeeld:\nlaat zien = toon\n",
+                );
+            }
+            if Command::new("notepad.exe").arg(&pad).spawn().is_err() {
+                melding(&format!("Ik kan Kladblok niet openen. Het bestand staat in {}.", pad.display()), MB_ICONERROR);
+            }
+        }
         ID_VERTROUW => {
-            let naam = motor::installatie::uit_programma(&motor::lees(&editor_tekst()).programma).and_then(|i| i.onderteken);
+            let naam = motor::installatie::uit_programma(&lees(&editor_tekst()).programma).and_then(|i| i.onderteken);
             match naam {
                 None => {
                     melding(
@@ -826,7 +911,7 @@ fn opdracht(id: u16) {
         }
         ID_BESCHRIJF => {
             let bron = editor_tekst();
-            let u = motor::lees(&bron);
+            let u = lees(&bron);
             let mut tekst = motor::beschrijf(&u);
             if !u.is_goed() {
                 tekst.push_str("\n\nLet op, er zijn nog meldingen:\n");
@@ -835,10 +920,10 @@ fn opdracht(id: u16) {
             tekstvenster("Wat ik van je zinnen maak", &tekst, false);
         }
         ID_SCHERM => {
-            let u = motor::lees(&editor_tekst());
+            let u = lees(&editor_tekst());
             tekstvenster("Wat er op het scherm komt", &motor::scherm::beschrijf_scherm(&u.programma), false);
         }
-        ID_RUSTCODE => match motor::rust_code(&editor_tekst()) {
+        ID_RUSTCODE => match rust_code(&editor_tekst()) {
             Ok(code) => tekstvenster("De Rust-code van je programma", motor::rustcode::alleen_programma(&code), true),
             Err(_) => {
                 melding("Er zijn nog meldingen. Eerst moet alles kloppen, dan kan ik Rust-code maken.", MB_ICONINFORMATION);
@@ -960,6 +1045,7 @@ fn maak_menu() -> HANDLE {
         voeg(prog, ID_BESCHRIJF, "&Laat zien wat ik van je zinnen maak\tF6");
         voeg(prog, ID_SCHERM, "Vertel wat er op het &scherm komt\tCtrl+F6");
         voeg(prog, ID_RUSTCODE, "Laat de &Rust-code zien\tShift+F6");
+        voeg(prog, ID_ENGELS, "Zet mijn programma om naar het &Engels");
         streep(prog);
         voeg(prog, ID_BOUW_EXE, "Bouw een .&exe-bestand...\tF8");
         voeg(prog, ID_INSTALLATIE, "Bouw een &installatiebestand...\tCtrl+F8");
@@ -973,6 +1059,7 @@ fn maak_menu() -> HANDLE {
 
         let help = CreatePopupMenu();
         voeg(help, ID_HANDLEIDING, "&Handleiding\tF1");
+        voeg(help, ID_EIGEN_WOORDEN, "Mijn &eigen woorden (openen in Kladblok)");
         voeg(help, ID_OVER, "&Over Jaap's Programmeertaal");
         AppendMenuW(balk, MF_POPUP, help as usize, w("&Help").as_ptr());
         balk

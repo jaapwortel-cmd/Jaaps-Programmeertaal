@@ -15,6 +15,7 @@ pub mod beschrijf;
 pub mod bestand;
 pub mod bouwen;
 mod controle;
+pub mod engels;
 pub mod getallen;
 pub mod installatie;
 pub mod melding;
@@ -47,8 +48,13 @@ impl Uitslag {
 
 /// Leest en controleert een programma.
 pub fn lees(bron: &str) -> Uitslag {
+    lees_met(bron, &[])
+}
+
+/// Leest en controleert een programma, met jouw eigen woorden (zoals "laat zien" = "toon").
+pub fn lees_met(bron: &str, eigen_woorden: &[(String, String)]) -> Uitslag {
     let regels: Vec<&str> = bron.lines().collect();
-    let (programma, mut meldingen) = ontleden::lees_programma(bron);
+    let (programma, mut meldingen) = ontleden::lees_programma_met(bron, eigen_woorden);
     if meldingen.is_empty() {
         meldingen = controle::controleer(&programma, &regels);
     }
@@ -63,7 +69,12 @@ pub fn beschrijf(uitslag: &Uitslag) -> String {
 
 /// Maakt de Rust-code van een programma. Lukt alleen als er geen meldingen meer zijn.
 pub fn rust_code(bron: &str) -> Result<String, Vec<Melding>> {
-    let uitslag = lees(bron);
+    rust_code_met(bron, &[])
+}
+
+/// Rust-code maken, met jouw eigen woorden.
+pub fn rust_code_met(bron: &str, eigen_woorden: &[(String, String)]) -> Result<String, Vec<Melding>> {
+    let uitslag = lees_met(bron, eigen_woorden);
     if !uitslag.is_goed() {
         return Err(uitslag.meldingen);
     }
