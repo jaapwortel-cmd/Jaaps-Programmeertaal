@@ -73,6 +73,8 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 if *wachten { " en wacht tot het klaar is" } else { " (het programma gaat meteen verder)" }
             ),
             Soort::StopGeluid => "stop het geluid.".into(),
+            Soort::Zeg(u) => format!("laat de schermlezer {} zeggen, zonder meldingsvenster.", uitdrukking(u)),
+            Soort::Pictogram(b) => format!("het pictogram van het programma is {}.", b),
             Soort::Zip { inpakken: true, map, zip } => format!("pak de map {} in tot het zipbestand {}.", uitdrukking(map), uitdrukking(zip)),
             Soort::Zip { inpakken: false, map, zip } => format!("pak het zipbestand {} uit in de map {}.", uitdrukking(zip), uitdrukking(map)),
             Soort::Sneltoets { knop, toets } => format!("de knop {} krijgt de sneltoets {}.", knop, toets.naam),

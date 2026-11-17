@@ -123,3 +123,20 @@ fn zip_inpakken_en_uitpakken() {
     assert_eq!(String::from_utf8_lossy(&uit.stdout).trim(), "hallo");
     let _ = std::fs::remove_dir_all(&werk);
 }
+
+#[test]
+fn zeg_en_pictogram() {
+    let bron = format!("{}Zeg Het bestand is opgeslagen\nLaat de schermlezer zeggen \"Klaar\"\nZeg \"Je hebt\" en dan 3 en dan \"punten\"\nHet pictogram staat in het bestand logo.ico\n", BASIS);
+    assert!(lees(&bron).is_goed(), "{:#?}", lees(&bron).meldingen);
+    let uit = voer_uit("Zeg Het bestand is opgeslagen\nZeg \"Je hebt\" en dan 3 en dan \"punten\"\n", &[]);
+    assert_eq!(uit, "[zeg] Het bestand is opgeslagen\n[zeg] Je hebt 3 punten\n");
+    assert!(!lees("Het pictogram staat in het bestand logo.png\n").is_goed());
+    let map = std::env::temp_dir().join(format!("jaaptaal-ico-{}", std::process::id()));
+    std::fs::create_dir_all(&map).unwrap();
+    std::fs::write(map.join("logo.ico"), [0u8, 0, 1, 0]).unwrap();
+    let p = lees("Het pictogram staat in het bestand logo.ico\n").programma;
+    let code = motor::installatie::vul_pictogram_in(&motor::rust_code("Het pictogram staat in het bestand logo.ico\n").unwrap(), &p, Some(&map)).unwrap();
+    assert!(code.contains("const PICTOGRAM: &[u8] = include_bytes!("));
+    assert!(motor::installatie::vul_pictogram_in("x", &p, None).is_err());
+    let _ = std::fs::remove_dir_all(&map);
+}

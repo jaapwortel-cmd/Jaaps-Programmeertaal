@@ -366,6 +366,18 @@ Of in een eigen bestand:
 De handleiding staat in het bestand Handleiding.txt
 Zet dat bestand dan ook in je installatie.
 
+Je schermlezer iets laten zeggen, zonder meldingsvenster:
+Zeg Het bestand is opgeslagen
+Laat de schermlezer zeggen "Klaar"
+Zeg "Je hebt" en dan punten en dan "punten"
+Dit gaat via de meldingen van Windows (UI Automation). NVDA, JAWS en Verteller kunnen die voorlezen.
+Heeft je programma (nog) geen venster, of lukt het niet, dan komt de tekst in een gewone melding.
+
+Een eigen pictogram voor je programma (een .ico-bestand, in dezelfde map als je programma):
+Het pictogram staat in het bestand logo.ico
+Het pictogram komt in de titelbalk, de taakbalk en de snelkoppelingen van je installatie.
+Het bestand van het programma zelf (de .exe in de Verkenner) houdt nog het gewone pictogram.
+
 Wat er op het scherm komt: druk op Ctrl+F6. Je hoort per venster de titel, de kleuren en of die goed te lezen
 zijn, alle onderdelen van boven naar beneden, de Tab-volgorde, waar de focus begint, de grootte, en tips.
 De tips komen uit vaste regels. Bijvoorbeeld: een knop hoort meestal onder de vakken die je invult.

@@ -650,6 +650,20 @@ impl Staat {
         }
         Ok(())
     }
+    fn zeg(&mut self, w: W) {
+        let t = w.tekst();
+        if self.scherm.tekststand {
+            println!("[zeg] {}", t);
+            return;
+        }
+        #[cfg(windows)]
+        {
+            if !win::zeg(self.scherm.win.actief(), &t) {
+                // Geen venster of de schermlezer luistert niet naar meldingen: dan als melding tonen.
+                self.scherm.toon(&t);
+            }
+        }
+    }
     fn stop_geluid(&mut self) {
         if self.scherm.tekststand {
             println!("[geluid stopt]");
@@ -996,6 +1010,7 @@ mod win {
         fn GetWindowTextW(h: HWND, buf: *mut u16, max: i32) -> i32;
         fn GetWindowTextLengthW(h: HWND) -> i32;
         fn GetKeyState(toets: i32) -> i16;
+        fn LoadImageW(inst: HANDLE, naam: *const u16, soort: u32, b: i32, h: i32, vlaggen: u32) -> HANDLE;
         fn FillRect(dc: HANDLE, r: *const RECT, kwast: HANDLE) -> i32;
         fn RedrawWindow(h: HWND, r: *const RECT, regio: HANDLE, vlaggen: u32) -> i32;
     }
@@ -1156,6 +1171,78 @@ mod win {
         unsafe { PlaySoundW(w(&pad.to_string_lossy()).as_ptr(), null_mut(), vlaggen) != 0 }
     }
 
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LoadLibraryW(naam: *const u16) -> HANDLE;
+        fn GetProcAddress(module: HANDLE, naam: *const u8) -> *const c_void;
+    }
+
+    /// Laat de schermlezer iets zeggen via een UI Automation-melding (zonder meldingsvenster).
+    pub(super) fn zeg(venster: HWND, tekst: &str) -> bool {
+        if venster.is_null() {
+            return false;
+        }
+        unsafe {
+            let uia = LoadLibraryW(w("uiautomationcore.dll").as_ptr());
+            let ole = LoadLibraryW(w("oleaut32.dll").as_ptr());
+            if uia.is_null() || ole.is_null() {
+                return false;
+            }
+            let host = GetProcAddress(uia, b"UiaHostProviderFromHwnd\0".as_ptr());
+            let melding = GetProcAddress(uia, b"UiaRaiseNotificationEvent\0".as_ptr());
+            let maak = GetProcAddress(ole, b"SysAllocString\0".as_ptr());
+            let vrij = GetProcAddress(ole, b"SysFreeString\0".as_ptr());
+            if host.is_null() || melding.is_null() || maak.is_null() || vrij.is_null() {
+                return false;
+            }
+            type Host = unsafe extern "system" fn(HWND, *mut *mut c_void) -> i32;
+            type Melding = unsafe extern "system" fn(*mut c_void, i32, i32, *mut u16, *mut u16) -> i32;
+            type Maak = unsafe extern "system" fn(*const u16) -> *mut u16;
+            type Vrij = unsafe extern "system" fn(*mut u16);
+            type Los = unsafe extern "system" fn(*mut c_void) -> u32;
+            let host: Host = std::mem::transmute(host);
+            let melding: Melding = std::mem::transmute(melding);
+            let maak: Maak = std::mem::transmute(maak);
+            let vrij: Vrij = std::mem::transmute(vrij);
+            let mut p: *mut c_void = null_mut();
+            if host(venster, &mut p) != 0 || p.is_null() {
+                return false;
+            }
+            let t = maak(w(tekst).as_ptr());
+            let id = maak(w("JaapsProgrammeertaal").as_ptr());
+            // Soort: Other (4). Verwerking: All (2), zodat geen melding wegvalt.
+            let gelukt = melding(p, 4, 2, t, id) == 0;
+            vrij(t);
+            vrij(id);
+            let vtabel = *(p as *const *const usize);
+            let los: Los = std::mem::transmute(*vtabel.add(2));
+            los(p);
+            gelukt
+        }
+    }
+
+    /// Het pictogram van het programma op een venster zetten (titelbalk en taakbalk).
+    pub(super) fn zet_pictogram(venster: HWND) {
+        if PICTOGRAM.is_empty() {
+            return;
+        }
+        let naam = std::env::current_exe().ok().and_then(|p| p.file_stem().map(|n| n.to_string_lossy().to_string())).unwrap_or_default();
+        let map = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir).join(naam);
+        let _ = std::fs::create_dir_all(&map);
+        let pad = map.join("pictogram.ico");
+        if std::fs::read(&pad).map_or(true, |b| b != PICTOGRAM) {
+            let _ = std::fs::write(&pad, PICTOGRAM);
+        }
+        unsafe {
+            for (soort, maat) in [(1usize, 0i32), (0usize, 16i32)] {
+                let ico = LoadImageW(null_mut(), w(&pad.to_string_lossy()).as_ptr(), 1, maat, maat, 0x10 | if maat == 0 { 0x40 } else { 0 });
+                if !ico.is_null() {
+                    SendMessageW(venster, 0x0080, soort, ico as isize);
+                }
+            }
+        }
+    }
+
     pub(super) fn stop_geluid() {
         unsafe {
             PlaySoundW(null(), null_mut(), 0);
@@ -1242,6 +1329,7 @@ mod win {
                     null_mut(),
                 );
                 OPEN.with(|o| o.set(o.get() + 1));
+                zet_pictogram(h);
                 self.vensters.push(h);
                 self.volgende_y.push(20);
                 self.heeft_focus.push(false);

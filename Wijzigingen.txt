@@ -21,6 +21,7 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   omschrijving voor het programma ...": voorlezen en vragen wat ermee moet.
 - Engelse basiszinnen, je programma omzetten naar het Engels (vaste regels), en eigen woorden die
   het programma onthoudt (zelflerend, zonder AI).
+- Zeg: de schermlezer iets laten zeggen zonder meldingsvenster. Een eigen pictogram voor je programma.
 - MP3 (en WMA, M4A, AAC, MIDI) afspelen, en zipbestanden inpakken en uitpakken.
 - Een installatiebestand voor je eigen programma (Ctrl+F8), beschreven met zinnen: naam, versie, maker,
   snelkoppelingen, met of zonder beheerdersrechten, extra bestanden.

@@ -69,7 +69,7 @@ const WOORDENLIJST: &[&str] = &[
     "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
     "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum", "speel", "piep",
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
-    "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand",
+    "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
@@ -856,6 +856,35 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 ))),
                 _ => Err(onbekend()),
             }
+        }
+        "zeg" | "laat" if w0 == "zeg" || begint(&s, &["laat", "de", "schermlezer", "zeggen"]) => {
+            let begin = if w0 == "zeg" { 1 } else { 4 };
+            if begin >= s.len() {
+                return Err(fout("Wat moet de schermlezer zeggen? Schrijf bijvoorbeeld: Zeg Het bestand is opgeslagen."));
+            }
+            let nieuw = format!("Toon {}", bron_tekst(&s[begin..]));
+            let r = &s[begin..];
+            let letterlijk = !r.iter().any(|x| matches!(x, Stuk::Tekst(_))) && uitdrukking(r).map_or(true, |u| matches!(u, Uitdrukking::Naam(_)) && r.len() > 1);
+            if letterlijk && !begint(r, &["de", "tekst", "in"]) {
+                let mut t = rest_tekst(r);
+                if begint(r, &["de", "tekst"]) {
+                    t = rest_tekst(&r[2..]);
+                }
+                return Ok(Vorm::Los(Soort::Zeg(Uitdrukking::Vast(Waarde::Tekst(t)))));
+            }
+            match ontleed_regel(&nieuw)? {
+                Vorm::Los(Soort::Toon(u)) => Ok(Vorm::Los(Soort::Zeg(u))),
+                _ => Err(fout("Schrijf het zo: Zeg Het bestand is opgeslagen.")),
+            }
+        }
+        "het" if klein(&s, 1) == "pictogram" || klein(&s, 1) == "icoon" => {
+            let Some(p) = zoek(&s, &["bestand"], 2) else {
+                return Err(fout("Schrijf het zo: Het pictogram staat in het bestand logo.ico."));
+            };
+            if p + 1 >= s.len() {
+                return Err(fout("Welk bestand? Schrijf bijvoorbeeld: Het pictogram staat in het bestand logo.ico."));
+            }
+            Ok(Vorm::Los(Soort::Pictogram(rest_tekst(&s[p + 1..]))))
         }
         "toon" => {
             let r = &s[1..];

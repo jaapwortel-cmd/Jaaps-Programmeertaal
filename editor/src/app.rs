@@ -538,6 +538,8 @@ fn uitvoeren() {
     let Some(bron) = controleer_met_vragen(true) else { return };
     let Some(rustc) = rustc_of_melding() else { return };
     let code = rust_code(&bron).expect("gecontroleerd");
+    let bronmap = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.parent().map(|m| m.to_path_buf())));
+    let code = motor::installatie::vul_pictogram_in(&code, &lees(&bron).programma, bronmap.as_deref()).unwrap_or(code);
     zet_meldingen("Bezig met bouwen. Je programma start zo meteen vanzelf.");
     start_klus(move || {
         let map = werkmap();
@@ -639,6 +641,14 @@ fn bouw_exe() {
     };
     let Ok(onderteken) = certificaat_klaar(&bron) else { return };
     let code = rust_code(&bron).expect("gecontroleerd");
+    let bronmap = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.parent().map(|m| m.to_path_buf())));
+    let code = match motor::installatie::vul_pictogram_in(&code, &lees(&bron).programma, bronmap.as_deref()) {
+        Ok(c) => c,
+        Err(e) => {
+            melding(&e, MB_ICONERROR);
+            return;
+        }
+    };
     zet_meldingen("Bezig met het bouwen van het .exe-bestand. Dit kan even duren.");
     start_klus(move || {
         Klaar::Exe(

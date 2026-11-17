@@ -189,6 +189,12 @@ mod win {
             zet_pad(link, w(&doel.to_string_lossy()).as_ptr());
             zet_map(link, w(&map.to_string_lossy()).as_ptr());
             zet_omschrijving(link, w(NAAM).as_ptr());
+            let ico = map.join("pictogram.ico");
+            if ico.is_file() {
+                type ZetIcoon = unsafe extern "system" fn(*mut c_void, *const u16, i32) -> i32;
+                let zet_icoon: ZetIcoon = std::mem::transmute(methode(link, 17));
+                zet_icoon(link, w(&ico.to_string_lossy()).as_ptr(), 0);
+            }
             let qi: Vraag = std::mem::transmute(methode(link, 0));
             let mut bestand: *mut c_void = null_mut();
             let mut gelukt = false;
@@ -215,7 +221,7 @@ mod win {
         let verwijder = format!("\"{}\" --verwijder", map.join("Verwijderen.exe").display());
         let mut waarden: Vec<(&str, String)> = vec![
             ("DisplayName", NAAM.to_string()),
-            ("DisplayIcon", exe.to_string_lossy().to_string()),
+            ("DisplayIcon", if map.join("pictogram.ico").is_file() { map.join("pictogram.ico") } else { exe.clone() }.to_string_lossy().to_string()),
             ("InstallLocation", map.to_string_lossy().to_string()),
             ("UninstallString", verwijder),
         ];

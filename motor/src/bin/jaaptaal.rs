@@ -88,6 +88,11 @@ fn main() {
         "bouw" => {
             let Some(uit) = args.get(2) else { uitleg() };
             let code = code_of_stop(&bron);
+            let bronmap = Path::new(&args[1]).parent().map(|p| p.to_path_buf());
+            let code = motor::installatie::vul_pictogram_in(&code, &motor::lees(&bron).programma, bronmap.as_deref()).unwrap_or_else(|e| {
+                eprintln!("{}", e);
+                exit(1)
+            });
             let stand = if args.iter().any(|a| a == "--snel") { Stand::Snel } else { Stand::Klein };
             let werk = std::env::temp_dir().join("jaaptaal-bouw");
             let onderteken = motor::installatie::uit_programma(&motor::lees(&bron).programma).and_then(|i| i.onderteken);

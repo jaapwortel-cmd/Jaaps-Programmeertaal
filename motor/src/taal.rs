@@ -258,6 +258,10 @@ pub enum Soort {
     SpeelGeluid { pad: Uitdrukking, wachten: bool },
     /// Het geluid stoppen.
     StopGeluid,
+    /// De schermlezer iets laten zeggen, zonder meldingsvenster.
+    Zeg(Uitdrukking),
+    /// Het pictogram van het programma (een .ico-bestand).
+    Pictogram(String),
     /// Een map inpakken in een zipbestand, of een zipbestand uitpakken in een map.
     Zip { inpakken: bool, map: Uitdrukking, zip: Uitdrukking },
     /// Een sneltoets voor een knop, zoals Ctrl+W.
@@ -397,7 +401,7 @@ impl Soort {
     /// Alle uitdrukkingen in deze opdracht (niet in de blokken eronder).
     pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
         match self {
-            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::Toon(u) | Soort::Zeg(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
@@ -426,7 +430,7 @@ impl Soort {
     /// Alle uitdrukkingen in deze opdracht (alleen lezen).
     pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
         match self {
-            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::Toon(u) | Soort::Zeg(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],

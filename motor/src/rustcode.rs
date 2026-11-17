@@ -235,6 +235,12 @@ impl<'a> Maker<'a> {
                     let z = self.uitdrukking(zip, r);
                     self.regel(diepte, &format!("{{ let m = {}; let z = {}; zip({}, m, z, {})?; }}", m, z, inpakken, r));
                 }
+                Soort::Zeg(u) => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.zeg(w); }}", u));
+                }
+                Soort::Pictogram(_) => self.opmerking(diepte, r),
                 Soort::StopGeluid => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, "s.stop_geluid();");
@@ -451,6 +457,7 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
         })
         .collect();
     m.uit.push_str(&format!("const PRIVACY: &str = {};\n", rust_tekst(&privacy.join("\n"))));
+    m.uit.push_str("const PICTOGRAM: &[u8] = &[];\n");
 
     let namen: Vec<String> = m.namenlijst.iter().map(|n| rust_tekst(n)).collect();
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();

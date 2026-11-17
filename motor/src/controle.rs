@@ -481,6 +481,19 @@ impl<'a> Controle<'a> {
                         }
                     }
                 }
+                Soort::Zeg(u) => {
+                    let mut namen = Vec::new();
+                    u.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    if let Err(t) = self.type_van(u) {
+                        self.meld(Melding::fout(r, t));
+                    }
+                }
+                Soort::Pictogram(b) => {
+                    if !b.to_lowercase().ends_with(".ico") {
+                        self.meld(Melding::fout(r, format!("Een pictogram is een .ico-bestand, maar hier staat {}.", b)));
+                    }
+                }
                 Soort::StopGeluid | Soort::Sneltoets { .. } | Soort::Kleur { .. } | Soort::Handleiding { .. } => {}
                 Soort::MaakOnderdeel { .. } => {}
                 Soort::VoegKeuzeToe { keuze, lijst } => {

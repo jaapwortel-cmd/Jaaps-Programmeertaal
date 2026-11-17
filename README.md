@@ -129,6 +129,10 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 
 **Geluid**: `Piep`, `Speel een piep van 440 hertz en 300 milliseconden`, `Speel het geluid deurbel.wav` (ook: `af en wacht`), `Stop het geluid` (WAV, MP3, WMA, M4A, AAC, MIDI)
 
+**Schermlezer laten zeggen**: `Zeg Het bestand is opgeslagen`, `Laat de schermlezer zeggen "Klaar"` (via UI Automation-meldingen, zonder venster)
+
+**Pictogram**: `Het pictogram staat in het bestand logo.ico` (titelbalk, taakbalk, snelkoppelingen; de .exe in de Verkenner nog niet)
+
 **ZIP**: `Pak de map Foto's in tot het zipbestand Foto's.zip`, `Pak het zipbestand Foto's.zip uit in de map Foto's`
 
 **Sneltoetsen, kleuren en handleiding (F1) in je eigen programma**
@@ -266,11 +270,11 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Netwerk**: verbinding met een andere computer, internet, PHP en CSS, updates via Dropbox of pCloud.
 
-**Spraak en toegankelijkheid**: eigen meldingen voor schermlezers, braille, spraakherkenning, voorlezen, hardware, Whisper en taalmodellen als onderdeel van jouw programma's (niet van de taal zelf).
+**Spraak en toegankelijkheid**: braille, spraakherkenning, voorlezen, hardware, Whisper en taalmodellen als onderdeel van jouw programma's (niet van de taal zelf).
 
 **Overig**: extensies en drivers ("motorschrijver"), je bestaande programma's nabouwen, alles wat Rust kan.
 
-**Over de installatie**: een eigen pictogram (icoon) kan nog niet. (Een gekocht certificaat komt er niet: Jaap kiest voor zijn eigen certificaat.)
+**Over de installatie**: het pictogram op het .exe-bestand zelf (in de Verkenner) kan nog niet; in de titelbalk, taakbalk en snelkoppelingen wel. (Een gekocht certificaat komt er niet: Jaap kiest voor zijn eigen certificaat.)
 
 ## 12. Wat ik heb gebouwd
 

@@ -91,6 +91,28 @@ fn zoek_bestand(naam: &str, bronmap: Option<&Path>) -> Result<PathBuf, String> {
     }
 }
 
+/// Het pictogram (Het pictogram staat in het bestand ...): het volledige pad, als het er is.
+pub fn pictogram(p: &Programma, bronmap: Option<&Path>) -> Result<Option<PathBuf>, String> {
+    for o in &p.opdrachten {
+        if let Soort::Pictogram(b) = &o.soort {
+            let pad = zoek_bestand(b, bronmap)?;
+            return Ok(Some(std::fs::canonicalize(&pad).unwrap_or(pad)));
+        }
+    }
+    Ok(None)
+}
+
+/// Zet het pictogram in de Rust-code van het programma (het gaat in de .exe mee).
+pub fn vul_pictogram_in(code: &str, p: &Programma, bronmap: Option<&Path>) -> Result<String, String> {
+    match pictogram(p, bronmap)? {
+        Some(pad) => Ok(code.replace(
+            "const PICTOGRAM: &[u8] = &[];",
+            &format!("const PICTOGRAM: &[u8] = include_bytes!({});", rs(&pad.to_string_lossy())),
+        )),
+        None => Ok(code.to_string()),
+    }
+}
+
 /// De tekst van de privacyverklaring, met een kopje erboven. Leeg als er geen is.
 pub fn privacytekst(i: &Installatie, bronmap: Option<&Path>) -> Result<String, String> {
     let inhoud = if let Some(b) = &i.privacy_bestand {
@@ -186,6 +208,7 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
 
     let regels: Vec<&str> = bron.lines().collect();
     let code = crate::rustcode::maak(&uitslag.programma, &regels);
+    let code = vul_pictogram_in(&code, &uitslag.programma, bronmap)?;
     let programmamap = werkmap.join("programma");
     let exe = programmamap.join(format!("{}.exe", bestandsnaam(&inst.naam)));
     bouwen::bouw(&code, &exe, rustc, Stand::Klein, &programmamap)?;
@@ -194,6 +217,10 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
         crate::ondertekenen::onderteken(&exe, naam)?;
     }
 
+    let mut extra = extra;
+    if let Some(ico) = pictogram(&uitslag.programma, bronmap)? {
+        extra.push(("pictogram.ico".to_string(), ico));
+    }
     let installcode = maak_code(&inst, &exe, &extra, &licentie, &privacy);
     let installmap = werkmap.join("installatie");
     let v = bouwen::bouw(&installcode, uit, rustc, Stand::Klein, &installmap)?;
