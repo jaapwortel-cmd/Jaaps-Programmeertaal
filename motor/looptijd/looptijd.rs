@@ -336,6 +336,33 @@ fn ingebouwd(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
     }
 }
 
+/// Een geluid zoeken: eerst naast het programma, dan in Documenten.
+fn geluidspad(p: &W) -> std::path::PathBuf {
+    let t = p.tekst();
+    let pad = std::path::PathBuf::from(t.trim());
+    if pad.is_absolute() {
+        return pad;
+    }
+    if let Some(naast) = std::env::current_exe().ok().and_then(|e| e.parent().map(|m| m.join(&pad))) {
+        if naast.is_file() {
+            return naast;
+        }
+    }
+    volledig_pad(p)
+}
+
+/// De tekst van de handleiding (F1): wat je in je programma schreef, of het bestand.
+fn handleiding_tekst() -> String {
+    if !HANDLEIDING.is_empty() {
+        return HANDLEIDING.to_string();
+    }
+    if !HANDLEIDING_BESTAND.is_empty() {
+        let pad = geluidspad(&W::T(HANDLEIDING_BESTAND.to_string()));
+        return lees_tekstbestand(&pad).unwrap_or_else(|_| format!("Ik kan de handleiding {} niet vinden.", HANDLEIDING_BESTAND));
+    }
+    String::new()
+}
+
 fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
     match w {
         Some(w) => Ok(w),
@@ -550,6 +577,64 @@ impl Staat {
         self.scherm.vink(i, aan);
         Ok(())
     }
+    fn piep(&mut self, h: W, d: W, r: usize) -> R<()> {
+        let (h, d) = match (h, d) {
+            (W::G(h), W::G(d)) if (37.0..=32767.0).contains(&h) && (1.0..=10000.0).contains(&d) => (h as u32, d as u32),
+            _ => return fout(r, "Een piep heeft een hoogte van 37 tot 32767 hertz en een duur van 1 tot 10000 milliseconden.".to_string()),
+        };
+        if self.scherm.tekststand {
+            println!("[piep] {} hertz, {} milliseconden", h, d);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        win::piep(h, d);
+        Ok(())
+    }
+    fn speel(&mut self, p: W, wachten: bool, r: usize) -> R<()> {
+        let pad = geluidspad(&p);
+        if !pad.is_file() {
+            return fout(r, format!("Ik kan het geluid {} niet vinden. Zet het naast je programma, of in Documenten.", p.tekst()));
+        }
+        if self.scherm.tekststand {
+            println!("[geluid] {}{}", p.tekst(), if wachten { " (wacht tot het klaar is)" } else { "" });
+            return Ok(());
+        }
+        #[cfg(windows)]
+        {
+            if !win::speel(&pad, wachten) {
+                return fout(r, format!("Het geluid {} kan ik niet afspelen. Is het een gewoon WAV-bestand?", p.tekst()));
+            }
+        }
+        Ok(())
+    }
+    fn stop_geluid(&mut self) {
+        if self.scherm.tekststand {
+            println!("[geluid stopt]");
+            return;
+        }
+        #[cfg(windows)]
+        win::stop_geluid();
+    }
+    fn sneltoets(&mut self, knop: &str, code: u16, ctrl: bool, alt: bool, shift: bool, naam: &str, r: usize) -> R<()> {
+        let Some(i) = self.scherm.knoppen.iter().position(|k| k.0.to_lowercase() == knop.to_lowercase()) else {
+            return fout(r, format!("De knop {} is er (nog) niet.", knop));
+        };
+        if self.scherm.tekststand {
+            println!("[sneltoets] {}: {}", knop, naam);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        win::sneltoets(i, code, ctrl, alt, shift, &format!("{} ({})", self.scherm.knoppen[i].0, naam));
+        Ok(())
+    }
+    fn kleur(&mut self, achtergrond: bool, rgb: (u8, u8, u8), naam: &str) {
+        if self.scherm.tekststand {
+            println!("[kleur {}] {}", if achtergrond { "achtergrond" } else { "tekst" }, naam);
+            return;
+        }
+        #[cfg(windows)]
+        self.scherm.win.kleur(achtergrond, rgb);
+    }
     fn focus(&mut self, naam: &str, r: usize) -> R<()> {
         let i = self.zoek(naam, r)?;
         self.scherm.focus(i);
@@ -632,6 +717,11 @@ fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], 
 fn start(namen: &'static [&'static str], acties: &'static [&'static str], hoofd: Hoofd, bij_knop: BijKnop) {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let tekststand = args.iter().any(|a| a == "--tekst") || !cfg!(windows);
+    if tekststand && args.iter().any(|a| a == "--handleiding") {
+        let t = handleiding_tekst();
+        println!("{}", if t.is_empty() { "Dit programma heeft geen handleiding.".to_string() } else { t });
+        return;
+    }
     if tekststand {
         let mut stappen = Vec::new();
         let mut i = 0;
@@ -853,9 +943,13 @@ mod win {
         fn GetClientRect(h: HWND, r: *mut RECT) -> i32;
         fn MoveWindow(h: HWND, x: i32, y: i32, w: i32, hh: i32, repaint: i32) -> i32;
         fn GetWindow(h: HWND, cmd: u32) -> HWND;
+        fn IsWindow(h: HWND) -> i32;
         fn SetWindowTextW(h: HWND, text: *const u16) -> i32;
         fn GetWindowTextW(h: HWND, buf: *mut u16, max: i32) -> i32;
         fn GetWindowTextLengthW(h: HWND) -> i32;
+        fn GetKeyState(toets: i32) -> i16;
+        fn FillRect(dc: HANDLE, r: *const RECT, kwast: HANDLE) -> i32;
+        fn RedrawWindow(h: HWND, r: *const RECT, regio: HANDLE, vlaggen: u32) -> i32;
     }
 
     #[link(name = "kernel32")]
@@ -867,6 +961,9 @@ mod win {
     extern "system" {
         fn CreateFontW(h: i32, w: i32, esc: i32, ori: i32, weight: i32, italic: u32, underline: u32, strike: u32, charset: u32, outp: u32, clip: u32, quality: u32, pitch: u32, face: *const u16) -> HANDLE;
         fn GetDeviceCaps(dc: HANDLE, index: i32) -> i32;
+        fn CreateSolidBrush(kleur: u32) -> HANDLE;
+        fn SetTextColor(dc: HANDLE, kleur: u32) -> u32;
+        fn SetBkColor(dc: HANDLE, kleur: u32) -> u32;
     }
 
     const WM_DESTROY: u32 = 0x0002;
@@ -929,7 +1026,12 @@ mod win {
         static BIJ_KNOP: Cell<Option<BijKnop>> = Cell::new(None);
         static OPEN: Cell<usize> = Cell::new(0);
         static KNOP_HWNDS: RefCell<Vec<HWND>> = RefCell::new(Vec::new());
-        static UITVOER_VAK: Cell<HWND> = Cell::new(std::ptr::null_mut());
+        /// Tekstvensters (uitvoer, handleiding) met hun tekstvak, zodat het vak meegroeit met het venster.
+        static TEKSTVAKKEN: RefCell<Vec<(HWND, HWND)>> = RefCell::new(Vec::new());
+        static SNELTOETSEN: RefCell<Vec<(u16, bool, bool, bool, HWND)>> = RefCell::new(Vec::new());
+        /// Per venster: achtergrondkleur, tekstkleur en de kwast voor de achtergrond.
+        static KLEUREN: RefCell<Vec<(HWND, Option<u32>, Option<u32>, HANDLE)>> = RefCell::new(Vec::new());
+        static HANDLEIDING_VENSTER: Cell<HWND> = Cell::new(std::ptr::null_mut());
     }
 
     #[derive(Default)]
@@ -981,6 +1083,47 @@ mod win {
         }
         let n = buf.iter().position(|&c| c == 0).unwrap_or(0);
         Some(std::path::PathBuf::from(String::from_utf16_lossy(&buf[..n])))
+    }
+
+    #[link(name = "winmm")]
+    extern "system" {
+        fn PlaySoundW(pad: *const u16, module: HANDLE, vlaggen: u32) -> i32;
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn Beep(hoogte: u32, duur: u32) -> i32;
+    }
+
+    pub(super) fn piep(h: u32, d: u32) {
+        unsafe {
+            Beep(h, d);
+        }
+    }
+
+    pub(super) fn speel(pad: &std::path::Path, wachten: bool) -> bool {
+        // SND_FILENAME | SND_NODEFAULT, en SND_ASYNC als we niet wachten.
+        let vlaggen = 0x0002_0000 | 0x0002 | if wachten { 0 } else { 0x0001 };
+        unsafe { PlaySoundW(w(&pad.to_string_lossy()).as_ptr(), null_mut(), vlaggen) != 0 }
+    }
+
+    pub(super) fn stop_geluid() {
+        unsafe {
+            PlaySoundW(null(), null_mut(), 0);
+        }
+    }
+
+    pub(super) fn sneltoets(knop: usize, code: u16, ctrl: bool, alt: bool, shift: bool, tekst: &str) {
+        let Some(h) = KNOP_HWNDS.with(|k| k.borrow().get(knop).copied()) else { return };
+        unsafe {
+            // De sneltoets staat ook in de naam van de knop: zo hoor je hem.
+            SetWindowTextW(h, w(tekst).as_ptr());
+        }
+        SNELTOETSEN.with(|s| s.borrow_mut().push((code, ctrl, alt, shift, h)));
+    }
+
+    fn rgb(k: (u8, u8, u8)) -> u32 {
+        k.0 as u32 | (k.1 as u32) << 8 | (k.2 as u32) << 16
     }
 
     pub(super) fn melding(eigenaar: HWND, tekst: &str, titel: &str) {
@@ -1074,6 +1217,26 @@ mod win {
                     SetFocus(h);
                 }
                 h
+            }
+        }
+
+        pub(super) fn kleur(&mut self, achtergrond: bool, k: (u8, u8, u8)) {
+            let Some(&venster) = self.vensters.last() else { return };
+            KLEUREN.with(|lijst| {
+                let mut lijst = lijst.borrow_mut();
+                if !lijst.iter().any(|x| x.0 == venster) {
+                    lijst.push((venster, None, None, null_mut()));
+                }
+                let e = lijst.iter_mut().find(|x| x.0 == venster).unwrap();
+                if achtergrond {
+                    e.1 = Some(rgb(k));
+                    e.3 = unsafe { CreateSolidBrush(rgb(k)) };
+                } else {
+                    e.2 = Some(rgb(k));
+                }
+            });
+            unsafe {
+                RedrawWindow(venster, null(), null_mut(), 0x0001 | 0x0004 | 0x0080);
             }
         }
 
@@ -1221,11 +1384,34 @@ mod win {
                 }
             }
             WM_SIZE => {
-                let vak = UITVOER_VAK.with(|u| u.get());
-                if !vak.is_null() && GetAncestor(vak, GA_ROOT) == h {
+                let vak = TEKSTVAKKEN.with(|t| t.borrow().iter().find(|x| x.0 == h).map(|x| x.1)).unwrap_or(null_mut());
+                if !vak.is_null() {
                     let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                     GetClientRect(h, &mut r);
                     MoveWindow(vak, 0, 0, r.right, r.bottom, 1);
+                }
+            }
+            0x0014 => {
+                // WM_ERASEBKGND: de achtergrondkleur.
+                let kwast = KLEUREN.with(|k| k.borrow().iter().find(|x| x.0 == h).map(|x| x.3)).filter(|k| !k.is_null());
+                if let Some(kwast) = kwast {
+                    let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    GetClientRect(h, &mut rc);
+                    FillRect(wp as HANDLE, &rc, kwast);
+                    return 1;
+                }
+            }
+            0x0138 | 0x0135 => {
+                // WM_CTLCOLORSTATIC en WM_CTLCOLORBTN: kleur van labels, selectievakjes en knoppen.
+                if let Some((_, bg, fg, kwast)) = KLEUREN.with(|k| k.borrow().iter().find(|x| x.0 == h).copied()) {
+                    let dc = wp as HANDLE;
+                    if let Some(f) = fg {
+                        SetTextColor(dc, f);
+                    }
+                    if let Some(b) = bg {
+                        SetBkColor(dc, b);
+                        return kwast as isize;
+                    }
                 }
             }
             WM_CLOSE => {
@@ -1248,11 +1434,15 @@ mod win {
     }
 
     fn uitvoervenster(regels: &[String]) {
+        tekstvenster("Uitvoer van het programma", regels);
+    }
+
+    fn tekstvenster(titel: &str, regels: &[String]) -> HWND {
         unsafe {
             let h = CreateWindowExW(
                 WS_EX_CONTROLPARENT,
                 klasse().as_ptr(),
-                w("Uitvoer van het programma").as_ptr(),
+                w(titel).as_ptr(),
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -1279,7 +1469,7 @@ mod win {
                 GetModuleHandleW(null()),
                 null_mut(),
             );
-            UITVOER_VAK.with(|u| u.set(vak));
+            TEKSTVAKKEN.with(|t| t.borrow_mut().push((h, vak)));
             let dc = GetDC(null_mut());
             let dpi = GetDeviceCaps(dc, LOGPIXELSY);
             ReleaseDC(null_mut(), dc);
@@ -1291,6 +1481,7 @@ mod win {
             SetForegroundWindow(h);
             SetFocus(vak);
             SendMessageW(vak, EM_SETSEL, 0, 0);
+            h
         }
     }
 
@@ -1353,6 +1544,37 @@ mod win {
                 let wortel = GetAncestor(msg.hwnd, GA_ROOT);
                 if msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE && !wortel.is_null() {
                     PostMessageW(wortel, WM_CLOSE, 0, 0);
+                    continue;
+                }
+                if (msg.message == WM_KEYDOWN || msg.message == 0x0104) && !SNELTOETSEN.with(|s| s.borrow().is_empty()) {
+                    let ctrl = GetKeyState(0x11) < 0;
+                    let alt = GetKeyState(0x12) < 0;
+                    let shift = GetKeyState(0x10) < 0;
+                    let knop = SNELTOETSEN.with(|s| {
+                        s.borrow().iter().find(|t| t.0 as usize == msg.wParam && t.1 == ctrl && t.2 == alt && t.3 == shift).map(|t| t.4)
+                    });
+                    if let Some(knop) = knop {
+                        SendMessageW(knop, BM_CLICK, 0, 0);
+                        continue;
+                    }
+                }
+                if msg.message == WM_KEYDOWN && msg.wParam == 0x70 {
+                    // F1: de handleiding van dit programma.
+                    let oud = HANDLEIDING_VENSTER.with(|v| v.get());
+                    if !oud.is_null() && IsWindow(oud) != 0 {
+                        SetForegroundWindow(oud);
+                        continue;
+                    }
+                    let tekst = handleiding_tekst();
+                    if tekst.is_empty() {
+                        melding(wortel, "Dit programma heeft geen handleiding.", "Handleiding");
+                    } else {
+                        let mut regels: Vec<String> = tekst.lines().map(|l| l.to_string()).collect();
+                        regels.push(String::new());
+                        regels.push("Druk op Escape om de handleiding te sluiten.".to_string());
+                        let h = tekstvenster("Handleiding", &regels);
+                        HANDLEIDING_VENSTER.with(|v| v.set(h));
+                    }
                     continue;
                 }
                 if msg.message == WM_KEYDOWN && msg.wParam == VK_RETURN {

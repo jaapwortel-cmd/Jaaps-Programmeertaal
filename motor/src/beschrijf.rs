@@ -66,6 +66,19 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 uitdrukking(pad)
             ),
             Soort::MaakMap(p) => format!("maak de map {}.", uitdrukking(p)),
+            Soort::Piep { hoogte, duur } => format!("laat een piep horen van {} hertz, {} milliseconden lang.", uitdrukking(hoogte), uitdrukking(duur)),
+            Soort::SpeelGeluid { pad, wachten } => format!(
+                "speel het geluid {} af{}.",
+                uitdrukking(pad),
+                if *wachten { " en wacht tot het klaar is" } else { " (het programma gaat meteen verder)" }
+            ),
+            Soort::StopGeluid => "stop het geluid.".into(),
+            Soort::Sneltoets { knop, toets } => format!("de knop {} krijgt de sneltoets {}.", knop, toets.naam),
+            Soort::Kleur { achtergrond: true, kleur, .. } => format!("de achtergrond van het laatste venster wordt {}.", kleur),
+            Soort::Kleur { achtergrond: false, kleur, .. } => format!("de tekst in het laatste venster wordt {}.", kleur),
+            Soort::Handleiding { regel: Some(t), .. } => format!("in de handleiding (F1) staat: {}", t),
+            Soort::Handleiding { bestand: Some(b), .. } => format!("de handleiding (F1) staat in het bestand {}.", b),
+            Soort::Handleiding { .. } => "een handleiding.".into(),
             Soort::Logboek(w) => format!("schrijf {} in het logboek, met de datum en tijd.", uitdrukking(w)),
             Soort::VoegToeAanLijst { waarde, lijst } => format!("voeg {} toe aan de lijst {}.", uitdrukking(waarde), lijst),
             Soort::HaalUitLijst { waarde, lijst } => format!("haal {} weg uit de lijst {}.", uitdrukking(waarde), lijst),

@@ -252,6 +252,18 @@ pub enum Soort {
     MaakMap(Uitdrukking),
     /// Een regel in het logboek schrijven.
     Logboek(Uitdrukking),
+    /// Een piep: hoogte in hertz, duur in milliseconden.
+    Piep { hoogte: Uitdrukking, duur: Uitdrukking },
+    /// Een WAV-bestand afspelen.
+    SpeelGeluid { pad: Uitdrukking, wachten: bool },
+    /// Het geluid stoppen.
+    StopGeluid,
+    /// Een sneltoets voor een knop, zoals Ctrl+W.
+    Sneltoets { knop: String, toets: Toets },
+    /// Een kleur voor het laatste venster: de achtergrond of de tekst.
+    Kleur { achtergrond: bool, kleur: String, rgb: (u8, u8, u8) },
+    /// Een regel van de handleiding van je programma (F1), of het bestand waar hij in staat.
+    Handleiding { regel: Option<String>, bestand: Option<String> },
     /// Een tekstvak, label, selectievakje of keuzelijst in het laatste venster.
     MaakOnderdeel { soort: OnderdeelSoort, naam: String },
     /// Een keuze toevoegen aan een keuzelijst of uitklaplijst.
@@ -264,6 +276,59 @@ pub enum Soort {
     Focus { naam: String },
     /// Een zin die het installatiebestand beschrijft. Doet niets als het programma draait.
     Installatie(InstallatieZin),
+}
+
+/// Een toets met Ctrl, Alt of Shift erbij.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Toets {
+    /// De Windows-code van de toets (zoals 0x57 voor W, 0x74 voor F5).
+    pub code: u16,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    /// Hoe de toets heet, zoals Ctrl+W.
+    pub naam: String,
+}
+
+/// De kleuren die je bij naam kunt noemen.
+pub const KLEUREN: &[(&str, (u8, u8, u8))] = &[
+    ("zwart", (0, 0, 0)),
+    ("wit", (255, 255, 255)),
+    ("rood", (200, 0, 0)),
+    ("donkerrood", (128, 0, 0)),
+    ("lichtrood", (255, 120, 120)),
+    ("groen", (0, 128, 0)),
+    ("donkergroen", (0, 80, 0)),
+    ("lichtgroen", (144, 238, 144)),
+    ("blauw", (0, 70, 200)),
+    ("donkerblauw", (0, 0, 110)),
+    ("lichtblauw", (173, 216, 230)),
+    ("geel", (255, 230, 0)),
+    ("lichtgeel", (255, 255, 200)),
+    ("oranje", (255, 140, 0)),
+    ("paars", (110, 30, 160)),
+    ("roze", (255, 182, 193)),
+    ("bruin", (120, 70, 20)),
+    ("grijs", (128, 128, 128)),
+    ("lichtgrijs", (220, 220, 220)),
+    ("donkergrijs", (64, 64, 64)),
+];
+
+/// Hoe goed tekst te lezen is op een achtergrond (de WCAG-regel: 4,5 of meer is goed).
+pub fn contrast(a: (u8, u8, u8), b: (u8, u8, u8)) -> f64 {
+    fn kanaal(c: u8) -> f64 {
+        let c = c as f64 / 255.0;
+        if c <= 0.03928 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    fn licht(k: (u8, u8, u8)) -> f64 {
+        0.2126 * kanaal(k.0) + 0.7152 * kanaal(k.1) + 0.0722 * kanaal(k.2)
+    }
+    let (x, y) = (licht(a), licht(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
 
 /// De soorten onderdelen die je in een venster kunt zetten.
@@ -326,6 +391,8 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
+            Soort::Piep { hoogte, duur } => vec![hoogte, duur],
+            Soort::SpeelGeluid { pad, .. } => vec![pad],
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }
@@ -352,6 +419,8 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } => vec![waarde, pad],
+            Soort::Piep { hoogte, duur } => vec![hoogte, duur],
+            Soort::SpeelGeluid { pad, .. } => vec![pad],
             Soort::Onthoud { waarde, .. }
             | Soort::Verander { waarde, .. }
             | Soort::TelOp { waarde, .. }

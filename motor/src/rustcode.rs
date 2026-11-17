@@ -218,6 +218,42 @@ impl<'a> Maker<'a> {
                     let p = self.uitdrukking(pad, r);
                     self.regel(diepte, &format!("{{ let w = {}; let p = {}; schrijf_bestand(p, w, {}, {})?; }}", w, p, toevoegen, r));
                 }
+                Soort::Piep { hoogte, duur } => {
+                    self.opmerking(diepte, r);
+                    let h = self.uitdrukking(hoogte, r);
+                    let d = self.uitdrukking(duur, r);
+                    self.regel(diepte, &format!("{{ let h = {}; let d = {}; s.piep(h, d, {})?; }}", h, d, r));
+                }
+                Soort::SpeelGeluid { pad, wachten } => {
+                    self.opmerking(diepte, r);
+                    let p = self.uitdrukking(pad, r);
+                    self.regel(diepte, &format!("{{ let p = {}; s.speel(p, {}, {})?; }}", p, wachten, r));
+                }
+                Soort::StopGeluid => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, "s.stop_geluid();");
+                }
+                Soort::Sneltoets { knop, toets } => {
+                    self.opmerking(diepte, r);
+                    self.regel(
+                        diepte,
+                        &format!(
+                            "s.sneltoets({}, {}, {}, {}, {}, {}, {})?;",
+                            rust_tekst(knop),
+                            toets.code,
+                            toets.ctrl,
+                            toets.alt,
+                            toets.shift,
+                            rust_tekst(&toets.naam),
+                            r
+                        ),
+                    );
+                }
+                Soort::Kleur { achtergrond, kleur, rgb } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.kleur({}, ({}, {}, {}), {});", achtergrond, rgb.0, rgb.1, rgb.2, rust_tekst(kleur)));
+                }
+                Soort::Handleiding { .. } => self.opmerking(diepte, r),
                 Soort::MaakMap(p) => {
                     self.opmerking(diepte, r);
                     let p = self.uitdrukking(p, r);
@@ -384,6 +420,22 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
         m.uit.push_str("    Ok(None)\n}\n\n");
         m.lokaal = None;
     }
+
+    // De handleiding (F1).
+    let mut handleiding = Vec::new();
+    let mut handleiding_bestand = String::new();
+    for o in &p.opdrachten {
+        if let Soort::Handleiding { regel, bestand } = &o.soort {
+            if let Some(t) = regel {
+                handleiding.push(t.clone());
+            }
+            if let Some(b) = bestand {
+                handleiding_bestand = b.clone();
+            }
+        }
+    }
+    m.uit.push_str(&format!("const HANDLEIDING: &str = {};\n", rust_tekst(&handleiding.join("\n"))));
+    m.uit.push_str(&format!("const HANDLEIDING_BESTAND: &str = {};\n", rust_tekst(&handleiding_bestand)));
 
     let namen: Vec<String> = m.namenlijst.iter().map(|n| rust_tekst(n)).collect();
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();

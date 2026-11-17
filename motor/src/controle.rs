@@ -435,6 +435,40 @@ impl<'a> Controle<'a> {
                         self.meld(Melding::fout(r, t));
                     }
                 }
+                Soort::Piep { hoogte, duur } => {
+                    for (u, laag, hoog, wat) in [(hoogte, 37.0, 32767.0, "De hoogte van een piep"), (duur, 1.0, 10000.0, "De duur van een piep")] {
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                        match self.type_van(u) {
+                            Err(t) => self.meld(Melding::fout(r, t)),
+                            Ok(Type::Tekst | Type::Waarheid | Type::Lijst) => self.meld(Melding::fout(r, format!("{} moet een getal zijn.", wat))),
+                            _ => {}
+                        }
+                        if let Some(g) = vast_getal(u) {
+                            if g < laag || g > hoog {
+                                self.meld(Melding::fout(
+                                    r,
+                                    format!("{} moet tussen {} en {} liggen.", wat, crate::getallen::schrijf(laag), crate::getallen::schrijf(hoog)),
+                                ));
+                            }
+                        }
+                    }
+                }
+                Soort::SpeelGeluid { pad, .. } => {
+                    let mut namen = Vec::new();
+                    pad.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    if let Uitdrukking::Vast(Waarde::Tekst(t)) = pad {
+                        if !t.to_lowercase().ends_with(".wav") {
+                            self.meld(Melding::fout(
+                                r,
+                                format!("Ik kan nu alleen WAV-bestanden afspelen. {} is geen WAV-bestand. MP3 en andere soorten komen later.", t),
+                            ));
+                        }
+                    }
+                }
+                Soort::StopGeluid | Soort::Sneltoets { .. } | Soort::Kleur { .. } | Soort::Handleiding { .. } => {}
                 Soort::MaakOnderdeel { .. } => {}
                 Soort::VoegKeuzeToe { keuze, lijst } => {
                     let mut namen = Vec::new();
@@ -737,6 +771,7 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
 
     controleer_installatie(&mut c, p);
     controleer_stukjes(&mut c, p);
+    controleer_scherm(&mut c, p);
 
     // Ronde 2: elke opdracht nalopen.
     c.controleer_lijst(&p.opdrachten, false);
@@ -906,4 +941,122 @@ fn controleer_stukjes(c: &mut Controle, p: &Programma) {
             }
         }
     }
+}
+
+/// Sneltoetsen, kleuren (is de tekst goed te lezen?) en de handleiding.
+fn controleer_scherm(c: &mut Controle, p: &Programma) {
+    let mut alle = p.alle();
+    alle.sort_by_key(|o| o.regel);
+    let knoppen: Vec<String> = alle
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::MaakKnop { naam } => Some(naam.to_lowercase()),
+            _ => None,
+        })
+        .collect();
+    let mut toetsen: Vec<(String, String, usize)> = Vec::new();
+    // Kleuren per venster: (achtergrond, tekst). Standaard: lichtgrijs met zwarte tekst.
+    let standaard = ((240u8, 240u8, 240u8), (0u8, 0u8, 0u8));
+    let mut kleuren: Option<((u8, u8, u8), (u8, u8, u8))> = None;
+    let mut kleurnamen = ("lichtgrijs".to_string(), "zwart".to_string());
+    let mut handleiding_regel = None;
+    let mut handleiding_bestand = None;
+    let mut laatste_kleur: Option<(usize, bool, (u8, u8, u8), (u8, u8, u8), (String, String))> = None;
+    let los: Vec<usize> = p.opdrachten.iter().map(|o| o.regel).collect();
+    for o in &alle {
+        let r = o.regel;
+        match &o.soort {
+            Soort::MaakVenster { .. } => {
+                if let Some(k) = laatste_kleur.take() {
+                    controleer_contrast(c, k);
+                }
+                kleuren = Some(standaard);
+                kleurnamen = ("lichtgrijs".into(), "zwart".into());
+            }
+            Soort::Sneltoets { knop, toets } => {
+                if !knoppen.contains(&knop.to_lowercase()) {
+                    c.meld(Melding::vraag(r, format!("Er is geen knop met de naam {}. Welke knop moet de sneltoets {} krijgen?", knop, toets.naam)));
+                }
+                if let Some((andere, _, eerder)) = toetsen.iter().find(|t| t.1 == toets.naam && t.0 != knop.to_lowercase()) {
+                    c.meld(Melding::vraag(
+                        r,
+                        format!(
+                            "De sneltoets {} hoort al bij de knop {} (regel {}). Twee knoppen met dezelfde sneltoets spreken elkaar tegen. Welke sneltoets moet deze knop krijgen?",
+                            toets.naam, andere, eerder
+                        ),
+                    ));
+                }
+                toetsen.push((knop.to_lowercase(), toets.naam.clone(), r));
+            }
+            Soort::Kleur { achtergrond, kleur, rgb } => {
+                let Some((mut bg, mut fg)) = kleuren else {
+                    let nieuw = "Maak een venster met als titel Mijn programma".to_string();
+                    c.meld(Melding::vraag(r, "Je kiest een kleur, maar er is nog geen venster.").met_voorstel(
+                        format!("Zal ik er eerst een venster voor maken, met de regel: {}?", nieuw),
+                        Wijziging::VoegInVoor { regel: r, nieuw },
+                    ));
+                    continue;
+                };
+                if *achtergrond {
+                    bg = *rgb;
+                    kleurnamen.0 = kleur.clone();
+                } else {
+                    fg = *rgb;
+                    kleurnamen.1 = kleur.clone();
+                }
+                kleuren = Some((bg, fg));
+                laatste_kleur = Some((r, *achtergrond, bg, fg, kleurnamen.clone()));
+            }
+            Soort::Handleiding { regel, bestand } => {
+                if !los.contains(&r) {
+                    c.meld(Melding::fout(r, "Zinnen over de handleiding moeten los staan, niet binnen een blok."));
+                }
+                if regel.is_some() {
+                    handleiding_regel.get_or_insert(r);
+                }
+                if bestand.is_some() {
+                    if let Some(eerder) = handleiding_bestand {
+                        c.meld(Melding::vraag(r, format!("Je noemt twee keer een bestand voor de handleiding (ook op regel {}). Welke bedoel je?", eerder)));
+                    }
+                    handleiding_bestand.get_or_insert(r);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(k) = laatste_kleur.take() {
+        controleer_contrast(c, k);
+    }
+    if let (Some(a), Some(b)) = (handleiding_regel, handleiding_bestand) {
+        c.meld(Melding::vraag(
+            a.max(b),
+            format!("Je schrijft de handleiding op regel {} zelf, en op regel {} zeg je dat hij in een bestand staat. Welke van de twee bedoel je?", a, b),
+        ));
+    }
+}
+
+/// Is de tekst goed te lezen op de achtergrond? Gecontroleerd bij de laatste kleurregel van een venster.
+fn controleer_contrast(c: &mut Controle, k: (usize, bool, (u8, u8, u8), (u8, u8, u8), (String, String))) {
+    let (r, achtergrond, bg, fg, (bgnaam, fgnaam)) = k;
+    let ct = contrast(bg, fg);
+    if ct >= 4.5 {
+        return;
+    }
+    let beter = if contrast(bg, (0, 0, 0)) >= contrast(bg, (255, 255, 255)) { "zwart" } else { "wit" };
+    let tekst = format!(
+        "Tekst in {} op een achtergrond van {} is slecht te lezen. Het contrast is {}; goed is 4,5 of meer.",
+        fgnaam,
+        bgnaam,
+        crate::getallen::schrijf((ct * 10.0).round() / 10.0)
+    );
+    let nieuw = format!("Geef de tekst de kleur {}", beter);
+    let m = if achtergrond {
+        Melding::vraag(r, tekst).met_voorstel(format!("Zal ik eronder zetten: {}?", nieuw), Wijziging::VoegInVoor { regel: r + 1, nieuw })
+    } else {
+        Melding::vraag(r, tekst).met_voorstel(
+            format!("Zal ik er {} van maken? Dan wordt de regel: {}", beter, nieuw),
+            Wijziging::VervangRegel { regel: r, nieuw },
+        )
+    };
+    c.meld(m);
 }

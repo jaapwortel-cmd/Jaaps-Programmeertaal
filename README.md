@@ -53,6 +53,7 @@ Druk op F5. Er komt een venster met de titel Begroeting. De knop Welkom heeft de
 | Shift+F6 | Laat de Rust-code zien |
 | F8 | Bouw een .exe-bestand |
 | Ctrl+F8 | Bouw een installatiebestand (met licentie) |
+| Ctrl+F6 | Vertel wat er op het scherm komt (vensters, onderdelen, kleuren, Tab-volgorde, tips) |
 | Ctrl+L | Op welke regel sta ik? |
 | F4 | Naar het vak Meldingen |
 | Tab | Wisselen tussen Opdrachten en Meldingen |
@@ -126,6 +127,13 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 
 **Tijd, datum en toeval**: `de tijd`, `de datum`, `een willekeurig getal van 1 tot 6`
 
+**Geluid**: `Piep`, `Speel een piep van 440 hertz en 300 milliseconden`, `Speel het geluid deurbel.wav` (ook: `af en wacht`), `Stop het geluid` (alleen WAV)
+
+**Sneltoetsen, kleuren en handleiding (F1) in je eigen programma**
+- `Geef de knop Welkom de sneltoets Ctrl+W`
+- `Geef het venster de kleur donkerblauw`, `Geef de tekst de kleur wit` (met controle of het goed leesbaar is)
+- `In de handleiding staat: ...` of `De handleiding staat in het bestand Handleiding.txt`
+
 **Blokken sluiten**: `Einde als`, `Einde herhaal`, `Einde van de knop`, `Einde van het stukje`, of alleen `Einde`.
 
 **Installatiebestand** (doet niets als het programma draait)
@@ -189,13 +197,14 @@ Uitvoeren (met Rust op de computer):
 cargo test --workspace
 ```
 
-Uitslag in deze sessie (Linux): 80 tests, allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
+Uitslag in deze sessie (Linux): 89 tests, allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
 
 **De opdrachtregel** (`jaaptaal.exe`, staat ook in de installatie):
 
 ```
 jaaptaal controleer programma.txt
 jaaptaal beschrijf programma.txt
+jaaptaal scherm programma.txt
 jaaptaal rust programma.txt
 jaaptaal bouw programma.txt Programma.exe
 jaaptaal proef programma.txt --typ "Naam=Jaap" --kies "Kleur=Rood" --vink "Geluid aan" --druk Welkom
@@ -223,9 +232,9 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); twee voorwaarden met "en" of "of"; Engelse opdrachten en vertalen naar het Engels; het onthouden van jouw eigen formuleringen (zelflerend).
 
-**Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), kleuren, zelf een lay-out kiezen, een lay-outvoorstel, vooraf vertellen wat er op het scherm staat, eigen sneltoetsen en tabvolgorde, aanpassen aan schermgrootte.
+**Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), zelf een plek en grootte kiezen (onderdelen staan nu altijd onder elkaar), een eigen Tab-volgorde, aanpassen aan schermgrootte, kleuren van knoppen en tekstvakken. (Wel gebouwd: kleuren van venster en tekst met contrastcontrole, sneltoetsen, en een beschrijving van het scherm met tips: Ctrl+F6.)
 
-**Geluid**: geluiden, mono/stereo/3D, opnemen, muziekspelers, audio-editor.
+**Geluid**: MP3 en andere soorten dan WAV, volume, mono/stereo/3D, opnemen, muziekspelers, audio-editor. (Wel gebouwd: piep en WAV afspelen.)
 
 **Beeld**: afbeeldingen met beschrijving, 3D, QR-codes en streepjescodes.
 

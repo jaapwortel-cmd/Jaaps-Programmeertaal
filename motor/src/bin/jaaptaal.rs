@@ -16,6 +16,7 @@ fn uitleg() -> ! {
     eprintln!("Gebruik:");
     eprintln!("  jaaptaal controleer <programma.txt>");
     eprintln!("  jaaptaal beschrijf <programma.txt>");
+    eprintln!("  jaaptaal scherm <programma.txt>");
     eprintln!("  jaaptaal rust <programma.txt>");
     eprintln!("  jaaptaal bouw <programma.txt> <uit.exe> [--snel]");
     eprintln!("  jaaptaal proef <programma.txt> [--druk Knopnaam]...");
@@ -71,6 +72,10 @@ fn main() {
             for m in &u.meldingen {
                 println!("{}", m);
             }
+        }
+        "scherm" => {
+            let u = motor::lees(&bron);
+            println!("{}", motor::scherm::beschrijf_scherm(&u.programma));
         }
         "rust" => {
             let code = code_of_stop(&bron);

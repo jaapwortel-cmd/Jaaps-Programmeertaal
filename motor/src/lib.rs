@@ -20,6 +20,7 @@ pub mod installatie;
 pub mod melding;
 mod ontleden;
 pub mod rustcode;
+pub mod scherm;
 pub mod taal;
 pub mod tekst;
 

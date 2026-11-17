@@ -67,13 +67,14 @@ const WOORDENLIJST: &[&str] = &[
     "versie", "maker", "voeg", "toe", "bestand", "licentie", "staat", "tekstvak", "label", "selectievakje", "keuzelijst",
     "uitklaplijst", "vink", "aan", "uit", "focus", "groot", "leeg", "aangevinkt", "keuze", "getal", "lijst", "stukje",
     "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
-    "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum",
+    "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum", "speel", "piep",
+    "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
     "tabel", "menu", "werkbalk",
-    "afbeelding", "plaatje", "foto", "geluid", "tekstverwerker", "qr-code", "streepjescode",
+    "afbeelding", "plaatje", "foto", "tekstverwerker", "qr-code", "streepjescode",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -267,6 +268,62 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
         return ib(Ingebouwd::Willekeurig, vec![operand(&s[v + 1..t], false)?, operand(&s[na..], false)?]);
     }
     Ok(None)
+}
+
+/// Leest een sneltoets, zoals "Ctrl+W", "Control Shift S", "Alt 1" of "F5".
+pub(crate) fn lees_toets(tekst: &str) -> Result<Toets, String> {
+    let mut t = Toets { code: 0, ctrl: false, alt: false, shift: false, naam: String::new() };
+    let mut sleutel = String::new();
+    for deel in tekst.split(['+', ' ', '-']).filter(|d| !d.is_empty()) {
+        let laag = deel.to_lowercase();
+        match laag.as_str() {
+            "ctrl" | "control" | "controle" | "besturing" => t.ctrl = true,
+            "alt" => t.alt = true,
+            "shift" | "hoofdletter" => t.shift = true,
+            "en" | "plus" => {}
+            _ => {
+                if !sleutel.is_empty() {
+                    return Err(format!("Een sneltoets heeft één gewone toets, maar ik lees er meer: {}.", tekst));
+                }
+                sleutel = laag;
+            }
+        }
+    }
+    let code = match sleutel.as_str() {
+        s if s.len() == 1 && s.chars().next().unwrap().is_ascii_alphanumeric() => s.to_ascii_uppercase().as_bytes()[0] as u16,
+        s if s.starts_with('f') && s[1..].parse::<u16>().map_or(false, |n| (2..=12).contains(&n)) => 0x6F + s[1..].parse::<u16>().unwrap(),
+        "f1" => return Err("F1 is altijd de handleiding. Kies een andere sneltoets.".into()),
+        "enter" => 0x0D,
+        "spatie" => 0x20,
+        "escape" | "esc" => return Err("Escape sluit altijd het venster. Kies een andere sneltoets.".into()),
+        "" => return Err(format!("Ik mis de gewone toets in de sneltoets {}. Schrijf bijvoorbeeld: Ctrl+W.", tekst)),
+        ander => return Err(format!("De toets \"{}\" ken ik niet. Gebruik een letter, een cijfer, F2 tot en met F12, Enter of Spatie.", ander)),
+    };
+    if !t.ctrl && !t.alt && code < 0x70 && code != 0x0D && code != 0x20 && !(0x70..=0x7B).contains(&code) {
+        return Err("Een letter of cijfer als sneltoets heeft Ctrl of Alt nodig, anders kun je niet meer typen. Schrijf bijvoorbeeld: Ctrl+W.".into());
+    }
+    if !t.ctrl && !t.alt && matches!(code, 0x0D | 0x20) {
+        return Err("Enter en Spatie zonder Ctrl of Alt drukken al op de knop waar je staat. Kies bijvoorbeeld Ctrl+Enter.".into());
+    }
+    t.code = code;
+    let mut naam = Vec::new();
+    if t.ctrl {
+        naam.push("Ctrl".to_string());
+    }
+    if t.alt {
+        naam.push("Alt".to_string());
+    }
+    if t.shift {
+        naam.push("Shift".to_string());
+    }
+    naam.push(match code {
+        0x0D => "Enter".into(),
+        0x20 => "Spatie".into(),
+        c if (0x70..=0x7B).contains(&c) => format!("F{}", c - 0x6F),
+        c => (c as u8 as char).to_string(),
+    });
+    t.naam = naam.join("+");
+    Ok(t)
 }
 
 /// "Verdubbel met 5", "Optellen met 3 en 4": de naam van een stukje en de invoer.
@@ -635,6 +692,19 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         return Ok(Vorm::Los(Soort::Opmerking(norm.trim_start_matches(['/', '#', ' ']).to_string())));
     }
 
+    if laag.starts_with("in de handleiding staat") {
+        let mut tekst = norm["in de handleiding staat".len()..].trim_start_matches([':', ' ']).trim().to_string();
+        if tekst.len() >= 2 && tekst.starts_with('"') && tekst.ends_with('"') {
+            tekst = tekst[1..tekst.len() - 1].to_string();
+        }
+        if tekst.is_empty() {
+            return Err(fout("Wat staat er in de handleiding? Schrijf bijvoorbeeld: In de handleiding staat: Druk op Welkom om gegroet te worden."));
+        }
+        if !tekst.ends_with(['.', '!', '?', ':']) {
+            tekst.push('.');
+        }
+        return Ok(Vorm::Los(Soort::Handleiding { regel: Some(tekst), bestand: None }));
+    }
     if laag.starts_with("in de licentie staat") {
         let mut tekst = norm["in de licentie staat".len()..].trim_start_matches([':', ' ']).trim().to_string();
         if tekst.len() >= 2 && tekst.starts_with('"') && tekst.ends_with('"') {
@@ -831,6 +901,15 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 Err(fout("Waar moet de snelkoppeling komen? Schrijf: Zet een snelkoppeling op het bureaublad, of: Zet een snelkoppeling in het startmenu."))
             }
         }
+        "de" if klein(&s, 1) == "handleiding" => {
+            let Some(p) = zoek(&s, &["bestand"], 2) else {
+                return Err(fout("Schrijf het zo: De handleiding staat in het bestand Handleiding.txt. Of: In de handleiding staat: (jouw tekst)."));
+            };
+            if p + 1 >= s.len() {
+                return Err(fout("Welk bestand? Schrijf bijvoorbeeld: De handleiding staat in het bestand Handleiding.txt."));
+            }
+            Ok(Vorm::Los(Soort::Handleiding { regel: None, bestand: Some(rest_tekst(&s[p + 1..])) }))
+        }
         "de" | "het" if matches!(klein(&s, 1).as_str(), "installatie" | "versie" | "maker" | "programma" | "licentie") => {
             installatie_zin(&s)
         }
@@ -908,6 +987,73 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 return Err(fout("Wat moet er in het bestand? Schrijf bijvoorbeeld: Schrijf \"Hallo\" in het bestand notities.txt."));
             }
             Ok(Vorm::Los(Soort::SchrijfBestand { waarde: u(&s[1..tot])?, pad: pad(&s[b + 1..]).map_err(fout)?, toevoegen: false }))
+        }
+        "piep" if s.len() == 1 => Ok(Vorm::Los(Soort::Piep {
+            hoogte: Uitdrukking::Vast(Waarde::Getal(880.0)),
+            duur: Uitdrukking::Vast(Waarde::Getal(200.0)),
+        })),
+        "speel" => {
+            if zoek(&s, &["piep"], 1).is_some() || zoek(&s, &["toon"], 1).is_some() {
+                // Speel een piep [van 440 hertz] [van 300 milliseconden]
+                let getal_voor = |eenheid: &[&str]| -> Result<Option<Uitdrukking>, RegelFout> {
+                    for e in eenheid {
+                        if let Some(p) = zoek(&s, &[e], 2) {
+                            if p >= 1 {
+                                return Ok(Some(operand(&s[p - 1..p], false).map_err(fout)?));
+                            }
+                        }
+                    }
+                    Ok(None)
+                };
+                let hoogte = getal_voor(&["hertz", "hz"])?.unwrap_or(Uitdrukking::Vast(Waarde::Getal(880.0)));
+                let duur = getal_voor(&["milliseconden", "ms"])?.unwrap_or(Uitdrukking::Vast(Waarde::Getal(200.0)));
+                return Ok(Vorm::Los(Soort::Piep { hoogte, duur }));
+            }
+            let Some(g) = zoek(&s, &["geluid"], 1) else {
+                return Err(fout("Schrijf het zo: Speel het geluid deurbel.wav. Of: Speel een piep."));
+            };
+            let mut eind = s.len();
+            let mut wachten = false;
+            if begint(&s[eind.saturating_sub(2)..], &["en", "wacht"]) {
+                wachten = true;
+                eind -= 2;
+            }
+            if klein(&s, eind - 1) == "af" {
+                eind -= 1;
+            }
+            if g + 1 >= eind {
+                return Err(fout("Welk geluid? Schrijf bijvoorbeeld: Speel het geluid deurbel.wav."));
+            }
+            Ok(Vorm::Los(Soort::SpeelGeluid { pad: pad(&s[g + 1..eind]).map_err(fout)?, wachten }))
+        }
+        "stop" if zoek(&s, &["geluid"], 1).is_some() => Ok(Vorm::Los(Soort::StopGeluid)),
+        "geef" if zoek(&s, &["sneltoets"], 2).is_some() => {
+            let k = zoek(&s, &["knop"], 1).ok_or_else(|| fout("Schrijf het zo: Geef de knop Welkom de sneltoets Ctrl+W."))?;
+            let t = zoek(&s, &["sneltoets"], k).unwrap();
+            let mut eind_naam = t;
+            if matches!(klein(&s, eind_naam - 1).as_str(), "de" | "als") {
+                eind_naam -= 1;
+            }
+            if eind_naam <= k + 1 || t + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Geef de knop Welkom de sneltoets Ctrl+W."));
+            }
+            let toets = lees_toets(&rest_tekst(&s[t + 1..])).map_err(fout)?;
+            Ok(Vorm::Los(Soort::Sneltoets { knop: rest_tekst(&s[k + 1..eind_naam]), toets }))
+        }
+        "geef" if zoek(&s, &["kleur"], 2).is_some() => {
+            let k = zoek(&s, &["kleur"], 2).unwrap();
+            let doel: Vec<String> = s[1..k].iter().filter_map(|x| x.klein()).filter(|w| !matches!(w.as_str(), "de" | "het")).collect();
+            let achtergrond = match doel.iter().map(|x| x.as_str()).collect::<Vec<_>>().as_slice() {
+                ["venster"] | ["achtergrond"] | ["scherm"] => true,
+                ["tekst"] | ["letters"] => false,
+                _ => return Err(fout("Schrijf het zo: Geef het venster de kleur donkerblauw. Of: Geef de tekst de kleur wit.")),
+            };
+            let naam = s[k + 1..].iter().filter_map(|x| x.klein()).collect::<Vec<_>>().join("");
+            let Some((kleur, rgb)) = KLEUREN.iter().find(|(n, _)| *n == naam) else {
+                let lijst: Vec<&str> = KLEUREN.iter().map(|k| k.0).collect();
+                return Err(fout(format!("De kleur \"{}\" ken ik niet. Deze kleuren ken ik: {}.", naam, lijst.join(", "))));
+            };
+            Ok(Vorm::Los(Soort::Kleur { achtergrond, kleur: kleur.to_string(), rgb: *rgb }))
         }
         "doe" => {
             if s.len() < 2 {

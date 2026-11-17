@@ -24,6 +24,7 @@ const ID_CONTROLEER: u16 = 201;
 const ID_UITVOEREN: u16 = 202;
 const ID_BESCHRIJF: u16 = 203;
 const ID_RUSTCODE: u16 = 204;
+const ID_SCHERM: u16 = 208;
 const ID_PROBEER: u16 = 205;
 const ID_BOUW_EXE: u16 = 206;
 const ID_INSTALLATIE: u16 = 207;
@@ -650,6 +651,10 @@ fn opdracht(id: u16) {
             }
             tekstvenster("Wat ik van je zinnen maak", &tekst, false);
         }
+        ID_SCHERM => {
+            let u = motor::lees(&editor_tekst());
+            tekstvenster("Wat er op het scherm komt", &motor::scherm::beschrijf_scherm(&u.programma), false);
+        }
         ID_RUSTCODE => match motor::rust_code(&editor_tekst()) {
             Ok(code) => tekstvenster("De Rust-code van je programma", motor::rustcode::alleen_programma(&code), true),
             Err(_) => {
@@ -770,6 +775,7 @@ fn maak_menu() -> HANDLE {
         voeg(prog, ID_PROBEER, "&Probeer alleen deze regel\tF9");
         streep(prog);
         voeg(prog, ID_BESCHRIJF, "&Laat zien wat ik van je zinnen maak\tF6");
+        voeg(prog, ID_SCHERM, "Vertel wat er op het &scherm komt\tCtrl+F6");
         voeg(prog, ID_RUSTCODE, "Laat de &Rust-code zien\tShift+F6");
         streep(prog);
         voeg(prog, ID_BOUW_EXE, "Bouw een .&exe-bestand...\tF8");
@@ -802,6 +808,7 @@ fn maak_sneltoetsen() -> HANDLE {
         toets(0, VK_F1 + 4, ID_UITVOEREN),
         toets(0, VK_F1 + 5, ID_BESCHRIJF),
         toets(FSHIFT, VK_F1 + 5, ID_RUSTCODE),
+        toets(FCONTROL, VK_F1 + 5, ID_SCHERM),
         toets(0, VK_F1 + 6, ID_CONTROLEER),
         toets(0, VK_F1 + 7, ID_BOUW_EXE),
         toets(FCONTROL, VK_F1 + 7, ID_INSTALLATIE),
