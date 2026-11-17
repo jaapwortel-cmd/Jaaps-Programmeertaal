@@ -629,7 +629,7 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();
     m.uit.push_str(&format!("const NAMEN: &[&str] = &[{}];\n", namen.join(", ")));
     m.uit.push_str(&format!("const ACTIES: &[&str] = &[{}];\n\n", acties.join(", ")));
-    m.uit.push_str("fn main() {\n    // Je zinnen blijven zo in het programma staan (anders haalt de linker ze weg).\n    std::hint::black_box(JOUW_ZINNEN.len());\n    start(NAMEN, ACTIES, hoofd, bij_knop);\n}\n");
+    m.uit.push_str("fn main() {\n    // Je zinnen blijven zo in het programma staan (anders haalt de linker ze weg).\n    std::hint::black_box(JOUW_ZINNEN);\n    start(NAMEN, ACTIES, hoofd, bij_knop);\n}\n");
     // Je eigen zinnen gaan mee in het programma, zodat je ze later weer kunt openen.
     let zinnen = format!("{}{}{}", crate::zinnen_begin(), regels.join("\n"), crate::zinnen_einde());
     m.uit.push_str(&format!(
