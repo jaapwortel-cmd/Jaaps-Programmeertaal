@@ -342,6 +342,105 @@ fn ingebouwd(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
     }
 }
 
+/// Tekst lezen als getal: 12, 3,5, 1.000 of -2.
+fn tekst_als_getal(t: &str) -> Option<f64> {
+    let t = t.trim().replace(' ', "");
+    let schoon = if t.contains(',') {
+        t.replace('.', "").replace(',', ".")
+    } else if t.matches('.').count() == 1 && t.split('.').nth(1).map_or(0, |d| d.len()) != 3 {
+        t.clone()
+    } else {
+        t.replace('.', "")
+    };
+    schoon.parse::<f64>().ok().filter(|g| g.is_finite() && !t.is_empty())
+}
+
+/// Rekenen en tekst: wortel, macht, afronden, lengte, hoofdletters, ...
+fn functie(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
+    let getal = |i: usize| -> R<f64> {
+        match &invoer[i] {
+            W::G(g) => Ok(*g),
+            ander => fout(r, format!("Hier moet een getal staan, maar het is {}: {}", ander.soort(), ander.tekst())),
+        }
+    };
+    let heel = |i: usize, wat: &str| -> R<usize> {
+        let g = getal(i)?;
+        if g < 0.0 || g.fract() != 0.0 || g > 1_000_000.0 {
+            return fout(r, format!("{} moet een heel getal zijn van 0 of meer, en niet {}.", wat, schrijf_getal(g)));
+        }
+        Ok(g as usize)
+    };
+    let tekst = |i: usize| invoer[i].tekst();
+    let klaar = |g: f64| -> R<W> {
+        if g.is_finite() {
+            Ok(W::G(g))
+        } else {
+            fout(r, "Het getal wordt te groot om mee te rekenen.".to_string())
+        }
+    };
+    match wat {
+        12 => {
+            let g = getal(0)?;
+            if g < 0.0 {
+                return fout(r, format!("De wortel van een getal onder nul ({}) kan niet.", schrijf_getal(g)));
+            }
+            klaar(g.sqrt())
+        }
+        13 => klaar(getal(0)?.powf(getal(1)?)),
+        14 => {
+            let n = heel(1, "Het aantal cijfers achter de komma")?.min(10) as i32;
+            let f = 10f64.powi(n);
+            klaar((getal(0)? * f).round() / f)
+        }
+        15 => {
+            let d = getal(1)?;
+            if d == 0.0 {
+                return fout(r, "Delen door nul kan niet.".to_string());
+            }
+            klaar(getal(0)? % d)
+        }
+        16 => klaar(getal(0)?.abs()),
+        17 => match &invoer[0] {
+            W::G(g) => Ok(W::G(*g)),
+            w => match tekst_als_getal(&w.tekst()) {
+                Some(g) => Ok(W::G(g)),
+                None if w.tekst().trim().is_empty() => fout(r, "Er staat nog niets, dus ik kan er geen getal van maken.".to_string()),
+                None => fout(r, format!("Hier staat geen getal, maar: {}", w.tekst().trim())),
+            },
+        },
+        18 => Ok(W::T(tekst(0))),
+        19 => Ok(W::G(tekst(0).chars().count() as f64)),
+        20 => Ok(W::T(tekst(0).to_uppercase())),
+        21 => Ok(W::T(tekst(0).to_lowercase())),
+        22 | 23 => {
+            let t: Vec<char> = tekst(0).chars().collect();
+            let n = heel(1, "Het aantal tekens")?.min(t.len());
+            let deel: String = if wat == 22 { t[..n].iter().collect() } else { t[t.len() - n..].iter().collect() };
+            Ok(W::T(deel))
+        }
+        24 => Ok(W::L(tekst(0).split_whitespace().map(|w| W::T(w.trim_matches(|c: char| c.is_ascii_punctuation()).to_string())).filter(|w| !w.tekst().is_empty()).collect())),
+        25 => {
+            let bij = tekst(1);
+            if bij.is_empty() {
+                return fout(r, "Waarbij moet ik de tekst in stukken hakken? Dat teken is leeg.".to_string());
+            }
+            Ok(W::L(tekst(0).split(bij.as_str()).map(|d| W::T(d.trim().to_string())).collect()))
+        }
+        26 => match &invoer[0] {
+            W::L(l) => Ok(W::T(l.iter().map(|w| w.tekst()).collect::<Vec<_>>().join(&tekst(1)))),
+            ander => fout(r, format!("Samenvoegen kan alleen met een lijst, maar dit is {}.", ander.soort())),
+        },
+        27 => {
+            let zoek = tekst(1);
+            if zoek.is_empty() {
+                return fout(r, "Wat moet ik vervangen? Die tekst is leeg.".to_string());
+            }
+            Ok(W::T(tekst(0).replace(zoek.as_str(), &tekst(2))))
+        }
+        _ => Ok(W::T(tekst(0).trim().to_string())),
+    }
+}
+
 /// HTML zonder opmaak: alleen de leesbare tekst, met een nieuwe regel na kopjes en alinea's.
 fn leesbare_tekst(html: &str) -> String {
     let mut uit = String::new();
@@ -956,6 +1055,40 @@ impl Staat {
             let gelukt = if laag.ends_with(".wav") { win::speel(&pad, wachten) } else { win::speel_mci(&pad, wachten) };
             if !gelukt {
                 return fout(r, format!("Het geluid {} kan ik niet afspelen. Is het een gewoon WAV- of MP3-bestand?", p.tekst()));
+            }
+        }
+        Ok(())
+    }
+    fn wacht(&mut self, w: W, r: usize) -> R<()> {
+        let sec = match w {
+            W::G(g) if (0.0..=3600.0).contains(&g) => g,
+            ander => return fout(r, format!("Wachten kan van 0 tot 3600 seconden, en niet {}.", ander.tekst())),
+        };
+        if self.scherm.tekststand {
+            println!("[wacht] {} {}", schrijf_getal(sec), if sec == 1.0 { "seconde" } else { "seconden" });
+            if std::env::var("JAAPTAAL_NIET_WACHTEN").is_ok() {
+                return Ok(());
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis((sec * 1000.0) as u64));
+        Ok(())
+    }
+    fn open(&mut self, w: W, programma: bool, r: usize) -> R<()> {
+        let naam = w.tekst();
+        let laag = naam.to_lowercase();
+        let internet = laag.starts_with("http://") || laag.starts_with("https://");
+        let pad = if internet || programma && !naam.contains(['\\', '/']) { std::path::PathBuf::from(&naam) } else { volledig_pad(&w) };
+        if !internet && !programma && !pad.exists() {
+            return fout(r, format!("Ik kan {} niet vinden.", pad.display()));
+        }
+        if self.scherm.tekststand {
+            println!("[{}] {}", if programma { "start" } else { "open" }, naam);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        {
+            if !win::open(&pad.to_string_lossy()) {
+                return fout(r, format!("Ik kan {} niet {}.", naam, if programma { "starten" } else { "openen" }));
             }
         }
         Ok(())
@@ -1952,6 +2085,18 @@ mod win {
     #[link(name = "shell32")]
     extern "system" {
         fn SHFileOperationW(op: *mut SHFILEOPSTRUCTW) -> i32;
+    }
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn ShellExecuteW(h: HWND, wat: *const u16, bestand: *const u16, opties: *const u16, map: *const u16, toon: i32) -> isize;
+    }
+
+    /// Een programma, bestand, map of webpagina openen zoals Windows dat zelf doet.
+    pub(super) fn open(naam: &str) -> bool {
+        let wat = w("open");
+        let b = w(naam);
+        unsafe { ShellExecuteW(std::ptr::null_mut(), wat.as_ptr(), b.as_ptr(), std::ptr::null(), std::ptr::null(), 1) > 32 }
     }
 
     #[repr(C)]

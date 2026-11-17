@@ -31,6 +31,9 @@ const ID_INSTALLATIE: u16 = 207;
 const ID_VERTROUW: u16 = 209;
 const ID_ENGELS: u16 = 210;
 const ID_EIGEN_WOORDEN: u16 = 211;
+const ID_EIGEN_ZINNEN: u16 = 212;
+/// Onlangs geopend: 121 tot en met 129.
+const ID_ONLANGS: u16 = 121;
 const ID_WELKE_REGEL: u16 = 301;
 const ID_NAAR_MELDINGEN: u16 = 302;
 const ID_HANDLEIDING: u16 = 401;
@@ -56,6 +59,7 @@ thread_local! {
     static BEZIG: Cell<bool> = const { Cell::new(false) };
     static LAATSTE_FOCUS: Cell<HWND> = const { Cell::new(null_mut()) };
     static TEKSTVENSTERS: RefCell<Vec<HWND>> = const { RefCell::new(Vec::new()) };
+    static ONLANGS_MENU: Cell<HANDLE> = const { Cell::new(null_mut()) };
 }
 
 /// Wat een achtergrondklus (bouwen) teruggeeft.
@@ -76,16 +80,115 @@ fn eigen_woorden_pad() -> PathBuf {
     map.join("Mijn eigen woorden.txt")
 }
 
+/// Waar jouw eigen zinnen staan die in al je programma's werken (Nieuwe zin: ...).
+fn eigen_zinnen_pad() -> PathBuf {
+    eigen_woorden_pad().with_file_name("Mijn eigen zinnen.txt")
+}
+
+fn eigen_zinnen() -> String {
+    motor::bestand::lees_txt(&eigen_zinnen_pad()).unwrap_or_default()
+}
+
+/// De lijst met programma's die je onlangs hebt geopend of opgeslagen (hooguit 9).
+fn onlangs_pad() -> PathBuf {
+    eigen_woorden_pad().with_file_name("Onlangs geopend.txt")
+}
+
+fn onlangs() -> Vec<PathBuf> {
+    motor::bestand::lees_txt(&onlangs_pad())
+        .map(|t| t.lines().filter(|l| !l.trim().is_empty()).map(PathBuf::from).take(9).collect())
+        .unwrap_or_default()
+}
+
+fn onthoud_onlangs(pad: &Path) {
+    let mut lijst = onlangs();
+    lijst.retain(|p| p.to_string_lossy().to_lowercase() != pad.to_string_lossy().to_lowercase());
+    lijst.insert(0, pad.to_path_buf());
+    lijst.truncate(9);
+    let tekst: Vec<String> = lijst.iter().map(|p| p.display().to_string()).collect();
+    let _ = motor::bestand::schrijf_txt(&onlangs_pad(), &tekst.join("\n"));
+    vul_onlangs_menu();
+}
+
+fn vul_onlangs_menu() {
+    let menu = ONLANGS_MENU.with(|m| m.get());
+    if menu.is_null() {
+        return;
+    }
+    unsafe {
+        while GetMenuItemCount(menu) > 0 {
+            DeleteMenu(menu, 0, MF_BYPOSITION);
+        }
+        let lijst = onlangs();
+        if lijst.is_empty() {
+            AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, w("(nog niets geopend)").as_ptr());
+        }
+        for (i, p) in lijst.iter().enumerate() {
+            let naam = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let map = p.parent().map(|m| m.display().to_string()).unwrap_or_default();
+            let tekst = format!("&{} {} (in {})", i + 1, naam.replace('&', "&&"), map.replace('&', "&&"));
+            AppendMenuW(menu, MF_STRING, (ID_ONLANGS + i as u16) as usize, w(&tekst).as_ptr());
+        }
+    }
+}
+
+/// Je zinnen uit een gebouwd programma (.exe) halen en in het vak Opdrachten zetten.
+fn open_programma_exe(pad: &Path) {
+    let inhoud = match std::fs::read(pad) {
+        Ok(i) => i,
+        Err(e) => {
+            melding(&format!("Ik kan {} niet lezen. Reden: {}", pad.display(), e), MB_ICONERROR);
+            return;
+        }
+    };
+    let Some(zinnen) = motor::zinnen_uit_programma(&inhoud) else {
+        melding(
+            &format!(
+                "In {} staan geen zinnen die ik kan openen. Misschien is het niet met Jaap's Programmeertaal gebouwd, of met een oudere versie (van voor 17 november 2026). Zoek dan het .txt-bestand met je zinnen.",
+                pad.display()
+            ),
+            MB_ICONINFORMATION,
+        );
+        return;
+    };
+    // Staat het .txt-bestand er nog naast? Dan dat voorstellen.
+    let txt = pad.with_extension("txt");
+    if txt.is_file() {
+        let vraag = format!(
+            "Naast dit programma staat ook het bestand {}. Wil je dat openen?\n\nJa: dat bestand openen.\nNee: de zinnen uit het programma zelf halen.",
+            txt.display()
+        );
+        match melding(&vraag, MB_YESNOCANCEL | MB_ICONQUESTION) {
+            IDYES => return open_gewoon(&txt),
+            IDNO => {}
+            _ => return,
+        }
+    }
+    zet_tekst(v().editor, &zinnen);
+    unsafe {
+        SendMessageW(v().editor, EM_SETMODIFY, 1, 0);
+        SendMessageW(v().editor, EM_EMPTYUNDOBUFFER, 0, 0);
+    }
+    PAD.with(|p| *p.borrow_mut() = Some(mijn_programmas().join(format!("{}.txt", pad.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()))));
+    zet_titel();
+    zet_meldingen(&format!(
+        "Dit zijn de zinnen uit het programma {}. Er staan {} regels in. Ze zijn nog niet opgeslagen: druk Control S om ze te bewaren in Documenten, Jaaps Programmeertaal.",
+        pad.display(),
+        zinnen.lines().count()
+    ));
+    ga_naar_regel(1);
+}
+
 fn eigen_woorden() -> Vec<(String, String)> {
     motor::bestand::lees_txt(&eigen_woorden_pad()).map(|t| motor::bestand::eigen_woorden(&t)).unwrap_or_default()
 }
 
 fn lees(bron: &str) -> motor::Uitslag {
-    motor::lees_met(bron, &eigen_woorden())
+    motor::lees_eigen(bron, &eigen_woorden(), &eigen_zinnen())
 }
 
 fn rust_code(bron: &str) -> Result<String, Vec<Melding>> {
-    motor::rust_code_met(bron, &eigen_woorden())
+    motor::rust_code_eigen(bron, &eigen_woorden(), &eigen_zinnen())
 }
 
 fn v() -> Vensters {
@@ -247,6 +350,7 @@ fn bestandskeuze(opslaan: bool, standaardnaam: &str, filter: &str, extensie: &st
 }
 
 const TXT_FILTER: &str = "Tekstbestanden (*.txt)|*.txt|Alle bestanden (*.*)|*.*";
+const OPEN_FILTER: &str = "Mijn programma's (*.txt en *.exe)|*.txt;*.exe|Tekstbestanden (*.txt)|*.txt|Gebouwde programma's (*.exe)|*.exe|Alle bestanden (*.*)|*.*";
 
 fn opslaan_als() -> bool {
     let standaard = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()));
@@ -268,6 +372,7 @@ fn opslaan() -> bool {
                 SendMessageW(v().editor, EM_SETMODIFY, 0, 0);
             }
             zet_titel();
+            onthoud_onlangs(&pad);
             zet_meldingen(&format!("Opgeslagen in {}.", pad.display()));
             true
         }
@@ -380,6 +485,9 @@ fn behandel_van_elders(pad: &Path, tekst: &str) -> bool {
 }
 
 fn open_bestand(pad: &Path) {
+    if pad.extension().map_or(false, |e| e.eq_ignore_ascii_case("exe")) {
+        return open_programma_exe(pad);
+    }
     if let Ok(tekst) = motor::bestand::lees_txt(pad) {
         if behandel_van_elders(pad, &tekst) {
             return;
@@ -398,6 +506,7 @@ fn open_gewoon(pad: &Path) {
             }
             PAD.with(|p| *p.borrow_mut() = Some(pad.to_path_buf()));
             zet_titel();
+            onthoud_onlangs(pad);
             let regels = tekst.lines().count();
             zet_meldingen(&format!("Geopend: {}. Er staan {} regels in.", pad.display(), regels));
             ga_naar_regel(1);
@@ -838,7 +947,7 @@ fn opdracht(id: u16) {
         }
         ID_OPENEN => {
             if mag_doorgaan() {
-                if let Some(pad) = bestandskeuze(false, "", TXT_FILTER, "txt", "Programma openen") {
+                if let Some(pad) = bestandskeuze(false, "", OPEN_FILTER, "txt", "Programma openen") {
                     open_bestand(&pad);
                 }
             }
@@ -880,6 +989,28 @@ fn opdracht(id: u16) {
                 ));
             }
             tekstvenster("Je programma in het Engels", &tekst, false);
+        }
+        ID_ONLANGS..=129 => {
+            let lijst = onlangs();
+            if let Some(pad) = lijst.get((id - ID_ONLANGS) as usize).cloned() {
+                if !pad.exists() {
+                    melding(&format!("Het bestand {} is er niet meer. Is het verplaatst of weggegooid?", pad.display()), MB_ICONERROR);
+                } else if mag_doorgaan() {
+                    open_bestand(&pad);
+                }
+            }
+        }
+        ID_EIGEN_ZINNEN => {
+            let pad = eigen_zinnen_pad();
+            if !pad.exists() {
+                let _ = motor::bestand::schrijf_txt(
+                    &pad,
+                    "Opmerking: Mijn eigen zinnen. Deze zinnen werken in al mijn programma's.\nOpmerking: Wat tussen [haken] staat, vul je in als je de zin gebruikt.\nNieuwe zin: Begroet [wie]\nToon \"Hallo\" en dan [wie]\nEinde van de zin\n",
+                );
+            }
+            if Command::new("notepad.exe").arg(&pad).spawn().is_err() {
+                melding(&format!("Ik kan Kladblok niet openen. Het bestand staat in {}.", pad.display()), MB_ICONERROR);
+            }
         }
         ID_EIGEN_WOORDEN => {
             let pad = eigen_woorden_pad();
@@ -1041,6 +1172,9 @@ fn maak_menu() -> HANDLE {
         let bestand = CreatePopupMenu();
         voeg(bestand, ID_NIEUW, "&Nieuw\tCtrl+N");
         voeg(bestand, ID_OPENEN, "&Openen...\tCtrl+O");
+        let onlangs = CreatePopupMenu();
+        ONLANGS_MENU.with(|m| m.set(onlangs));
+        AppendMenuW(bestand, MF_POPUP, onlangs as usize, w("Onlangs &geopend").as_ptr());
         voeg(bestand, ID_OPSLAAN, "Op&slaan\tCtrl+S");
         voeg(bestand, ID_OPSLAAN_ALS, "Opslaan &als...\tCtrl+Shift+S");
         streep(bestand);
@@ -1070,6 +1204,7 @@ fn maak_menu() -> HANDLE {
         let help = CreatePopupMenu();
         voeg(help, ID_HANDLEIDING, "&Handleiding\tF1");
         voeg(help, ID_EIGEN_WOORDEN, "Mijn &eigen woorden (openen in Kladblok)");
+        voeg(help, ID_EIGEN_ZINNEN, "Mijn eigen &zinnen (openen in Kladblok)");
         voeg(help, ID_OVER, "&Over Jaap's Programmeertaal");
         AppendMenuW(balk, MF_POPUP, help as usize, w("&Help").as_ptr());
         balk
@@ -1170,6 +1305,7 @@ pub fn start() {
             v.set(Some(Vensters { hoofd, label1, editor, label2, meldingen, accel: maak_sneltoetsen(), letter, vaste_letter }))
         });
         indeling(hoofd);
+        vul_onlangs_menu();
         zet_titel();
         zet_meldingen("Welkom bij Jaap's Programmeertaal. Schrijf of dicteer je zinnen in het vak Opdrachten. F1 opent de handleiding.");
         ShowWindow(hoofd, SW_SHOWMAXIMIZED);

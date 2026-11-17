@@ -92,6 +92,12 @@ pub fn bouw(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path) 
     let uitkomst = cmd.output().map_err(|e| format!("Ik kan de Rust-compiler niet starten ({}): {}", rustc.display(), e))?;
     if !uitkomst.status.success() {
         let fouten = String::from_utf8_lossy(&uitkomst.stderr);
+        if code.contains("// Rust-stukje: begin van de eigen Rust-code") {
+            return Err(format!(
+                "Het bouwen is mislukt. Je programma heeft een Rust-stukje: kijk eerst daar, want de fout zit waarschijnlijk in die eigen Rust-code. Wat de Rust-compiler zei:\n{}",
+                fouten
+            ));
+        }
         return Err(format!(
             "Het bouwen is mislukt. Dit is een fout in Jaap's Programmeertaal zelf, niet in jouw zinnen. Wat de Rust-compiler zei:\n{}",
             fouten

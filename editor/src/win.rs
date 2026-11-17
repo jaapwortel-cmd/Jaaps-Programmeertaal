@@ -109,6 +109,8 @@ extern "system" {
     pub fn CreateMenu() -> HANDLE;
     pub fn CreatePopupMenu() -> HANDLE;
     pub fn AppendMenuW(menu: HANDLE, flags: u32, id: usize, text: *const u16) -> i32;
+    pub fn DeleteMenu(menu: HANDLE, positie: u32, flags: u32) -> i32;
+    pub fn GetMenuItemCount(menu: HANDLE) -> i32;
     pub fn SetMenu(h: HWND, menu: HANDLE) -> i32;
     pub fn CreateAcceleratorTableW(accel: *const ACCEL, count: i32) -> HANDLE;
     pub fn TranslateAcceleratorW(h: HWND, accel: HANDLE, m: *const MSG) -> i32;
@@ -196,6 +198,8 @@ pub const IDNO: i32 = 7;
 pub const MF_STRING: u32 = 0x0;
 pub const MF_POPUP: u32 = 0x10;
 pub const MF_SEPARATOR: u32 = 0x800;
+pub const MF_BYPOSITION: u32 = 0x400;
+pub const MF_GRAYED: u32 = 0x1;
 pub const FVIRTKEY: u8 = 1;
 pub const FSHIFT: u8 = 4;
 pub const FCONTROL: u8 = 8;

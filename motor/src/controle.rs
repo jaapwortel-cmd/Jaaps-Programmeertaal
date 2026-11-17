@@ -123,6 +123,18 @@ impl<'a> Controle<'a> {
                     Ingebouwd::Regels | Ingebouwd::GekozenRij | Ingebouwd::RijNummer => Type::Lijst,
                     Ingebouwd::AantalRijen => Type::Getal,
                     Ingebouwd::Bestaat => Type::Waarheid,
+                    Ingebouwd::Wortel | Ingebouwd::Macht | Ingebouwd::Afgerond | Ingebouwd::Rest | Ingebouwd::Absoluut => {
+                        for i in invoer {
+                            if matches!(self.type_van(i)?, Type::Tekst | Type::Waarheid | Type::Lijst) {
+                                return Err(format!("Rekenen kan alleen met getallen, maar {} is geen getal. Gebruik eerst: als getal.", kort(i)));
+                            }
+                        }
+                        Type::Getal
+                    }
+                    Ingebouwd::AlsGetal | Ingebouwd::Lengte => Type::Getal,
+                    Ingebouwd::AlsTekst | Ingebouwd::Hoofdletters | Ingebouwd::KleineLetters | Ingebouwd::EersteTekens | Ingebouwd::LaatsteTekens
+                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties => Type::Tekst,
+                    Ingebouwd::Woorden | Ingebouwd::Gesplitst => Type::Lijst,
                     Ingebouwd::Willekeurig => {
                         for i in invoer {
                             if matches!(self.type_van(i)?, Type::Tekst | Type::Waarheid | Type::Lijst) {
@@ -478,6 +490,23 @@ impl<'a> Controle<'a> {
                     }
                 }
                 Soort::BeginOpname => {}
+                Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => {
+                    let mut namen = Vec::new();
+                    u.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    match self.type_van(u) {
+                        Err(t) => self.meld(Melding::fout(r, t)),
+                        Ok(Type::Tekst | Type::Waarheid | Type::Lijst) if matches!(o.soort, Soort::Wacht(_)) => {
+                            self.meld(Melding::fout(r, "Hoe lang wachten moet een getal zijn, bijvoorbeeld: Wacht 3 seconden."))
+                        }
+                        _ => {}
+                    }
+                    if let (Soort::Wacht(_), Some(g)) = (&o.soort, vast_getal(u)) {
+                        if !(0.0..=3600.0).contains(&g) {
+                            self.meld(Melding::fout(r, "Wachten kan van 0 tot 3600 seconden (een uur)."));
+                        }
+                    }
+                }
                 Soort::StopOpname(p) => {
                     let mut namen = Vec::new();
                     p.namen(&mut namen);
@@ -884,7 +913,7 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
         })
         .collect();
 
-    if let Some((naam, regel)) = op_scherm.iter().find(|(_, r)| !vensters.iter().any(|v| v < r)) {
+    if let Some((naam, regel)) = op_scherm.iter().find(|(_, r)| !vensters.iter().any(|v| v <= r)) {
         let nieuw = "Maak een venster met als titel Mijn programma".to_string();
         c.meld(
             Melding::vraag(*regel, format!("Je maakt {}, maar er is nog geen venster om het in te zetten.", naam))

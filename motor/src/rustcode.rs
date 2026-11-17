@@ -82,7 +82,9 @@ impl<'a> Maker<'a> {
             Uitdrukking::LegeLijst => "W::L(Vec::new())".into(),
             Uitdrukking::Ingebouwd { wat, invoer } => {
                 let args: Vec<String> = invoer.iter().map(|i| self.uitdrukking(i, r)).collect();
-                if wat.nummer() >= 9 {
+                if wat.nummer() >= 12 {
+                    format!("functie({}, vec![{}], {})?", wat.nummer(), args.join(", "), r)
+                } else if wat.nummer() >= 9 {
                     format!("{{ let invoer = vec![{}]; s.tabel_waarde({}, invoer, {})? }}", args.join(", "), wat.nummer(), r)
                 } else {
                     format!("ingebouwd({}, vec![{}], {})?", wat.nummer(), args.join(", "), r)
@@ -360,6 +362,17 @@ impl<'a> Maker<'a> {
                     };
                     self.regel(diepte, &regel);
                 }
+                Soort::Wacht(u) => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.wacht(w, {})?; }}", w, r));
+                }
+                Soort::StartProgramma(u) | Soort::OpenBestand(u) => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(u, r);
+                    let programma = matches!(o.soort, Soort::StartProgramma(_));
+                    self.regel(diepte, &format!("{{ let w = {}; s.open(w, {}, {})?; }}", w, programma, r));
+                }
                 Soort::BeginOpname => {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.begin_opname({})?;", r));
@@ -484,7 +497,7 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
         .opdrachten
         .iter()
         .filter_map(|o| match &o.soort {
-            Soort::Stukje { naam, invoer, blok, einde } => Some((naam, invoer, blok, o.regel, *einde)),
+            Soort::Stukje { naam, invoer, blok, einde, .. } => Some((naam, invoer, blok, o.regel, *einde)),
             _ => None,
         })
         .collect();
@@ -525,7 +538,31 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
     m.uit.push_str("        _ => {}\n    }\n    Ok(())\n}\n\n");
 
     // De eigen stukjes.
+    let rustcode: Vec<Option<String>> = p
+        .opdrachten
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::Stukje { rust, .. } => Some(rust.clone()),
+            _ => None,
+        })
+        .collect();
     for (k, (naam, invoer, blok, regel, einde)) in stukjes.iter().enumerate() {
+        if let Some(Some(code)) = rustcode.get(k) {
+            m.uit.push_str(&format!("/// Het Rust-stukje {} (eigen Rust-code, regel {} tot {}).\n", naam, regel, einde));
+            m.uit.push_str(&format!("#[allow(unused_mut, unused_variables)]\nfn stukje_{}(s: &mut Staat, invoer: Vec<W>, r: usize) -> R<Option<W>> {{\n", k));
+            m.uit.push_str("    let mut invoer = invoer.into_iter();\n");
+            for i in invoer.iter() {
+                let id: String = i.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+                m.uit.push_str(&format!("    let mut {}: W = invoer.next().unwrap_or(W::T(String::new()));\n", id));
+            }
+            m.uit.push_str("    // Rust-stukje: begin van de eigen Rust-code\n");
+            m.uit.push_str("    let uit: W = {\n");
+            for l in code.lines() {
+                m.uit.push_str(&format!("        {}\n", l));
+            }
+            m.uit.push_str("    };\n    // Rust-stukje: einde van de eigen Rust-code\n    Ok(Some(uit))\n}\n\n");
+            continue;
+        }
         let mut lokale: Vec<String> = invoer.to_vec();
         onthouden_in(blok, &mut lokale);
         m.lokaal = Some(lokale.iter().enumerate().map(|(i, n)| (n.clone(), i)).collect());
@@ -589,6 +626,12 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
     m.uit.push_str(&format!("const NAMEN: &[&str] = &[{}];\n", namen.join(", ")));
     m.uit.push_str(&format!("const ACTIES: &[&str] = &[{}];\n\n", acties.join(", ")));
     m.uit.push_str("fn main() {\n    start(NAMEN, ACTIES, hoofd, bij_knop);\n}\n");
+    // Je eigen zinnen gaan mee in het programma, zodat je ze later weer kunt openen.
+    let zinnen = format!("{}{}{}", crate::zinnen_begin(), regels.join("\n"), crate::zinnen_einde());
+    m.uit.push_str(&format!(
+        "\n/// Je eigen zinnen, zodat Jaap's Programmeertaal ze later weer uit dit programma kan halen.\n#[used]\nstatic JOUW_ZINNEN: &str = {};\n",
+        rust_tekst(&zinnen)
+    ));
 
     format!("{}{}", LOOPTIJD, m.uit)
 }

@@ -29,6 +29,26 @@ fn uitdrukking(u: &Uitdrukking) -> String {
                 Ingebouwd::GekozenRij => format!("de gekozen rij van de tabel {} (als lijst)", a(0)),
                 Ingebouwd::AantalRijen => format!("het aantal rijen in de tabel {}", a(0)),
                 Ingebouwd::RijNummer => format!("rij nummer {} van de tabel {} (als lijst)", a(1), a(0)),
+                Ingebouwd::Wortel => format!("de wortel van {}", a(0)),
+                Ingebouwd::Macht => format!("{} tot de macht {}", a(0), a(1)),
+                Ingebouwd::Afgerond if matches!(invoer.get(1), Some(Uitdrukking::Vast(Waarde::Getal(g))) if *g == 0.0) => {
+                    format!("{} afgerond op een heel getal", a(0))
+                }
+                Ingebouwd::Afgerond => format!("{} afgerond op {} cijfers achter de komma", a(0), a(1)),
+                Ingebouwd::Rest => format!("de rest bij het delen van {} door {}", a(0), a(1)),
+                Ingebouwd::Absoluut => format!("{} zonder min ervoor", a(0)),
+                Ingebouwd::AlsGetal => format!("{} als getal", a(0)),
+                Ingebouwd::AlsTekst => format!("{} als tekst", a(0)),
+                Ingebouwd::Lengte => format!("het aantal tekens van {}", a(0)),
+                Ingebouwd::Hoofdletters => format!("{} in hoofdletters", a(0)),
+                Ingebouwd::KleineLetters => format!("{} in kleine letters", a(0)),
+                Ingebouwd::EersteTekens => format!("de eerste {} tekens van {}", a(1), a(0)),
+                Ingebouwd::LaatsteTekens => format!("de laatste {} tekens van {}", a(1), a(0)),
+                Ingebouwd::Woorden => format!("de woorden van {} (als lijst)", a(0)),
+                Ingebouwd::Gesplitst => format!("{} in stukken gehakt bij {} (als lijst)", a(0), a(1)),
+                Ingebouwd::Samengevoegd => format!("de lijst {} aan elkaar geplakt met {} ertussen", a(0), a(1)),
+                Ingebouwd::Vervangen => format!("{} waarin {} vervangen is door {}", a(0), a(1), a(2)),
+                Ingebouwd::ZonderSpaties => format!("{} zonder spaties aan het begin en eind", a(0)),
             }
         }
         Uitdrukking::Aantal(a) => format!("het aantal dingen in {}", uitdrukking(a)),
@@ -94,6 +114,9 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 TabelActie::Inlezen(p) => format!("lees de tabel {} in uit het CSV-bestand {}.", tabel, uitdrukking(p)),
             },
             Soort::BeginOpname => "begin met opnemen van de microfoon.".into(),
+            Soort::Wacht(u) => format!("wacht {} seconden.", uitdrukking(u)),
+            Soort::StartProgramma(u) => format!("start het programma {}.", uitdrukking(u)),
+            Soort::OpenBestand(u) => format!("open {} met het programma dat erbij hoort.", uitdrukking(u)),
             Soort::StopOpname(p) => format!("stop met opnemen en bewaar de opname als WAV-bestand {}.", uitdrukking(p)),
             Soort::MaakAfbeelding { pad, beschrijving } => {
                 format!("zet de afbeelding {} in het laatste venster. De schermlezer leest voor: {}.", pad, beschrijving)
@@ -144,7 +167,20 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
                 continue;
             }
-            Soort::Stukje { naam, invoer, blok, einde } => {
+            Soort::Stukje { naam, invoer, einde, rust: Some(code), .. } => {
+                let met = if invoer.is_empty() { String::new() } else { format!(", met als invoer {}", invoer.join(" en ")) };
+                uit.push(format!(
+                    "{}Regel {}: een Rust-stukje met de naam {}{}. Het doet wat de eigen Rust-code zegt ({}), tot regel {}.",
+                    insp,
+                    r,
+                    naam,
+                    met,
+                    match code.lines().count() { 1 => "1 regel".to_string(), n => format!("{} regels", n) },
+                    einde
+                ));
+                continue;
+            }
+            Soort::Stukje { naam, invoer, blok, einde, .. } => {
                 let met = if invoer.is_empty() { String::new() } else { format!(", met als invoer {}", invoer.join(" en ")) };
                 uit.push(format!("{}Regel {}: een eigen stukje met de naam {}{}. Dit doet het:", insp, r, naam, met));
                 lijst_(blok, diepte + 1, uit);

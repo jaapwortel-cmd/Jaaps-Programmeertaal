@@ -71,6 +71,8 @@ const WOORDENLIJST: &[&str] = &[
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
     "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
     "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga", "verstuur", "download", "adres", "webpagina",
+    "wortel", "macht", "afgerond", "decimalen", "rest", "delen", "absolute", "lengte", "tekens", "hoofdletters", "kleine", "letters",
+    "woorden", "gesplitst", "samengevoegd", "vervangen", "waarin", "spaties", "seconden", "programma", "open",
     "updates", "zoek", "opnemen", "opname", "begin", "start", "afbeelding", "beschrijving", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
 ];
 
@@ -277,6 +279,9 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
             }
         }
     }
+    if let Some(f) = functie(s)? {
+        return Ok(Some(f));
+    }
     if begint(s, &["de", "plek", "van", "het", "logboek"]) && s.len() == 5 {
         return ib(Ingebouwd::LogboekPlek, vec![]);
     }
@@ -300,6 +305,119 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
             return Err("Schrijf het zo: een willekeurig getal van 1 tot 6.".into());
         }
         return ib(Ingebouwd::Willekeurig, vec![operand(&s[v + 1..t], false)?, operand(&s[na..], false)?]);
+    }
+    Ok(None)
+}
+
+/// Rekenen en tekst: de wortel van 16, 2 tot de macht 3, de lengte van naam, naam in hoofdletters, ...
+fn functie(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
+    let ib = |wat, invoer| Ok(Some(Uitdrukking::Ingebouwd { wat, invoer }));
+    let op = |d: &[Stuk], voorbeeld: &str| -> Result<Uitdrukking, String> {
+        if d.is_empty() {
+            return Err(format!("Hier mist iets. Schrijf het zo: {}", voorbeeld));
+        }
+        operand(d, false)
+    };
+    // Vaste woorden vooraan, daarna één waarde.
+    for (voor, wat, vb) in [
+        (&["de", "wortel", "van"][..], Ingebouwd::Wortel, "de wortel van 16"),
+        (&["de", "wortel", "uit"][..], Ingebouwd::Wortel, "de wortel uit 16"),
+        (&["de", "absolute", "waarde", "van"][..], Ingebouwd::Absoluut, "de absolute waarde van getal"),
+        (&["de", "lengte", "van"][..], Ingebouwd::Lengte, "de lengte van naam"),
+        (&["het", "aantal", "tekens", "van"][..], Ingebouwd::Lengte, "het aantal tekens van naam"),
+        (&["het", "aantal", "tekens", "in"][..], Ingebouwd::Lengte, "het aantal tekens in naam"),
+        (&["de", "woorden", "van"][..], Ingebouwd::Woorden, "de woorden van zin"),
+        (&["de", "woorden", "in"][..], Ingebouwd::Woorden, "de woorden in zin"),
+    ] {
+        if begint(s, voor) && !(wat == Ingebouwd::Lengte && zoek(s, &["lijst"], voor.len()) == Some(voor.len())) {
+            return ib(wat, vec![op(&s[voor.len()..], vb)?]);
+        }
+    }
+    // de rest bij het delen van 7 door 2
+    if begint(s, &["de", "rest", "bij", "het", "delen", "van"]) || begint(s, &["de", "rest", "van"]) {
+        let b = if klein(s, 2) == "bij" { 6 } else { 3 };
+        let vb = "de rest bij het delen van 7 door 2";
+        let Some(d) = zoek(s, &["door"], b + 1) else {
+            return Err(format!("Waardoor moet ik delen? Schrijf het zo: {}", vb));
+        };
+        return ib(Ingebouwd::Rest, vec![op(&s[b..d], vb)?, op(&s[d + 1..], vb)?]);
+    }
+    // de eerste 3 tekens van naam / de laatste 3 tekens van naam
+    if (begint(s, &["de", "eerste"]) || begint(s, &["de", "laatste"])) && zoek(s, &["tekens"], 3).is_some() || zoek(s, &["teken"], 2) == Some(2) {
+        let t = zoek(s, &["tekens"], 2).or_else(|| zoek(s, &["teken"], 2)).unwrap();
+        let wat = if klein(s, 1) == "eerste" { Ingebouwd::EersteTekens } else { Ingebouwd::LaatsteTekens };
+        let vb = "de eerste 3 tekens van naam";
+        if !matches!(klein(s, t + 1).as_str(), "van" | "uit") {
+            return Err(format!("Van welke tekst? Schrijf het zo: {}", vb));
+        }
+        let n = if t == 2 { Uitdrukking::Vast(Waarde::Getal(1.0)) } else { op(&s[2..t], vb)? };
+        return ib(wat, vec![op(&s[t + 2..], vb)?, n]);
+    }
+    // Eén waarde, daarna vaste woorden.
+    let einde = |achter: &[&str]| -> bool {
+        s.len() > achter.len() && s[s.len() - achter.len()..].iter().zip(achter).all(|(x, w)| x.klein().as_deref() == Some(*w))
+    };
+    for (achter, wat, vb) in [
+        (&["in", "hoofdletters"][..], Ingebouwd::Hoofdletters, "naam in hoofdletters"),
+        (&["in", "kleine", "letters"][..], Ingebouwd::KleineLetters, "naam in kleine letters"),
+        (&["als", "getal"][..], Ingebouwd::AlsGetal, "de tekst in het tekstvak Leeftijd als getal"),
+        (&["als", "tekst"][..], Ingebouwd::AlsTekst, "getal als tekst"),
+        (&["zonder", "spaties"][..], Ingebouwd::ZonderSpaties, "naam zonder spaties"),
+        (&["zonder", "min"][..], Ingebouwd::Absoluut, "getal zonder min"),
+        (&["afgerond"][..], Ingebouwd::Afgerond, "getal afgerond"),
+    ] {
+        if einde(achter) {
+            let d = &s[..s.len() - achter.len()];
+            let mut invoer = vec![op(d, vb)?];
+            if wat == Ingebouwd::Afgerond {
+                invoer.push(Uitdrukking::Vast(Waarde::Getal(0.0)));
+            }
+            return ib(wat, invoer);
+        }
+    }
+    // getal afgerond op 2 decimalen / cijfers achter de komma
+    if let Some(a) = zoek(s, &["afgerond", "op"], 1) {
+        let mut eind = s.len();
+        for achter in [&["cijfers", "achter", "de", "komma"][..], &["cijfer", "achter", "de", "komma"][..], &["decimalen"][..], &["decimaal"][..]] {
+            if einde(achter) {
+                eind = s.len() - achter.len();
+            }
+        }
+        let vb = "getal afgerond op 2 decimalen";
+        if eind == s.len() || eind <= a + 2 {
+            return Err(format!("Op hoeveel cijfers achter de komma? Schrijf het zo: {}", vb));
+        }
+        return ib(Ingebouwd::Afgerond, vec![op(&s[..a], vb)?, op(&s[a + 2..eind], vb)?]);
+    }
+    // 2 tot de macht 3
+    if let Some(t) = zoek(s, &["tot", "de", "macht"], 1) {
+        let vb = "2 tot de macht 3";
+        return ib(Ingebouwd::Macht, vec![op(&s[..t], vb)?, op(&s[t + 3..], vb)?]);
+    }
+    // zin gesplitst bij ","
+    if let Some(g) = zoek(s, &["gesplitst", "bij"], 1).or_else(|| zoek(s, &["gesplitst", "op"], 1)) {
+        let vb = "zin gesplitst bij \",\"";
+        return ib(Ingebouwd::Gesplitst, vec![op(&s[..g], vb)?, op(&s[g + 2..], vb)?]);
+    }
+    // de lijst namen samengevoegd met ", "
+    if let Some(g) = zoek(s, &["samengevoegd", "met"], 1) {
+        let vb = "de lijst namen samengevoegd met \", \"";
+        return ib(Ingebouwd::Samengevoegd, vec![op(&s[..g], vb)?, op(&s[g + 2..], vb)?]);
+    }
+    // zin waarin "a" vervangen is door "b" / zin met "a" vervangen door "b"
+    if let Some(v) = zoek(s, &["vervangen"], 2) {
+        let vb = "zin waarin \"fiets\" vervangen is door \"auto\"";
+        let Some(m) = (1..v).rev().find(|&i| matches!(klein(s, i).as_str(), "waarin" | "met")) else {
+            return Err(format!("Schrijf het zo: {}", vb));
+        };
+        let mut d = v + 1;
+        if klein(s, d) == "is" || klein(s, d) == "wordt" {
+            d += 1;
+        }
+        if klein(s, d) != "door" {
+            return Err(format!("Waardoor moet het vervangen worden? Schrijf het zo: {}", vb));
+        }
+        return ib(Ingebouwd::Vervangen, vec![op(&s[..m], vb)?, op(&s[m + 1..v], vb)?, op(&s[d + 1..], vb)?]);
     }
     Ok(None)
 }
@@ -450,6 +568,25 @@ fn tekst_of_uitdrukking(s: &[Stuk]) -> Result<Uitdrukking, String> {
 pub(crate) fn uitdrukking(s: &[Stuk]) -> Result<Uitdrukking, String> {
     if s.is_empty() {
         return Err("Ik mis hier een waarde: een getal, een tekst of een naam.".into());
+    }
+    // "10 gedeeld door 3 afgerond op 2 decimalen": het afronden hoort bij de hele som.
+    if let Some(a) = (1..s.len()).rev().find(|&i| klein(s, i) == "afgerond") {
+        let rekent = s[..a].iter().enumerate().any(|(i, x)| {
+            matches!(x.klein().as_deref(), Some("plus" | "min" | "keer" | "maal" | "+" | "-" | "*" | "/")) || klein(s, i) == "gedeeld"
+        });
+        let rest: Vec<String> = s[a + 1..].iter().filter_map(|x| x.klein()).collect();
+        let r: Vec<&str> = rest.iter().map(|x| x.as_str()).collect();
+        let n = match r.as_slice() {
+            [] => Some(Uitdrukking::Vast(Waarde::Getal(0.0))),
+            ["op", .., "decimalen" | "decimaal"] | ["op", .., "cijfers" | "cijfer", "achter", "de", "komma"] => {
+                let eind = s.len() - if r.last() == Some(&"komma") { 4 } else { 1 };
+                (eind > a + 2).then(|| operand(&s[a + 2..eind], false)).transpose()?
+            }
+            _ => None,
+        };
+        if let (true, Some(n)) = (rekent, n) {
+            return Ok(Uitdrukking::Ingebouwd { wat: Ingebouwd::Afgerond, invoer: vec![uitdrukking(&s[..a])?, n] });
+        }
     }
     let mut operanden: Vec<Uitdrukking> = Vec::new();
     let mut tekens: Vec<Teken> = Vec::new();
@@ -1059,6 +1196,38 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::LeesVoor(spreektekst(r)?)))
         }
         "stop" if zoek(&s, &["voorlezen"], 1).is_some() => Ok(Vorm::Los(Soort::StopVoorlezen)),
+        "wacht" if s.len() >= 2 => {
+            let mut eind = s.len();
+            if matches!(klein(&s, eind - 1).as_str(), "seconden" | "seconde" | "sec") {
+                eind -= 1;
+            } else {
+                return Err(fout("Schrijf het zo: Wacht 3 seconden."));
+            }
+            if eind <= 1 {
+                return Err(fout("Hoeveel seconden? Schrijf het zo: Wacht 3 seconden."));
+            }
+            Ok(Vorm::Los(Soort::Wacht(operand(&s[1..eind], false).map_err(fout)?)))
+        }
+        "start" | "open" if zoek(&s, &["programma"], 1).is_some_and(|p| p <= 2) => {
+            let p = zoek(&s, &["programma"], 1).unwrap();
+            if p + 1 >= s.len() {
+                return Err(fout("Welk programma? Schrijf het zo: Start het programma notepad.exe."));
+            }
+            Ok(Vorm::Los(Soort::StartProgramma(pad(&s[p + 1..]).map_err(fout)?)))
+        }
+        "open" if s.len() >= 2 => {
+            let mut b = 1;
+            if matches!(klein(&s, b).as_str(), "het" | "de") {
+                b += 1;
+            }
+            if matches!(klein(&s, b).as_str(), "bestand" | "map" | "webpagina" | "website") {
+                b += 1;
+            }
+            if b >= s.len() {
+                return Err(fout("Wat moet ik openen? Schrijf het zo: Open het bestand brief.docx."));
+            }
+            Ok(Vorm::Los(Soort::OpenBestand(pad(&s[b..]).map_err(fout)?)))
+        }
         "begin" | "start" if zoek(&s, &["opnemen"], 1).is_some() || zoek(&s, &["opname"], 1).is_some() => Ok(Vorm::Los(Soort::BeginOpname)),
         "stop" if zoek(&s, &["opnemen"], 1).is_some() || zoek(&s, &["opname"], 1).is_some() => {
             let p = zoek(&s, &["bestand"], 1).or_else(|| (1..s.len()).rev().find(|&i| klein(&s, i) == "als"));
@@ -1779,7 +1948,7 @@ impl Kader {
             KaderSoort::Knop(naam) => Soort::BijKnop { naam, blok: self.dan, einde },
             KaderSoort::VoorElk(naam, lijst) => Soort::VoorElk { naam, lijst, blok: self.dan, einde },
             KaderSoort::Tel(naam, van, tot) => Soort::Tel { naam, van, tot, blok: self.dan, einde },
-            KaderSoort::Stukje(naam, invoer) => Soort::Stukje { naam, invoer, blok: self.dan, einde },
+            KaderSoort::Stukje(naam, invoer) => Soort::Stukje { naam, invoer, blok: self.dan, einde, rust: None },
         };
         Opdracht { regel: self.regel, soort }
     }
@@ -1810,13 +1979,95 @@ fn anders_lezen(norm: &str, eigen: &[(String, String)]) -> Option<Vorm> {
     ontleed_regel(&tekst::normaliseer(&nl)).ok()
 }
 
-pub(crate) fn lees_programma_met(bron: &str, eigen: &[(String, String)]) -> (Programma, Vec<Melding>) {
+/// Zet eigen zinnen om in wat ze betekenen. Elke regel houdt het regelnummer waar de zin stond.
+/// Rust-stukjes: een stukje met eigen Rust-code. Die regels worden niet als zinnen gelezen.
+fn rust_stukjes(bron: &str, meldingen: &mut Vec<Melding>) -> (Vec<Opdracht>, Vec<usize>) {
+    let regels: Vec<&str> = bron.lines().collect();
+    let mut uit = Vec::new();
+    let mut bezet = Vec::new();
+    let mut i = 0;
+    while i < regels.len() {
+        let norm = tekst::normaliseer(regels[i]);
+        let laag = norm.to_lowercase();
+        if !(laag.starts_with("maak een rust-stukje") || laag.starts_with("maak een ruststukje")) {
+            i += 1;
+            continue;
+        }
+        let nr = i + 1;
+        let kop = format!("Maak een stukje{}", &norm[norm.to_lowercase().find("stukje").unwrap() + "stukje".len()..]);
+        let mut code = Vec::new();
+        let mut j = i + 1;
+        let mut einde = None;
+        while j < regels.len() {
+            let l = tekst::normaliseer(regels[j]).to_lowercase();
+            if matches!(l.as_str(), "einde van het rust-stukje" | "einde rust-stukje" | "einde van het ruststukje") {
+                einde = Some(j + 1);
+                break;
+            }
+            code.push(regels[j].to_string());
+            j += 1;
+        }
+        for k in nr..=einde.unwrap_or(regels.len()) {
+            bezet.push(k);
+        }
+        match (ontleed_regel(&kop), einde) {
+            (_, None) => meldingen.push(Melding::fout(nr, "Dit Rust-stukje wordt niet gesloten. Zet eronder: Einde van het Rust-stukje.")),
+            (Ok(Vorm::OpenStukje(naam, invoer)), Some(e)) => uit.push(Opdracht {
+                regel: nr,
+                soort: Soort::Stukje { naam, invoer, blok: Vec::new(), einde: e, rust: Some(code.join("\n")) },
+            }),
+            (Err(rf), _) => meldingen.push(Melding::fout(nr, rf.tekst)),
+            _ => meldingen.push(Melding::fout(nr, "Schrijf het zo: Maak een Rust-stukje met als naam Dubbel, met als invoer x")),
+        }
+        i = einde.unwrap_or(regels.len());
+    }
+    (uit, bezet)
+}
+
+fn breid_uit(bron: &str, eigen: &[(String, String)], bibliotheek: &str, meldingen: &mut Vec<Melding>, rust_bezet: &[usize]) -> Vec<(usize, String)> {
+    let (mut zinnen, eigen_meldingen, mut bezet) = crate::eigen_zinnen::verzamel(bron);
+    bezet.extend_from_slice(rust_bezet);
+    meldingen.extend(eigen_meldingen);
+    let (bib, _, _) = crate::eigen_zinnen::verzamel(bibliotheek);
+    zinnen.extend(bib);
+    let mut uit = Vec::new();
+    fn verwerk(nr: usize, regel: &str, zinnen: &[crate::eigen_zinnen::Sjabloon], eigen: &[(String, String)], diepte: usize, uit: &mut Vec<(usize, String)>, meldingen: &mut Vec<Melding>) {
+        let norm = tekst::normaliseer(regel);
+        // Een eigen zin geldt als de regel geen goede vaste zin is.
+        let onbekend = ontleed_regel(&norm).is_err() && anders_lezen(&norm, eigen).is_none();
+        if onbekend && !zinnen.is_empty() {
+            if let Some(betekenis) = crate::eigen_zinnen::vervang(regel, zinnen) {
+                if diepte >= 10 {
+                    meldingen.push(Melding::fout(nr, "Deze eigen zin gebruikt zichzelf steeds weer (meer dan tien keer diep). Ik ben gestopt."));
+                    return;
+                }
+                for b in betekenis {
+                    verwerk(nr, &b, zinnen, eigen, diepte + 1, uit, meldingen);
+                }
+                return;
+            }
+        }
+        uit.push((nr, regel.to_string()));
+    }
+    for (i, ruw) in bron.lines().enumerate() {
+        if bezet.contains(&(i + 1)) {
+            continue;
+        }
+        verwerk(i + 1, ruw, &zinnen, eigen, 0, &mut uit, meldingen);
+    }
+    uit
+}
+
+pub(crate) fn lees_programma_eigen(bron: &str, eigen: &[(String, String)], bibliotheek: &str) -> (Programma, Vec<Melding>) {
     let mut meldingen = Vec::new();
     let mut stapel = vec![Kader::nieuw(KaderSoort::Hoofd, 0)];
-    let regels: Vec<&str> = bron.lines().collect();
+    let (rust, rust_bezet) = rust_stukjes(bron, &mut meldingen);
+    let regels = breid_uit(bron, eigen, bibliotheek, &mut meldingen, &rust_bezet);
+    let aantal_regels = bron.lines().count();
 
-    for (i, ruw) in regels.iter().enumerate() {
-        let nr = i + 1;
+    for (nr, ruw) in regels.iter() {
+        let nr = *nr;
+        let ruw = ruw.as_str();
         let norm = tekst::normaliseer(ruw);
         let gelezen = match ontleed_regel(&norm) {
             Err(rf) if rf.onbekend => anders_lezen(&norm, eigen).ok_or(rf),
@@ -1930,7 +2181,7 @@ pub(crate) fn lees_programma_met(bron: &str, eigen: &[(String, String)]) -> (Pro
         }
     }
 
-    let laatste = regels.len();
+    let laatste = aantal_regels;
     while stapel.len() > 1 {
         let top = stapel.pop().unwrap();
         let zin = sluitzin(top.blok());
@@ -1946,6 +2197,8 @@ pub(crate) fn lees_programma_met(bron: &str, eigen: &[(String, String)]) -> (Pro
     }
     let hoofd = stapel.pop().unwrap();
     let mut programma = Programma { opdrachten: hoofd.dan };
+    programma.opdrachten.extend(rust);
+    programma.opdrachten.sort_by_key(|o| o.regel);
     verbind_stukjes(&mut programma);
     (programma, meldingen)
 }

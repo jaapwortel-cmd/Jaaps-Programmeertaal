@@ -149,6 +149,40 @@ pub enum Ingebouwd {
     AantalRijen,
     /// Een rij van een tabel, met een nummer (een lijst).
     RijNummer,
+    /// De wortel van een getal.
+    Wortel,
+    /// Een getal tot de macht een ander getal.
+    Macht,
+    /// Een getal afgerond (op een aantal cijfers achter de komma).
+    Afgerond,
+    /// Wat overblijft bij het delen.
+    Rest,
+    /// Een getal zonder min ervoor.
+    Absoluut,
+    /// Tekst omzetten naar een getal.
+    AlsGetal,
+    /// Iets omzetten naar tekst.
+    AlsTekst,
+    /// Hoeveel tekens een tekst heeft.
+    Lengte,
+    /// Tekst in hoofdletters.
+    Hoofdletters,
+    /// Tekst in kleine letters.
+    KleineLetters,
+    /// De eerste tekens van een tekst.
+    EersteTekens,
+    /// De laatste tekens van een tekst.
+    LaatsteTekens,
+    /// De woorden van een tekst, als lijst.
+    Woorden,
+    /// Een tekst in stukken gehakt bij een teken, als lijst.
+    Gesplitst,
+    /// Een lijst aan elkaar geplakt tot een tekst.
+    Samengevoegd,
+    /// Een tekst waarin iets vervangen is.
+    Vervangen,
+    /// Tekst zonder spaties aan het begin en eind.
+    ZonderSpaties,
 }
 
 impl Ingebouwd {
@@ -269,7 +303,8 @@ pub enum Soort {
     /// "Herhaal voor elk getal van 1 tot 10".
     Tel { naam: String, van: Uitdrukking, tot: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
     /// Een eigen stukje met een naam, invoer en misschien een uitkomst.
-    Stukje { naam: String, invoer: Vec<String>, blok: Vec<Opdracht>, einde: usize },
+    /// `rust`: bij een Rust-stukje de eigen Rust-code (dan is `blok` leeg).
+    Stukje { naam: String, invoer: Vec<String>, blok: Vec<Opdracht>, einde: usize, rust: Option<String> },
     /// "Doe Verdubbel met 5": een eigen stukje uitvoeren.
     Doe(Uitdrukking),
     /// "Geef als uitkomst ...": het stukje stopt en geeft dit terug.
@@ -286,6 +321,12 @@ pub enum Soort {
     ZoekUpdates,
     /// Beginnen met opnemen van de microfoon.
     BeginOpname,
+    /// Een aantal seconden wachten.
+    Wacht(Uitdrukking),
+    /// Een ander programma starten.
+    StartProgramma(Uitdrukking),
+    /// Een bestand of map openen met het programma dat daarbij hoort.
+    OpenBestand(Uitdrukking),
     /// Stoppen met opnemen en de opname bewaren als WAV-bestand.
     StopOpname(Uitdrukking),
     /// Een afbeelding in het laatste venster, met een beschrijving voor de schermlezer.
@@ -478,6 +519,7 @@ impl Soort {
     pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
@@ -519,6 +561,7 @@ impl Soort {
     pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
+            Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => vec![u],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
