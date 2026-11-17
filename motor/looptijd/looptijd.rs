@@ -416,6 +416,7 @@ mod win {
     const EM_SETSEL: u32 = 0x00B1;
     const WS_OVERLAPPEDWINDOW: u32 = 0x00CF_0000;
     const WS_CHILD: u32 = 0x4000_0000;
+    const WS_CLIPCHILDREN: u32 = 0x0200_0000;
     const WS_VISIBLE: u32 = 0x1000_0000;
     const WS_TABSTOP: u32 = 0x0001_0000;
     const WS_VSCROLL: u32 = 0x0020_0000;
@@ -500,7 +501,7 @@ mod win {
                     WS_EX_CONTROLPARENT,
                     klasse().as_ptr(),
                     w(titel).as_ptr(),
-                    WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                    WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
                     CW_USEDEFAULT,
                     CW_USEDEFAULT,
                     self.s(460),
@@ -619,7 +620,7 @@ mod win {
                 WS_EX_CONTROLPARENT,
                 klasse().as_ptr(),
                 w("Uitvoer van het programma").as_ptr(),
-                WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 700,
@@ -702,6 +703,11 @@ mod win {
         } else if let Some(&laatste) = staat.scherm.win.vensters.last() {
             unsafe {
                 SetForegroundWindow(laatste);
+            }
+            // Tekst die getoond werd voordat er een venster was, gaat niet verloren.
+            let eerder = std::mem::take(&mut staat.scherm.uitvoer);
+            if !eerder.is_empty() {
+                melding(laatste, &eerder.join("\n"), "Melding");
             }
         }
         STAAT.with(|s| *s.borrow_mut() = Some(staat));

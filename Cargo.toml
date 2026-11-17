@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["motor"]
+members = ["motor", "editor"]
 
 [workspace.package]
 version = "0.1.0"
