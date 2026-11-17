@@ -40,3 +40,18 @@ Programmeertaal in gewone Nederlandse zinnen, gemaakt voor Jaap Wortel. Rust, zo
 - Niets veranderen aan Jaaps andere repositories. Zichtbaarheid van deze repository niet veranderen.
 - Geen wachtwoorden, sleutels of persoonlijke gegevens in de code.
 - Wensenlijst: zie de opdracht in README ("Wat nog niet werkt"). "Motorschrijver": eerst voorbeelden aan Jaap vragen.
+
+## Keuzes van Jaap (17 nov 2026)
+
+- Rust in de installatie ("meteen A"); het programma zelf ook in Rust.
+- Installatiebestand en eigen licentie voor zijn programma's, beschreven met zinnen (Ctrl+F8).
+- Eigen privacyverklaring (zinnen of bestand): bij installeren, als Privacyverklaring.txt, Shift+F1 in het programma.
+- Bestand van elders met bovenaan "Dit is code/een omschrijving voor het programma X": EERST VRAGEN wat ermee moet
+  (Ja = als code toevoegen aan X.txt en controleren, Nee = notitie in "X notities.txt", Annuleren = gewoon openen).
+  Programma's staan in Documenten\Jaaps Programmeertaal.
+- Ondertekenen met een ZELFGEMAAKT certificaat (New-SelfSignedCertificate via Windows PowerShell, CurrentUser\My,
+  5 jaar). Eerlijk melden: andere computers blijven waarschuwen. Menu: mijn certificaat vertrouwen op deze computer.
+- Engelse basiszinnen (motor/src/engels.rs), omzetten naar het Engels met vaste regels, eigen woorden
+  (%APPDATA%\Jaaps Programmeertaal\Mijn eigen woorden.txt, "laat zien = toon"); na "Ja" op een tikfout: vragen of het
+  onthouden mag.
+- "Motorschrijver": nog steeds eerst drie voorbeelden aan Jaap vragen.
