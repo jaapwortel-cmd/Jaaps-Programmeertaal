@@ -15,6 +15,14 @@ enum W {
     G(f64),
     T(String),
     B(bool),
+    L(Vec<W>),
+}
+
+/// Waar een naam staat: in het hele programma (G) of alleen in een eigen stukje (L).
+#[derive(Clone, Copy)]
+enum P {
+    G(usize),
+    L(usize),
 }
 
 struct Fout {
@@ -49,6 +57,8 @@ impl W {
             W::T(t) => t.clone(),
             W::B(true) => "waar".to_string(),
             W::B(false) => "niet waar".to_string(),
+            W::L(l) if l.is_empty() => "een lege lijst".to_string(),
+            W::L(l) => l.iter().map(|w| w.tekst()).collect::<Vec<_>>().join(", "),
         }
     }
     fn soort(&self) -> &'static str {
@@ -56,6 +66,7 @@ impl W {
             W::G(_) => "een getal",
             W::T(_) => "tekst",
             W::B(_) => "waar of niet waar",
+            W::L(_) => "een lijst",
         }
     }
 }
@@ -99,14 +110,72 @@ fn negatief(a: W, r: usize) -> R<W> {
     }
 }
 
+fn gelijk(a: &W, b: &W) -> bool {
+    match (a, b) {
+        (W::G(x), W::G(y)) => x == y,
+        (W::T(x), W::T(y)) => x.to_lowercase() == y.to_lowercase(),
+        (W::B(x), W::B(y)) => x == y,
+        (W::L(x), W::L(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| gelijk(p, q)),
+        _ => false,
+    }
+}
+
+fn lijst_van(a: W, r: usize) -> R<Vec<W>> {
+    match a {
+        W::L(l) => Ok(l),
+        ander => fout(r, format!("Hier verwacht ik een lijst, maar hier staat {}.", ander.soort())),
+    }
+}
+
+fn aantal_in(a: W, r: usize) -> R<W> {
+    Ok(W::G(lijst_van(a, r)?.len() as f64))
+}
+
+fn element(a: W, i: W, r: usize) -> R<W> {
+    let l = lijst_van(a, r)?;
+    let n = match i {
+        W::G(g) if g.fract() == 0.0 => g as i64,
+        ander => return fout(r, format!("Het nummer in de lijst moet een heel getal zijn, en niet {}.", ander.tekst())),
+    };
+    let plek = if n < 0 { l.len() as i64 + n } else { n - 1 };
+    if l.is_empty() {
+        return fout(r, "De lijst is leeg. Er staat nog niets in.".to_string());
+    }
+    if plek < 0 || plek >= l.len() as i64 {
+        return fout(r, format!("De lijst heeft {} dingen. Nummer {} bestaat dus niet.", l.len(), n));
+    }
+    Ok(l[plek as usize].clone())
+}
+
+fn bevat(a: W, b: W, r: usize) -> R<bool> {
+    Ok(lijst_van(a, r)?.iter().any(|x| gelijk(x, &b)))
+}
+
+/// De getallen van ... tot en met ..., met een grens.
+fn telling(a: W, b: W, r: usize) -> R<std::ops::RangeInclusive<i64>> {
+    let heel = |w: W| -> R<i64> {
+        match w {
+            W::G(g) if g.fract() == 0.0 => Ok(g as i64),
+            ander => fout(r, format!("Tellen gaat met hele getallen, en niet met {}.", ander.tekst())),
+        }
+    };
+    let (van, tot) = (heel(a)?, heel(b)?);
+    if tot - van > MAX_HERHALINGEN as i64 {
+        return fout(r, "Zo ver tellen mag niet. Het kan hoogstens een miljoen keer.".to_string());
+    }
+    Ok(van..=tot)
+}
+
+fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
+    match w {
+        Some(w) => Ok(w),
+        None => fout(r, format!("Het stukje {} geeft geen uitkomst. Zet in het stukje een regel zoals: Geef als uitkomst ...", naam)),
+    }
+}
+
 fn vergelijk(a: W, b: W, op: u8, r: usize) -> R<bool> {
     if op <= 1 {
-        let gelijk = match (&a, &b) {
-            (W::G(x), W::G(y)) => x == y,
-            (W::T(x), W::T(y)) => x.to_lowercase() == y.to_lowercase(),
-            (W::B(x), W::B(y)) => x == y,
-            _ => false,
-        };
+        let gelijk = gelijk(&a, &b);
         return Ok(if op == 0 { gelijk } else { !gelijk });
     }
     let (x, y) = match (&a, &b) {
@@ -142,6 +211,8 @@ fn aantal(a: W, r: usize) -> R<u64> {
 }
 
 struct Staat {
+    /// De namen en waarden van de eigen stukjes die nu bezig zijn.
+    lokaal: Vec<(&'static [&'static str], Vec<Option<W>>)>,
     waarden: Vec<Option<W>>,
     namen: &'static [&'static str],
     acties: &'static [&'static str],
@@ -150,31 +221,86 @@ struct Staat {
 }
 
 impl Staat {
-    fn lees(&self, i: usize, r: usize) -> R<W> {
-        match &self.waarden[i] {
-            Some(w) => Ok(w.clone()),
+    fn naam_van(&self, p: P) -> &'static str {
+        match p {
+            P::G(i) => self.namen[i],
+            P::L(i) => self.lokaal.last().map(|l| l.0[i]).unwrap_or("?"),
+        }
+    }
+    fn plek(&mut self, p: P) -> &mut Option<W> {
+        match p {
+            P::G(i) => &mut self.waarden[i],
+            P::L(i) => &mut self.lokaal.last_mut().expect("stukje").1[i],
+        }
+    }
+    fn lees(&mut self, p: P, r: usize) -> R<W> {
+        match self.plek(p).clone() {
+            Some(w) => Ok(w),
             None => {
-                let n = self.namen[i];
+                let n = self.naam_van(p);
                 fout(r, format!("{} heeft nog geen waarde. Zet eerst een regel zoals: Onthoud {} is 0.", n, n))
             }
         }
     }
-    fn zet(&mut self, i: usize, w: W) {
-        self.waarden[i] = Some(w);
+    fn zet(&mut self, p: P, w: W) {
+        *self.plek(p) = Some(w);
     }
-    fn verander(&mut self, i: usize, w: W, r: usize) -> R<()> {
-        if self.waarden[i].is_none() {
-            let n = self.namen[i];
+    fn verander(&mut self, p: P, w: W, r: usize) -> R<()> {
+        if self.plek(p).is_none() {
+            let n = self.naam_van(p);
             return fout(r, format!("Je kunt {} pas veranderen als je het eerst hebt onthouden.", n));
         }
-        self.waarden[i] = Some(w);
+        *self.plek(p) = Some(w);
         Ok(())
     }
-    fn tel_op(&mut self, i: usize, w: W, erbij: bool, r: usize) -> R<()> {
-        let oud = self.lees(i, r)?;
+    fn tel_op(&mut self, p: P, w: W, erbij: bool, r: usize) -> R<()> {
+        let oud = self.lees(p, r)?;
         let nieuw = reken(oud, if erbij { 0 } else { 1 }, w, r)?;
-        self.waarden[i] = Some(nieuw);
+        *self.plek(p) = Some(nieuw);
         Ok(())
+    }
+    fn voeg_toe(&mut self, p: P, w: W, r: usize) -> R<()> {
+        let n = self.naam_van(p);
+        match self.plek(p) {
+            Some(W::L(l)) => {
+                if l.len() >= 10_000_000 {
+                    return fout(r, format!("De lijst {} is te groot geworden (tien miljoen dingen).", n));
+                }
+                l.push(w);
+                Ok(())
+            }
+            Some(ander) => {
+                let soort = ander.soort();
+                fout(r, format!("{} is {}, geen lijst.", n, soort))
+            }
+            None => fout(r, format!("De lijst {} bestaat nog niet. Maak hem eerst met: Maak een lijst met als naam {}.", n, n)),
+        }
+    }
+    fn haal_uit(&mut self, p: P, w: W, r: usize) -> R<()> {
+        let n = self.naam_van(p);
+        match self.plek(p) {
+            Some(W::L(l)) => {
+                if let Some(i) = l.iter().position(|x| gelijk(x, &w)) {
+                    l.remove(i);
+                }
+                Ok(())
+            }
+            _ => fout(r, format!("{} is geen lijst.", n)),
+        }
+    }
+    fn begin_stukje(&mut self, namen: &'static [&'static str], invoer: Vec<W>, r: usize) -> R<()> {
+        if self.lokaal.len() >= 1000 {
+            return fout(r, "Een stukje roept zichzelf te vaak aan (meer dan duizend keer diep). Ik heb het gestopt.".to_string());
+        }
+        let mut waarden = vec![None; namen.len()];
+        for (i, w) in invoer.into_iter().enumerate() {
+            waarden[i] = Some(w);
+        }
+        self.lokaal.push((namen, waarden));
+        Ok(())
+    }
+    fn einde_stukje(&mut self) {
+        self.lokaal.pop();
     }
     fn stap(&mut self, r: usize) -> R<()> {
         self.stappen += 1;
@@ -285,7 +411,7 @@ fn foutzin(f: &Fout) -> String {
 // Tekst-stand: voor proeven en voor computers zonder Windows.
 // ---------------------------------------------------------------------
 fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], hoofd: Hoofd, bij_knop: BijKnop, stappen: Vec<(String, String)>) {
-    let mut s = Staat { waarden: vec![None; namen.len()], namen, acties, stappen: 0, scherm: Scherm::tekst() };
+    let mut s = Staat { lokaal: Vec::new(), waarden: vec![None; namen.len()], namen, acties, stappen: 0, scherm: Scherm::tekst() };
     if let Err(f) = hoofd(&mut s) {
         println!("{}", foutzin(&f));
         std::process::exit(1);
@@ -978,6 +1104,7 @@ mod win {
         }
         BIJ_KNOP.with(|b| b.set(Some(bij_knop)));
         let mut staat = Staat {
+            lokaal: Vec::new(),
             waarden: vec![None; namen.len()],
             namen,
             acties,

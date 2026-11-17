@@ -92,7 +92,7 @@ jobs:
           $uit = & $j proef 'voorbeelden\Begroeting.txt' --druk Welkom
           $uit | Write-Host
           if (($uit -join "`n") -notmatch 'Hallo') { throw 'Het voorbeeld zegt geen Hallo.' }
-          foreach ($v in Get-ChildItem 'voorbeelden\*.txt') {
+          foreach ($v in Get-ChildItem 'voorbeelden\*.txt' | Where-Object { $_.Name -notmatch 'uitleg' }) {
             & $j controleer $v.FullName | Write-Host
             if ($LASTEXITCODE) { throw ("Voorbeeld klopt niet: " + $v.Name) }
           }

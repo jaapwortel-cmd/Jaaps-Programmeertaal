@@ -104,7 +104,20 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 - `Herhaal 10 keer` ... `Einde herhaal`
 - `Herhaal zolang teller is kleiner dan 10, hoogstens 100 keer` ... `Einde herhaal`
 
-**Blokken sluiten**: `Einde als`, `Einde herhaal`, `Einde van de knop`, of alleen `Einde`.
+**Lijsten**
+- `Maak een lijst met als naam boodschappen`, `Voeg "melk" toe aan de lijst boodschappen`, `Haal "melk" weg uit de lijst boodschappen`, `Maak de lijst boodschappen leeg`
+- Lezen: `de lijst boodschappen`, `het aantal in de lijst boodschappen`, `het eerste uit ...`, `het laatste uit ...`, `nummer 2 uit de lijst boodschappen`
+- `Als de lijst boodschappen bevat "melk"`
+- `Herhaal voor elk ding in de lijst boodschappen` ... `Einde herhaal`
+- `Herhaal voor elk getal van 1 tot 10` ... `Einde herhaal`
+
+**Eigen stukjes (een blok met een naam, invoer en uitkomst)**
+- `Maak een stukje met als naam Verdubbel, met als invoer getal` ... `Einde van het stukje`
+- `Geef als uitkomst getal keer 2`
+- `Doe Groet`, `Doe Verdubbel met 5`, `Toon de uitkomst van Optellen met 3 en 4`
+- Voorbeeld: `voorbeelden/Lijsten en stukjes.txt`
+
+**Blokken sluiten**: `Einde als`, `Einde herhaal`, `Einde van de knop`, `Einde van het stukje`, of alleen `Einde`.
 
 **Installatiebestand** (doet niets als het programma draait)
 - `Maak een installatiebestand met als naam Begroeting`
@@ -167,7 +180,7 @@ Uitvoeren (met Rust op de computer):
 cargo test --workspace
 ```
 
-Uitslag in deze sessie (Linux): 65 tests, allemaal geslaagd.
+Uitslag in deze sessie (Linux): 75 tests, allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
 
 **De opdrachtregel** (`jaaptaal.exe`, staat ook in de installatie):
 
@@ -199,7 +212,7 @@ De lijst met handmatige tests staat in `docs/Handmatige-tests.md`. Belangrijkste
 
 Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo'n zin, dan zegt het programma dat eerlijk.
 
-**De taal**: lijsten met meerdere waarden; eigen stukjes met een naam, invoer en uitkomst; twee voorwaarden met "en" of "of"; Engelse opdrachten en vertalen naar het Engels; het onthouden van jouw eigen formuleringen (zelflerend).
+**De taal**: rekenen binnen de invoer van een stukje (eerst onthouden); twee voorwaarden met "en" of "of"; Engelse opdrachten en vertalen naar het Engels; het onthouden van jouw eigen formuleringen (zelflerend).
 
 **Scherm**: tabellen, menu's, werkbalken, een echte tekstverwerker (met opslaan, lettertype, zoeken), kleuren, zelf een lay-out kiezen, een lay-outvoorstel, vooraf vertellen wat er op het scherm staat, eigen sneltoetsen en tabvolgorde, aanpassen aan schermgrootte.
 

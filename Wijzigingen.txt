@@ -9,6 +9,8 @@ Versie 0.1.0 (proefversie, 17 november 2026)
 - Zinnen voor vensters, knoppen, tekst tonen, onthouden, veranderen, rekenen, vergelijken, kiezen en herhalen met een grens.
 - Tekstvakken, grote tekstvakken, labels, selectievakjes, keuzelijsten en uitklaplijsten in je eigen programma,
   en lezen wat erin staat (ook als getal). Voorbeeld: Rekenhulp.
+- Lijsten (toevoegen, weghalen, aantal, nummer, bevat, voor elk ding), tellen van ... tot ...,
+  en eigen stukjes met een naam, invoer en uitkomst.
 - Een installatiebestand voor je eigen programma (Ctrl+F8), beschreven met zinnen: naam, versie, maker,
   snelkoppelingen, met of zonder beheerdersrechten, extra bestanden.
 - Een eigen licentie, met zinnen of uit een tekstbestand. Bij het installeren moet je akkoord gaan.

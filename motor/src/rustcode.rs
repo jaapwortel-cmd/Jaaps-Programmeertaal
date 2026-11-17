@@ -17,6 +17,28 @@ struct Maker<'a> {
     acties: Vec<String>,
     regels: &'a [&'a str],
     uit: String,
+    /// Binnen een eigen stukje: de namen die alleen in dat stukje bestaan.
+    lokaal: Option<HashMap<String, usize>>,
+    /// De namen van de eigen stukjes, op volgorde.
+    stukjes: Vec<String>,
+}
+
+/// Alle namen die binnen een blok worden onthouden (voor de namen van een stukje).
+fn onthouden_in(lijst: &[Opdracht], uit: &mut Vec<String>) {
+    for o in lijst {
+        match &o.soort {
+            Soort::Onthoud { naam, .. } | Soort::VoorElk { naam, .. } | Soort::Tel { naam, .. } => {
+                if !uit.contains(naam) {
+                    uit.push(naam.clone());
+                }
+            }
+            _ => {}
+        }
+        let mut kopie = o.soort.clone();
+        for blok in kopie.blokken_mut() {
+            onthouden_in(blok, uit);
+        }
+    }
 }
 
 fn rust_tekst(s: &str) -> String {
@@ -34,14 +56,42 @@ impl<'a> Maker<'a> {
         n
     }
 
+    /// Waar een naam staat: in het stukje (P::L) of in het hele programma (P::G).
+    fn plek(&mut self, naam: &str) -> String {
+        if let Some(i) = self.lokaal.as_ref().and_then(|l| l.get(naam)) {
+            return format!("P::L({})", i);
+        }
+        format!("P::G({})", self.naam_nr(naam))
+    }
+
+    fn aanroep(&mut self, naam: &str, invoer: &[Uitdrukking], r: usize) -> String {
+        let nr = self.stukjes.iter().position(|n| n == naam).unwrap_or(0);
+        let args: Vec<String> = invoer.iter().map(|i| self.uitdrukking(i, r)).collect();
+        format!("{{ let invoer = vec![{}]; stukje_{}(s, invoer, {})? }}", args.join(", "), nr, r)
+    }
+
     fn uitdrukking(&mut self, u: &Uitdrukking, r: usize) -> String {
         match u {
             Uitdrukking::Vast(Waarde::Getal(g)) => format!("W::G({:?}f64)", g),
             Uitdrukking::Vast(Waarde::Tekst(t)) => format!("W::T({}.to_string())", rust_tekst(t)),
             Uitdrukking::Vast(Waarde::Waarheid(b)) => format!("W::B({})", b),
             Uitdrukking::Naam(n) => {
-                let i = self.naam_nr(n);
-                format!("s.lees({}, {})?", i, r)
+                let p = self.plek(n);
+                format!("s.lees({}, {})?", p, r)
+            }
+            Uitdrukking::LegeLijst => "W::L(Vec::new())".into(),
+            Uitdrukking::Aantal(a) => {
+                let a = self.uitdrukking(a, r);
+                format!("aantal_in({}, {})?", a, r)
+            }
+            Uitdrukking::Element(a, b) => {
+                let a = self.uitdrukking(a, r);
+                let b = self.uitdrukking(b, r);
+                format!("element({}, {}, {})?", a, b, r)
+            }
+            Uitdrukking::Aanroep { naam, invoer } => {
+                let a = self.aanroep(naam, invoer, r);
+                format!("uitkomst_van({}, {}, {})?", a, rust_tekst(naam), r)
             }
             Uitdrukking::Onderdeel { naam, als_getal } => format!("s.waarde_van({}, {}, {})?", rust_tekst(naam), als_getal, r),
             Uitdrukking::Negatief(a) => {
@@ -68,6 +118,11 @@ impl<'a> Maker<'a> {
             Voorwaarde::IsWaar(u) => {
                 let u = self.uitdrukking(u, r);
                 format!("waar({}, {})?", u, r)
+            }
+            Voorwaarde::Bevat(a, b) => {
+                let a = self.uitdrukking(a, r);
+                let b = self.uitdrukking(b, r);
+                format!("bevat({}, {}, {})?", a, b, r)
             }
             Voorwaarde::Vergelijk(a, verg, b) => {
                 let a = self.uitdrukking(a, r);
@@ -142,19 +197,60 @@ impl<'a> Maker<'a> {
                 }
                 Soort::Onthoud { naam, waarde, .. } => {
                     self.opmerking(diepte, r);
-                    let i = self.naam_nr(naam);
+                    let i = self.plek(naam);
                     let u = self.uitdrukking(waarde, r);
                     self.regel(diepte, &format!("{{ let w = {}; s.zet({}, w); }}", u, i));
                 }
+                Soort::VoegToeAanLijst { waarde, lijst } | Soort::HaalUitLijst { waarde, lijst } => {
+                    self.opmerking(diepte, r);
+                    let i = self.plek(lijst);
+                    let u = self.uitdrukking(waarde, r);
+                    let f = if matches!(o.soort, Soort::VoegToeAanLijst { .. }) { "voeg_toe" } else { "haal_uit" };
+                    self.regel(diepte, &format!("{{ let w = {}; s.{}({}, w, {})?; }}", u, f, i, r));
+                }
+                Soort::Doe(Uitdrukking::Aanroep { naam, invoer }) => {
+                    self.opmerking(diepte, r);
+                    let a = self.aanroep(naam, invoer, r);
+                    self.regel(diepte, &format!("{};", a));
+                }
+                Soort::Doe(_) | Soort::Stukje { .. } => {}
+                Soort::GeefUitkomst(u) => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; return Ok(Some(w)); }}", u));
+                }
+                Soort::VoorElk { naam, lijst, blok, einde } => {
+                    self.opmerking(diepte, r);
+                    let l = self.uitdrukking(lijst, r);
+                    let p = self.plek(naam);
+                    self.regel(diepte, &format!("for w in lijst_van({}, {})? {{", l, r));
+                    self.regel(diepte + 1, &format!("s.stap({})?;", r));
+                    self.regel(diepte + 1, &format!("s.zet({}, w);", p));
+                    self.lijst(blok, diepte + 1);
+                    self.regel(diepte, "}");
+                    self.opmerking(diepte, *einde);
+                }
+                Soort::Tel { naam, van, tot, blok, einde } => {
+                    self.opmerking(diepte, r);
+                    let a = self.uitdrukking(van, r);
+                    let b = self.uitdrukking(tot, r);
+                    let p = self.plek(naam);
+                    self.regel(diepte, &format!("for i in telling({}, {}, {})? {{", a, b, r));
+                    self.regel(diepte + 1, &format!("s.stap({})?;", r));
+                    self.regel(diepte + 1, &format!("s.zet({}, W::G(i as f64));", p));
+                    self.lijst(blok, diepte + 1);
+                    self.regel(diepte, "}");
+                    self.opmerking(diepte, *einde);
+                }
                 Soort::Verander { naam, waarde } => {
                     self.opmerking(diepte, r);
-                    let i = self.naam_nr(naam);
+                    let i = self.plek(naam);
                     let u = self.uitdrukking(waarde, r);
                     self.regel(diepte, &format!("{{ let w = {}; s.verander({}, w, {})?; }}", u, i, r));
                 }
                 Soort::TelOp { naam, waarde } | Soort::TrekAf { naam, waarde } => {
                     self.opmerking(diepte, r);
-                    let i = self.naam_nr(naam);
+                    let i = self.plek(naam);
                     let u = self.uitdrukking(waarde, r);
                     let erbij = matches!(o.soort, Soort::TelOp { .. });
                     self.regel(diepte, &format!("{{ let w = {}; s.tel_op({}, w, {}, {})?; }}", u, i, erbij, r));
@@ -205,7 +301,23 @@ impl<'a> Maker<'a> {
 
 /// Maakt de volledige Rust-code (looptijd + jouw programma) van een gecontroleerd programma.
 pub fn maak(p: &Programma, regels: &[&str]) -> String {
-    let mut m = Maker { namen: HashMap::new(), namenlijst: Vec::new(), acties: Vec::new(), regels, uit: String::new() };
+    let stukjes: Vec<(&String, &Vec<String>, &Vec<Opdracht>, usize, usize)> = p
+        .opdrachten
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::Stukje { naam, invoer, blok, einde } => Some((naam, invoer, blok, o.regel, *einde)),
+            _ => None,
+        })
+        .collect();
+    let mut m = Maker {
+        namen: HashMap::new(),
+        namenlijst: Vec::new(),
+        acties: Vec::new(),
+        regels,
+        uit: String::new(),
+        lokaal: None,
+        stukjes: stukjes.iter().map(|s| s.0.clone()).collect(),
+    };
 
     // Wat de knoppen doen.
     let knop_blokken: Vec<(&String, &Vec<Opdracht>, usize, usize)> = p
@@ -232,6 +344,26 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
         m.regel(2, "}");
     }
     m.uit.push_str("        _ => {}\n    }\n    Ok(())\n}\n\n");
+
+    // De eigen stukjes.
+    for (k, (naam, invoer, blok, regel, einde)) in stukjes.iter().enumerate() {
+        let mut lokale: Vec<String> = invoer.to_vec();
+        onthouden_in(blok, &mut lokale);
+        m.lokaal = Some(lokale.iter().enumerate().map(|(i, n)| (n.clone(), i)).collect());
+        let namen: Vec<String> = lokale.iter().map(|n| rust_tekst(n)).collect();
+        m.uit.push_str(&format!("const LOKAAL_{}: &[&str] = &[{}];\n\n", k, namen.join(", ")));
+        m.uit.push_str(&format!("/// Het stukje {}.\n", naam));
+        m.uit.push_str(&format!(
+            "fn stukje_{0}(s: &mut Staat, invoer: Vec<W>, r: usize) -> R<Option<W>> {{\n    s.begin_stukje(LOKAAL_{0}, invoer, r)?;\n    let uit = stukje_{0}_binnen(s);\n    s.einde_stukje();\n    uit\n}}\n\n",
+            k
+        ));
+        m.uit.push_str(&format!("fn stukje_{}_binnen(s: &mut Staat) -> R<Option<W>> {{\n", k));
+        m.opmerking(1, *regel);
+        m.lijst(blok, 1);
+        m.opmerking(1, *einde);
+        m.uit.push_str("    Ok(None)\n}\n\n");
+        m.lokaal = None;
+    }
 
     let namen: Vec<String> = m.namenlijst.iter().map(|n| rust_tekst(n)).collect();
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();

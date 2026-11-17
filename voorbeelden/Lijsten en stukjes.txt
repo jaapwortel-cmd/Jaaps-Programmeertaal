@@ -1,0 +1,34 @@
+Maak een lijst met als naam boodschappen
+Voeg "melk" toe aan de lijst boodschappen
+Voeg "brood" toe aan de lijst boodschappen
+Voeg "kaas" toe aan de lijst boodschappen
+Haal "brood" weg uit de lijst boodschappen
+Toon de lijst boodschappen
+Toon het aantal in de lijst boodschappen
+Toon het laatste uit de lijst boodschappen
+Toon nummer 1 uit de lijst boodschappen
+Als de lijst boodschappen bevat "kaas"
+Toon de tekst kaas staat erop
+Einde als
+Herhaal voor elk ding in de lijst boodschappen
+Toon "Koop" en dan ding
+Einde herhaal
+Onthoud som is 0
+Herhaal voor elk getal van 1 tot 10
+Tel getal op bij som
+Einde herhaal
+Toon som
+Maak een stukje met als naam Verdubbel, met als invoer getal
+Geef als uitkomst getal keer 2
+Einde van het stukje
+Maak een stukje met als naam Optellen, met als invoer a en b
+Geef als uitkomst a plus b
+Einde van het stukje
+Maak een stukje met als naam Groet
+Toon de tekst Goedemorgen
+Einde van het stukje
+Toon de uitkomst van Verdubbel met 21
+Toon de uitkomst van Optellen met 3 en 4 plus 1
+Doe Groet
+Onthoud x is de uitkomst van Verdubbel met som
+Toon x

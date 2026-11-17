@@ -238,11 +238,71 @@ Einde herhaal
 Een herhaling heeft altijd een grens. Zo kan je programma nooit vastlopen.
 Hoogstens een miljoen keer. Stopt een herhaling bij de grens, dan hoor je dat.
 
+4.7b Lijsten
+
+Een lijst bewaart meerdere dingen onder één naam.
+
+Maak een lijst met als naam boodschappen
+Voeg "melk" toe aan de lijst boodschappen
+Haal "melk" weg uit de lijst boodschappen
+Maak de lijst boodschappen leeg
+
+Lezen uit een lijst:
+de lijst boodschappen                 (alles, met komma's ertussen)
+het aantal in de lijst boodschappen
+het eerste uit de lijst boodschappen
+het laatste uit de lijst boodschappen
+nummer 2 uit de lijst boodschappen
+
+Kijken of iets in een lijst staat:
+Als de lijst boodschappen bevat "melk"
+
+Iets doen met elk ding in een lijst:
+Herhaal voor elk ding in de lijst boodschappen
+Toon ding
+Einde herhaal
+
+Tellen:
+Herhaal voor elk getal van 1 tot 10
+Toon getal
+Einde herhaal
+
+Zet tekst in een lijst tussen aanhalingstekens. Schrijf je Voeg melk toe, dan vraagt het programma
+of je de tekst "melk" bedoelt.
+
+4.7c Eigen stukjes (een blok met een naam)
+
+Een stukje is een rijtje opdrachten met een naam. Je schrijft het één keer en gebruikt het zo vaak je wilt.
+Een stukje kan invoer krijgen en een uitkomst geven.
+
+Maak een stukje met als naam Groet
+Toon de tekst Goedemorgen
+Einde van het stukje
+
+Maak een stukje met als naam Verdubbel, met als invoer getal
+Geef als uitkomst getal keer 2
+Einde van het stukje
+
+Maak een stukje met als naam Optellen, met als invoer a en b
+Geef als uitkomst a plus b
+Einde van het stukje
+
+Gebruiken:
+Doe Groet
+Doe Verdubbel met 5
+Toon de uitkomst van Verdubbel met 21
+Onthoud som is de uitkomst van Optellen met 3 en 4
+
+Wat je binnen een stukje onthoudt, bestaat alleen in dat stukje. Een stukje moet los staan, niet in een blok.
+"Geef als uitkomst" stopt het stukje meteen.
+Let op: de invoer moet een getal, een tekst of een naam zijn. Wil je eerst rekenen, onthoud de uitkomst dan eerst.
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
 Einde herhaal             sluit een herhaling
 Einde van de knop         sluit wat een knop doet
+Einde van het stukje      sluit een eigen stukje
 Einde                     sluit het laatste blok, wat het ook is
 
 
@@ -376,7 +436,6 @@ Dit staat op de wensenlijst, maar zit nog niet in deze versie:
 - afbeeldingen, QR-codes en streepjescodes;
 - bestanden en mappen lezen en schrijven vanuit je programma;
 - internet en netwerk;
-- eigen stukjes met een naam (functies) en lijsten met waarden;
 - twee voorwaarden in één keer met "en" of "of";
 - Engelse opdrachten en vertalen;
 - onthouden van jouw eigen formuleringen (zelflerend).

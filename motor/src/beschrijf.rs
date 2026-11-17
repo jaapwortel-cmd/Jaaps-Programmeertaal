@@ -13,6 +13,15 @@ fn uitdrukking(u: &Uitdrukking) -> String {
         Uitdrukking::Onderdeel { naam, als_getal: false } => format!("wat er in het onderdeel {} staat", naam),
         Uitdrukking::Onderdeel { naam, als_getal: true } => format!("het getal in het onderdeel {}", naam),
         Uitdrukking::Negatief(a) => format!("min {}", uitdrukking(a)),
+        Uitdrukking::LegeLijst => "een lege lijst".into(),
+        Uitdrukking::Aantal(a) => format!("het aantal dingen in {}", uitdrukking(a)),
+        Uitdrukking::Element(a, b) => format!("ding nummer {} uit {}", uitdrukking(b), uitdrukking(a)),
+        Uitdrukking::Aanroep { naam, invoer } if invoer.is_empty() => format!("de uitkomst van het stukje {}", naam),
+        Uitdrukking::Aanroep { naam, invoer } => format!(
+            "de uitkomst van het stukje {} met als invoer {}",
+            naam,
+            invoer.iter().map(uitdrukking).collect::<Vec<_>>().join(" en ")
+        ),
         Uitdrukking::Bewerking(a, t, b) => {
             let woord = match t {
                 Teken::EnDan => "met daarachter",
@@ -27,15 +36,39 @@ fn voorwaarde(v: &Voorwaarde) -> String {
     match v {
         Voorwaarde::Vergelijk(a, verg, b) => format!("{} {} {}", uitdrukking(a), verg.woorden(), uitdrukking(b)),
         Voorwaarde::IsWaar(a) => format!("{} waar is", uitdrukking(a)),
+        Voorwaarde::Bevat(a, b) => format!("{} {} bevat", uitdrukking(a), uitdrukking(b)),
     }
 }
 
-fn lijst(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
+fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
     let insp = "    ".repeat(diepte);
     for o in l {
         let r = o.regel;
         let zin = match &o.soort {
             Soort::Opmerking(t) => format!("een opmerking die niets doet: {}", t),
+            Soort::VoegToeAanLijst { waarde, lijst } => format!("voeg {} toe aan de lijst {}.", uitdrukking(waarde), lijst),
+            Soort::HaalUitLijst { waarde, lijst } => format!("haal {} weg uit de lijst {}.", uitdrukking(waarde), lijst),
+            Soort::Doe(a) => format!("voer uit: {}.", uitdrukking(a).replacen("de uitkomst van ", "", 1)),
+            Soort::GeefUitkomst(a) => format!("stop het stukje en geef als uitkomst {}.", uitdrukking(a)),
+            Soort::VoorElk { naam, lijst, blok, einde } => {
+                uit.push(format!("{}Regel {}: doe dit voor elk ding in {}. Het ding heet dan {}:", insp, r, uitdrukking(lijst), naam));
+                lijst_(blok, diepte + 1, uit);
+                uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
+                continue;
+            }
+            Soort::Tel { naam, van, tot, blok, einde } => {
+                uit.push(format!("{}Regel {}: tel {} van {} tot en met {}, en doe elke keer dit:", insp, r, naam, uitdrukking(van), uitdrukking(tot)));
+                lijst_(blok, diepte + 1, uit);
+                uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
+                continue;
+            }
+            Soort::Stukje { naam, invoer, blok, einde } => {
+                let met = if invoer.is_empty() { String::new() } else { format!(", met als invoer {}", invoer.join(" en ")) };
+                uit.push(format!("{}Regel {}: een eigen stukje met de naam {}{}. Dit doet het:", insp, r, naam, met));
+                lijst_(blok, diepte + 1, uit);
+                uit.push(format!("{}Regel {}: einde van het stukje {}.", insp, einde, naam));
+                continue;
+            }
             Soort::MaakOnderdeel { soort, naam } => {
                 format!("maak een {} in het laatste venster. De naam is: {}.", soort.woord(), naam)
             }
@@ -67,23 +100,23 @@ fn lijst(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
             Soort::TrekAf { naam, waarde } => format!("trek {} af van {}.", uitdrukking(waarde), naam),
             Soort::BijKnop { naam, blok, einde } => {
                 uit.push(format!("{}Regel {}: als iemand op de knop {} drukt, doe dan dit:", insp, r, naam));
-                lijst(blok, diepte + 1, uit);
+                lijst_(blok, diepte + 1, uit);
                 uit.push(format!("{}Regel {}: einde van wat de knop {} doet.", insp, einde, naam));
                 continue;
             }
             Soort::Als { voorwaarde: v, dan, anders, anders_regel, einde } => {
                 uit.push(format!("{}Regel {}: kijk of {}. Zo ja, doe dan dit:", insp, r, voorwaarde(v)));
-                lijst(dan, diepte + 1, uit);
+                lijst_(dan, diepte + 1, uit);
                 if let Some(a) = anders_regel {
                     uit.push(format!("{}Regel {}: zo nee, doe dan dit:", insp, a));
-                    lijst(anders, diepte + 1, uit);
+                    lijst_(anders, diepte + 1, uit);
                 }
                 uit.push(format!("{}Regel {}: einde van de keuze.", insp, einde));
                 continue;
             }
             Soort::Herhaal { aantal, blok, einde } => {
                 uit.push(format!("{}Regel {}: doe dit {} keer:", insp, r, uitdrukking(aantal)));
-                lijst(blok, diepte + 1, uit);
+                lijst_(blok, diepte + 1, uit);
                 uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
                 continue;
             }
@@ -95,7 +128,7 @@ fn lijst(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                     voorwaarde(v),
                     uitdrukking(hoogstens)
                 ));
-                lijst(blok, diepte + 1, uit);
+                lijst_(blok, diepte + 1, uit);
                 uit.push(format!("{}Regel {}: einde van de herhaling.", insp, einde));
                 continue;
             }
@@ -110,6 +143,6 @@ pub fn beschrijf(p: &Programma) -> String {
     if p.opdrachten.is_empty() {
         uit.push("Er staan nog geen opdrachten in.".into());
     }
-    lijst(&p.opdrachten, 0, &mut uit);
+    lijst_(&p.opdrachten, 0, &mut uit);
     uit.join("\n")
 }

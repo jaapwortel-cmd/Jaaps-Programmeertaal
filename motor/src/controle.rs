@@ -18,6 +18,7 @@ enum Type {
     Getal,
     Tekst,
     Waarheid,
+    Lijst,
     Onbekend,
 }
 
@@ -26,6 +27,7 @@ fn type_naam(t: Type) -> &'static str {
         Type::Getal => "een getal",
         Type::Tekst => "tekst",
         Type::Waarheid => "waar of niet waar",
+        Type::Lijst => "een lijst",
         Type::Onbekend => "onbekend",
     }
 }
@@ -65,7 +67,16 @@ fn onderdelen_in(u: &Uitdrukking, uit: &mut Vec<(String, bool)>) {
             onderdelen_in(a, uit);
             onderdelen_in(b, uit);
         }
-        Uitdrukking::Negatief(a) => onderdelen_in(a, uit),
+        Uitdrukking::Negatief(a) | Uitdrukking::Aantal(a) => onderdelen_in(a, uit),
+        Uitdrukking::Element(a, b) => {
+            onderdelen_in(a, uit);
+            onderdelen_in(b, uit);
+        }
+        Uitdrukking::Aanroep { invoer, .. } => {
+            for i in invoer {
+                onderdelen_in(i, uit);
+            }
+        }
         _ => {}
     }
 }
@@ -77,6 +88,10 @@ fn onderdelen_in_voorwaarde(v: &Voorwaarde, uit: &mut Vec<(String, bool)>) {
             onderdelen_in(b, uit);
         }
         Voorwaarde::IsWaar(a) => onderdelen_in(a, uit),
+        Voorwaarde::Bevat(a, b) => {
+            onderdelen_in(a, uit);
+            onderdelen_in(b, uit);
+        }
     }
 }
 
@@ -88,6 +103,22 @@ impl<'a> Controle<'a> {
             Uitdrukking::Vast(Waarde::Waarheid(_)) => Ok(Type::Waarheid),
             Uitdrukking::Naam(n) => Ok(self.types.get(n).map(|t| t.0).unwrap_or(Type::Onbekend)),
             Uitdrukking::Onderdeel { als_getal: true, .. } => Ok(Type::Getal),
+            Uitdrukking::LegeLijst => Ok(Type::Lijst),
+            Uitdrukking::Aanroep { .. } => Ok(Type::Onbekend),
+            Uitdrukking::Aantal(a) => match self.type_van(a)? {
+                Type::Lijst | Type::Onbekend => Ok(Type::Getal),
+                t => Err(format!("Het aantal kan ik alleen tellen in een lijst. Maar {} is {}.", kort(a), type_naam(t))),
+            },
+            Uitdrukking::Element(a, b) => {
+                match self.type_van(a)? {
+                    Type::Lijst | Type::Onbekend => {}
+                    t => return Err(format!("Iets uit een lijst halen kan alleen bij een lijst. Maar {} is {}.", kort(a), type_naam(t))),
+                }
+                match self.type_van(b)? {
+                    Type::Getal | Type::Onbekend => Ok(Type::Onbekend),
+                    t => Err(format!("Het nummer in de lijst moet een getal zijn, maar {} is {}.", kort(b), type_naam(t))),
+                }
+            }
             Uitdrukking::Onderdeel { naam, .. } => Ok(match self.onderdeel_soort(naam) {
                 Some(OnderdeelSoort::Selectievakje) => Type::Waarheid,
                 Some(_) => Type::Tekst,
@@ -95,7 +126,7 @@ impl<'a> Controle<'a> {
             }),
             Uitdrukking::Negatief(a) => {
                 let t = self.type_van(a)?;
-                if matches!(t, Type::Tekst | Type::Waarheid) {
+                if matches!(t, Type::Tekst | Type::Waarheid | Type::Lijst) {
                     return Err(format!("Min ervoor kan alleen bij een getal. {} is {}.", kort(a), type_naam(t)));
                 }
                 Ok(Type::Getal)
@@ -107,7 +138,7 @@ impl<'a> Controle<'a> {
                     return Ok(Type::Tekst);
                 }
                 for (deel, t) in [(a, ta), (b, tb)] {
-                    if matches!(t, Type::Tekst | Type::Waarheid) {
+                    if matches!(t, Type::Tekst | Type::Waarheid | Type::Lijst) {
                         return Err(format!(
                             "Rekenen ({}) kan alleen met getallen, maar {} is {}. Wil je stukken tekst aan elkaar zetten? Gebruik dan \"en dan\".",
                             teken.woord(),
@@ -251,6 +282,16 @@ impl<'a> Controle<'a> {
         v.namen(&mut namen);
         self.controleer_namen(regel, namen, in_knop, None);
         match v {
+            Voorwaarde::Bevat(a, b) => {
+                match self.type_van(a) {
+                    Err(t) => self.meld(Melding::fout(regel, t)),
+                    Ok(Type::Lijst) | Ok(Type::Onbekend) => {}
+                    Ok(t) => self.meld(Melding::fout(regel, format!("\"bevat\" kan alleen bij een lijst. Maar {} is {}.", kort(a), type_naam(t)))),
+                }
+                if let Err(t) = self.type_van(b) {
+                    self.meld(Melding::fout(regel, t));
+                }
+            }
             Voorwaarde::IsWaar(u) => match self.type_van(u) {
                 Err(t) => self.meld(Melding::fout(regel, t)),
                 Ok(Type::Getal) | Ok(Type::Tekst) => self.meld(Melding::fout(
@@ -271,7 +312,7 @@ impl<'a> Controle<'a> {
                 let groter_kleiner = !matches!(verg, Vergelijking::Gelijk | Vergelijking::NietGelijk);
                 if groter_kleiner {
                     for (deel, t) in [(a, ta), (b, tb)] {
-                        if matches!(t, Type::Tekst | Type::Waarheid) {
+                        if matches!(t, Type::Tekst | Type::Waarheid | Type::Lijst) {
                             return self.meld(Melding::fout(
                                 regel,
                                 format!("Groter of kleiner kan ik alleen bij getallen bepalen. Maar {} is {}.", kort(deel), type_naam(t)),
@@ -299,6 +340,70 @@ impl<'a> Controle<'a> {
             let r = o.regel;
             match &o.soort {
                 Soort::Opmerking(_) | Soort::MaakVenster { .. } | Soort::MaakKnop { .. } | Soort::Installatie(_) => {}
+                Soort::VoegToeAanLijst { waarde, lijst } | Soort::HaalUitLijst { waarde, lijst } => {
+                    let mut od = Vec::new();
+                    onderdelen_in(waarde, &mut od);
+                    self.controleer_onderdelen_in(r, od);
+                    let mut namen = Vec::new();
+                    waarde.namen(&mut namen);
+                    if let Uitdrukking::Naam(n) = waarde {
+                        if !self.is_bekend(n, r, in_knop) && !self.onthoud.iter().any(|o| tekst::mag_tikfout_zijn(n, &o.0)) {
+                            let regeltekst = self.regels.get(r - 1).copied().unwrap_or("");
+                            if let Some(nieuw) = aanhalen(regeltekst, n) {
+                                self.al_gemeld.insert((r, n.clone()));
+                                self.meld(Melding::vraag(r, format!("Je gebruikt \"{}\", maar je hebt nog niet gezegd wat {} is.", n, n)).met_voorstel(
+                                    format!("Bedoel je de tekst {}? Dan wordt de regel: {}", n, nieuw),
+                                    Wijziging::VervangRegel { regel: r, nieuw },
+                                ));
+                            }
+                        }
+                    }
+                    self.controleer_namen(r, namen, in_knop, None);
+                    self.controleer_namen(r, vec![lijst.clone()], in_knop, None);
+                    if let Err(t) = self.type_van(waarde) {
+                        self.meld(Melding::fout(r, t));
+                    }
+                    let tl = self.types.get(lijst).map(|t| t.0).unwrap_or(Type::Onbekend);
+                    if !matches!(tl, Type::Lijst | Type::Onbekend) {
+                        self.meld(Melding::fout(
+                            r,
+                            format!("{} is {}, geen lijst. Maak eerst een lijst met: Maak een lijst met als naam {}.", lijst, type_naam(tl), lijst),
+                        ));
+                    }
+                }
+                Soort::VoorElk { lijst, blok, .. } => {
+                    let mut namen = Vec::new();
+                    lijst.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    match self.type_van(lijst) {
+                        Ok(Type::Lijst) | Ok(Type::Onbekend) => {}
+                        Ok(t) => self.meld(Melding::fout(r, format!("Voor elk ding in ... kan alleen bij een lijst. Maar {} is {}.", kort(lijst), type_naam(t)))),
+                        Err(t) => self.meld(Melding::fout(r, t)),
+                    }
+                    self.controleer_lijst(blok, in_knop);
+                }
+                Soort::Tel { van, tot, blok, .. } => {
+                    self.controleer_aantal(r, van, in_knop);
+                    self.controleer_aantal(r, tot, in_knop);
+                    if let (Some(a), Some(b)) = (vast_getal(van), vast_getal(tot)) {
+                        if b - a > MAX_HERHALINGEN {
+                            self.meld(Melding::fout(r, "Zo ver tellen mag niet. Het kan hoogstens een miljoen keer, anders loopt het programma vast."));
+                        }
+                    }
+                    self.controleer_lijst(blok, in_knop);
+                }
+                Soort::Stukje { blok, .. } => self.controleer_lijst(blok, true),
+                Soort::Doe(u) | Soort::GeefUitkomst(u) => {
+                    let mut od = Vec::new();
+                    onderdelen_in(u, &mut od);
+                    self.controleer_onderdelen_in(r, od);
+                    let mut namen = Vec::new();
+                    u.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    if let Err(t) = self.type_van(u) {
+                        self.meld(Melding::fout(r, t));
+                    }
+                }
                 Soort::MaakOnderdeel { .. } => {}
                 Soort::VoegKeuzeToe { keuze, lijst } => {
                     let mut namen = Vec::new();
@@ -385,7 +490,7 @@ impl<'a> Controle<'a> {
                         Err(t) => self.meld(Melding::fout(r, t)),
                         Ok(t) => {
                             for (wat, tt) in [(naam.clone(), doel), (kort(waarde), t)] {
-                                if matches!(tt, Type::Tekst | Type::Waarheid) {
+                                if matches!(tt, Type::Tekst | Type::Waarheid | Type::Lijst) {
                                     self.meld(Melding::fout(
                                         r,
                                         format!("Optellen en aftrekken kan alleen met getallen. Maar {} is {}.", wat, type_naam(tt)),
@@ -468,6 +573,19 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
                     verzamel(c, anders, false);
                 }
                 Soort::Herhaal { blok, .. } | Soort::HerhaalZolang { blok, .. } | Soort::BijKnop { blok, .. } => {
+                    verzamel(c, blok, false)
+                }
+                Soort::VoorElk { naam, blok, .. } | Soort::Tel { naam, blok, .. } => {
+                    let t = if matches!(o.soort, Soort::Tel { .. }) { Type::Getal } else { Type::Onbekend };
+                    c.types.entry(naam.clone()).or_insert((t, o.regel));
+                    c.onthoud.push((naam.clone(), o.regel, false));
+                    verzamel(c, blok, false)
+                }
+                Soort::Stukje { invoer, blok, .. } => {
+                    for i in invoer {
+                        c.types.entry(i.clone()).or_insert((Type::Onbekend, o.regel));
+                        c.onthoud.push((i.clone(), o.regel, false));
+                    }
                     verzamel(c, blok, false)
                 }
                 _ => {}
@@ -587,6 +705,7 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
     }
 
     controleer_installatie(&mut c, p);
+    controleer_stukjes(&mut c, p);
 
     // Ronde 2: elke opdracht nalopen.
     c.controleer_lijst(&p.opdrachten, false);
@@ -664,5 +783,96 @@ fn controleer_installatie(c: &mut Controle, p: &Programma) {
                 t, b
             ),
         ));
+    }
+}
+
+/// Zet de naam (uit de regel) tussen aanhalingstekens: Voeg melk toe ... wordt Voeg "melk" toe ...
+fn aanhalen(regel: &str, naam: &str) -> Option<String> {
+    let norm = tekst::normaliseer(regel);
+    let woorden: Vec<&str> = norm.split(' ').collect();
+    let oud: Vec<&str> = naam.split(' ').collect();
+    for i in 0..woorden.len() {
+        if i + oud.len() <= woorden.len() && oud.iter().enumerate().all(|(j, o)| woorden[i + j].to_lowercase() == *o) {
+            let mut uit: Vec<String> = woorden[..i].iter().map(|s| s.to_string()).collect();
+            uit.push(format!("\"{}\"", woorden[i..i + oud.len()].join(" ")));
+            uit.extend(woorden[i + oud.len()..].iter().map(|s| s.to_string()));
+            return Some(uit.join(" "));
+        }
+    }
+    None
+}
+
+/// Eigen stukjes: bestaan ze, krijgen ze genoeg invoer, en zijn de namen uniek?
+fn controleer_stukjes(c: &mut Controle, p: &Programma) {
+    let stukjes: Vec<(String, Vec<String>, usize)> = p
+        .alle()
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::Stukje { naam, invoer, .. } => Some((naam.clone(), invoer.clone(), o.regel)),
+            _ => None,
+        })
+        .collect();
+    for (i, (naam, _, regel)) in stukjes.iter().enumerate() {
+        if let Some((_, _, eerste)) = stukjes[..i].iter().find(|s| &s.0 == naam) {
+            c.meld(Melding::vraag(
+                *regel,
+                format!("Er is al een stukje met de naam {}, op regel {}. Dat spreekt elkaar tegen. Welke naam moet dit stukje krijgen?", naam, eerste),
+            ));
+        }
+        if let Some((_, r, _)) = c.onthoud.iter().find(|o| &o.0 == naam).cloned() {
+            c.meld(Melding::vraag(
+                *regel,
+                format!("{} is al de naam van iets dat je onthoudt (regel {}). Een stukje moet een andere naam hebben.", naam, r),
+            ));
+        }
+    }
+    for o in p.alle() {
+        let mut aanroepen = Vec::new();
+        for u in o.soort.uitdrukkingen() {
+            u.aanroepen(&mut aanroepen);
+        }
+        for (naam, aantal) in aanroepen {
+            match stukjes.iter().find(|s| s.0 == naam) {
+                Some((_, invoer, _)) if invoer.len() == aantal => {}
+                Some((_, invoer, _)) => c.meld(Melding::fout(
+                    o.regel,
+                    if invoer.is_empty() {
+                        format!("Het stukje {} heeft geen invoer nodig, maar je geeft er {}.", naam, aantal)
+                    } else {
+                        format!(
+                            "Het stukje {} heeft {} invoer nodig ({}), maar je geeft er {}. Schrijf bijvoorbeeld: Doe {} met {}.",
+                            naam,
+                            invoer.len(),
+                            invoer.join(" en "),
+                            aantal,
+                            naam,
+                            invoer.iter().map(|_| "1").collect::<Vec<_>>().join(" en ")
+                        )
+                    },
+                )),
+                None => {
+                    let lijkt_op = stukjes
+                        .iter()
+                        .map(|s| s.0.clone())
+                        .filter(|s| tekst::mag_tikfout_zijn(&naam, s))
+                        .min_by_key(|s| tekst::afstand(&naam, s));
+                    let regeltekst = c.regels.get(o.regel - 1).copied().unwrap_or("");
+                    let m = match lijkt_op.as_ref().and_then(|g| vervang_naam(regeltekst, &naam, g).map(|n| (g.clone(), n))) {
+                        Some((goed, nieuw)) => Melding::vraag(o.regel, format!("Er is geen stukje met de naam {}.", naam)).met_voorstel(
+                            format!("Bedoel je {}? Dan wordt de regel: {}", goed, nieuw),
+                            Wijziging::VervangRegel { regel: o.regel, nieuw },
+                        ),
+                        None => Melding::vraag(
+                            o.regel,
+                            format!(
+                                "Er is geen stukje met de naam {}. Welk stukje bedoel je? Een stukje maak je met: Maak een stukje met als naam {}.",
+                                naam, naam
+                            ),
+                        ),
+                    };
+                    c.meld(m);
+                }
+            }
+        }
     }
 }

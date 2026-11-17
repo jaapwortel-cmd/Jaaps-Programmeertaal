@@ -40,6 +40,14 @@ pub enum Uitdrukking {
     /// Wat er in een onderdeel van het scherm staat (tekstvak, label, selectievakje, keuzelijst).
     /// `als_getal`: de tekst als getal lezen ("het getal in het tekstvak Leeftijd").
     Onderdeel { naam: String, als_getal: bool },
+    /// Een nieuwe, lege lijst.
+    LegeLijst,
+    /// Hoeveel dingen er in een lijst staan.
+    Aantal(Box<Uitdrukking>),
+    /// Eén ding uit een lijst: nummer 1 is het eerste, -1 is het laatste.
+    Element(Box<Uitdrukking>, Box<Uitdrukking>),
+    /// De uitkomst van een eigen stukje.
+    Aanroep { naam: String, invoer: Vec<Uitdrukking> },
     Bewerking(Box<Uitdrukking>, Teken, Box<Uitdrukking>),
     Negatief(Box<Uitdrukking>),
 }
@@ -54,7 +62,55 @@ impl Uitdrukking {
                 a.namen(uit);
                 b.namen(uit);
             }
-            Uitdrukking::Negatief(a) => a.namen(uit),
+            Uitdrukking::Negatief(a) | Uitdrukking::Aantal(a) => a.namen(uit),
+            Uitdrukking::Element(a, b) => {
+                a.namen(uit);
+                b.namen(uit);
+            }
+            Uitdrukking::LegeLijst => {}
+            Uitdrukking::Aanroep { invoer, .. } => {
+                for i in invoer {
+                    i.namen(uit);
+                }
+            }
+        }
+    }
+
+    /// Alle aanroepen van eigen stukjes in deze uitdrukking: (naam, aantal invoer).
+    pub fn aanroepen(&self, uit: &mut Vec<(String, usize)>) {
+        match self {
+            Uitdrukking::Aanroep { naam, invoer } => {
+                uit.push((naam.clone(), invoer.len()));
+                for i in invoer {
+                    i.aanroepen(uit);
+                }
+            }
+            Uitdrukking::Bewerking(a, _, b) | Uitdrukking::Element(a, b) => {
+                a.aanroepen(uit);
+                b.aanroepen(uit);
+            }
+            Uitdrukking::Negatief(a) | Uitdrukking::Aantal(a) => a.aanroepen(uit),
+            _ => {}
+        }
+    }
+
+    /// Verandert een naam van een eigen stukje in een aanroep zonder invoer.
+    pub fn verbind_stukjes(&mut self, stukjes: &[String]) {
+        match self {
+            Uitdrukking::Naam(n) if stukjes.contains(n) => {
+                *self = Uitdrukking::Aanroep { naam: n.clone(), invoer: Vec::new() };
+            }
+            Uitdrukking::Bewerking(a, _, b) | Uitdrukking::Element(a, b) => {
+                a.verbind_stukjes(stukjes);
+                b.verbind_stukjes(stukjes);
+            }
+            Uitdrukking::Negatief(a) | Uitdrukking::Aantal(a) => a.verbind_stukjes(stukjes),
+            Uitdrukking::Aanroep { invoer, .. } => {
+                for i in invoer {
+                    i.verbind_stukjes(stukjes);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -87,6 +143,8 @@ pub enum Voorwaarde {
     Vergelijk(Uitdrukking, Vergelijking, Uitdrukking),
     /// Een waarde die zelf waar of niet waar is.
     IsWaar(Uitdrukking),
+    /// Staat iets in een lijst?
+    Bevat(Uitdrukking, Uitdrukking),
 }
 
 impl Voorwaarde {
@@ -97,6 +155,24 @@ impl Voorwaarde {
                 b.namen(uit);
             }
             Voorwaarde::IsWaar(a) => a.namen(uit),
+            Voorwaarde::Bevat(a, b) => {
+                a.namen(uit);
+                b.namen(uit);
+            }
+        }
+    }
+
+    pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
+        match self {
+            Voorwaarde::Vergelijk(a, _, b) | Voorwaarde::Bevat(a, b) => vec![a, b],
+            Voorwaarde::IsWaar(a) => vec![a],
+        }
+    }
+
+    pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
+        match self {
+            Voorwaarde::Vergelijk(a, _, b) | Voorwaarde::Bevat(a, b) => vec![a, b],
+            Voorwaarde::IsWaar(a) => vec![a],
         }
     }
 }
@@ -124,6 +200,20 @@ pub enum Soort {
     Als { voorwaarde: Voorwaarde, dan: Vec<Opdracht>, anders: Vec<Opdracht>, anders_regel: Option<usize>, einde: usize },
     Herhaal { aantal: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
     HerhaalZolang { voorwaarde: Voorwaarde, hoogstens: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
+    /// Iets aan een lijst toevoegen.
+    VoegToeAanLijst { waarde: Uitdrukking, lijst: String },
+    /// Iets uit een lijst weghalen (de eerste keer dat het erin staat).
+    HaalUitLijst { waarde: Uitdrukking, lijst: String },
+    /// "Herhaal voor elk ding in de lijst boodschappen".
+    VoorElk { naam: String, lijst: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
+    /// "Herhaal voor elk getal van 1 tot 10".
+    Tel { naam: String, van: Uitdrukking, tot: Uitdrukking, blok: Vec<Opdracht>, einde: usize },
+    /// Een eigen stukje met een naam, invoer en misschien een uitkomst.
+    Stukje { naam: String, invoer: Vec<String>, blok: Vec<Opdracht>, einde: usize },
+    /// "Doe Verdubbel met 5": een eigen stukje uitvoeren.
+    Doe(Uitdrukking),
+    /// "Geef als uitkomst ...": het stukje stopt en geeft dit terug.
+    GeefUitkomst(Uitdrukking),
     /// Een tekstvak, label, selectievakje of keuzelijst in het laatste venster.
     MaakOnderdeel { soort: OnderdeelSoort, naam: String },
     /// Een keuze toevoegen aan een keuzelijst of uitklaplijst.
@@ -192,6 +282,72 @@ pub enum InstallatieZin {
     LicentieBestand(String),
 }
 
+impl Soort {
+    /// Alle uitdrukkingen in deze opdracht (niet in de blokken eronder).
+    pub fn uitdrukkingen_mut(&mut self) -> Vec<&mut Uitdrukking> {
+        match self {
+            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) => vec![u],
+            Soort::Onthoud { waarde, .. }
+            | Soort::Verander { waarde, .. }
+            | Soort::TelOp { waarde, .. }
+            | Soort::TrekAf { waarde, .. }
+            | Soort::VoegToeAanLijst { waarde, .. }
+            | Soort::HaalUitLijst { waarde, .. }
+            | Soort::ZetIn { waarde, .. } => vec![waarde],
+            Soort::VoegKeuzeToe { keuze, .. } => vec![keuze],
+            Soort::Als { voorwaarde, .. } => voorwaarde.uitdrukkingen_mut(),
+            Soort::Herhaal { aantal, .. } => vec![aantal],
+            Soort::HerhaalZolang { voorwaarde, hoogstens, .. } => {
+                let mut v = voorwaarde.uitdrukkingen_mut();
+                v.push(hoogstens);
+                v
+            }
+            Soort::VoorElk { lijst, .. } => vec![lijst],
+            Soort::Tel { van, tot, .. } => vec![van, tot],
+            _ => Vec::new(),
+        }
+    }
+
+    /// Alle uitdrukkingen in deze opdracht (alleen lezen).
+    pub fn uitdrukkingen(&self) -> Vec<&Uitdrukking> {
+        match self {
+            Soort::Toon(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) => vec![u],
+            Soort::Onthoud { waarde, .. }
+            | Soort::Verander { waarde, .. }
+            | Soort::TelOp { waarde, .. }
+            | Soort::TrekAf { waarde, .. }
+            | Soort::VoegToeAanLijst { waarde, .. }
+            | Soort::HaalUitLijst { waarde, .. }
+            | Soort::ZetIn { waarde, .. } => vec![waarde],
+            Soort::VoegKeuzeToe { keuze, .. } => vec![keuze],
+            Soort::Als { voorwaarde, .. } => voorwaarde.uitdrukkingen(),
+            Soort::Herhaal { aantal, .. } => vec![aantal],
+            Soort::HerhaalZolang { voorwaarde, hoogstens, .. } => {
+                let mut v = voorwaarde.uitdrukkingen();
+                v.push(hoogstens);
+                v
+            }
+            Soort::VoorElk { lijst, .. } => vec![lijst],
+            Soort::Tel { van, tot, .. } => vec![van, tot],
+            _ => Vec::new(),
+        }
+    }
+
+    /// De blokken onder deze opdracht.
+    pub fn blokken_mut(&mut self) -> Vec<&mut Vec<Opdracht>> {
+        match self {
+            Soort::BijKnop { blok, .. }
+            | Soort::Herhaal { blok, .. }
+            | Soort::HerhaalZolang { blok, .. }
+            | Soort::VoorElk { blok, .. }
+            | Soort::Tel { blok, .. }
+            | Soort::Stukje { blok, .. } => vec![blok],
+            Soort::Als { dan, anders, .. } => vec![dan, anders],
+            _ => Vec::new(),
+        }
+    }
+}
+
 /// Een heel programma.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Programma {
@@ -205,9 +361,12 @@ impl Programma {
             for o in lijst {
                 uit.push(o);
                 match &o.soort {
-                    Soort::BijKnop { blok, .. } | Soort::Herhaal { blok, .. } | Soort::HerhaalZolang { blok, .. } => {
-                        loop_langs(blok, uit)
-                    }
+                    Soort::BijKnop { blok, .. }
+                    | Soort::Herhaal { blok, .. }
+                    | Soort::HerhaalZolang { blok, .. }
+                    | Soort::VoorElk { blok, .. }
+                    | Soort::Tel { blok, .. }
+                    | Soort::Stukje { blok, .. } => loop_langs(blok, uit),
                     Soort::Als { dan, anders, .. } => {
                         loop_langs(dan, uit);
                         loop_langs(anders, uit);

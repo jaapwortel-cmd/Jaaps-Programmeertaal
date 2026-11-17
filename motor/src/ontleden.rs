@@ -17,6 +17,9 @@ pub(crate) enum Vorm {
     OpenHerhaal(Uitdrukking),
     OpenZolang(Voorwaarde, Uitdrukking),
     OpenKnop(String),
+    OpenVoorElk(String, Uitdrukking),
+    OpenTel(String, Uitdrukking, Uitdrukking),
+    OpenStukje(String, Vec<String>),
     Einde(Blok),
 }
 
@@ -26,6 +29,7 @@ pub(crate) enum Blok {
     Als,
     Herhaal,
     Knop,
+    Stukje,
 }
 
 #[derive(Debug)]
@@ -49,7 +53,8 @@ fn onbekend() -> RegelFout {
 const GERESERVEERD: &[&str] = &[
     "plus", "min", "keer", "maal", "gedeeld", "door", "en", "of", "dan", "is", "niet", "waar", "onwaar", "groter",
     "kleiner", "gelijk", "aan", "minstens", "hoogstens", "meer", "minder", "hoger", "lager", "als", "anders", "op",
-    "bij", "van", "in", "naar", "met", "toon", "maak", "onthoud", "verander", "herhaal", "einde", "zolang",
+    "bij", "van", "in", "naar", "met", "toon", "maak", "onthoud", "verander", "herhaal", "einde", "zolang", "bevat", "tot",
+    "elk", "elke", "uit",
 ];
 
 /// Woorden uit de zinnen die de motor kent. Hiermee zoeken we naar tikfouten.
@@ -60,12 +65,13 @@ const WOORDENLIJST: &[&str] = &[
     "dan", "gelijk", "aan", "minstens", "waar", "niet", "herhaling", "keuze", "waarde", "uitkomst", "een", "de", "het",
     "ik", "in", "installatiebestand", "installatie", "snelkoppeling", "bureaublad", "startmenu", "beheerdersrechten",
     "versie", "maker", "voeg", "toe", "bestand", "licentie", "staat", "tekstvak", "label", "selectievakje", "keuzelijst",
-    "uitklaplijst", "vink", "aan", "uit", "focus", "groot", "leeg", "aangevinkt", "keuze", "getal",
+    "uitklaplijst", "vink", "aan", "uit", "focus", "groot", "leeg", "aangevinkt", "keuze", "getal", "lijst", "stukje",
+    "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "lijst", "tabel", "menu", "werkbalk",
+    "tabel", "menu", "werkbalk",
     "afbeelding", "plaatje", "foto", "geluid", "map", "bestand", "tekstverwerker", "qr-code", "streepjescode",
 ];
 
@@ -174,9 +180,78 @@ fn onderdeel_operand(s: &[Stuk]) -> Option<Uitdrukking> {
     None
 }
 
+/// Lijsten en eigen stukjes in een waarde.
+fn lijst_of_stukje(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
+    let lijst_na = |s: &[Stuk], vanaf: usize| -> Result<Uitdrukking, String> {
+        let Some(p) = zoek(s, &["lijst"], vanaf) else {
+            return Err(format!("Welke lijst bedoel je bij \"{}\"? Schrijf bijvoorbeeld: het aantal in de lijst boodschappen.", bron_tekst(s)));
+        };
+        Ok(Uitdrukking::Naam(naam(&s[p + 1..])?))
+    };
+    if begint(s, &["de", "lijst"]) && s.len() > 2 {
+        return Ok(Some(Uitdrukking::Naam(naam(&s[2..])?)));
+    }
+    if begint(s, &["het", "aantal"]) && zoek(s, &["lijst"], 2).is_some() {
+        return Ok(Some(Uitdrukking::Aantal(Box::new(lijst_na(s, 2)?))));
+    }
+    if (begint(s, &["het", "eerste"]) || begint(s, &["het", "laatste"])) && zoek(s, &["lijst"], 2).is_some() {
+        let plek = if klein(s, 1) == "eerste" { 1.0 } else { -1.0 };
+        return Ok(Some(Uitdrukking::Element(Box::new(lijst_na(s, 2)?), Box::new(Uitdrukking::Vast(Waarde::Getal(plek))))));
+    }
+    if begint(s, &["nummer"]) {
+        if let Some(p) = (2..s.len()).find(|&i| matches!(klein(s, i).as_str(), "uit" | "van") && zoek(s, &["lijst"], i).is_some()) {
+            let nummer = operand(&s[1..p], false)?;
+            return Ok(Some(Uitdrukking::Element(Box::new(lijst_na(s, p)?), Box::new(nummer))));
+        }
+    }
+    let mut r = s;
+    if begint(r, &["de", "uitkomst", "van"]) && r.len() > 3 {
+        r = &r[3..];
+        if zoek(r, &["met"], 1).is_none() {
+            return Ok(Some(operand(r, false)?));
+        }
+    }
+    if let Some(m) = zoek(r, &["met"], 1) {
+        if r[..m].iter().all(|x| matches!(x, Stuk::Woord(_))) {
+            return Ok(Some(aanroep(r)?));
+        }
+    }
+    Ok(None)
+}
+
+/// "Verdubbel met 5", "Optellen met 3 en 4": de naam van een stukje en de invoer.
+pub(crate) fn aanroep(s: &[Stuk]) -> Result<Uitdrukking, String> {
+    let m = zoek(s, &["met"], 1).unwrap_or(s.len());
+    let naam_deel = &s[..m];
+    if naam_deel.is_empty() {
+        return Err("Welk stukje bedoel je? Schrijf bijvoorbeeld: Doe Verdubbel met 5.".into());
+    }
+    let naam = naam_deel.iter().filter_map(|x| x.klein()).collect::<Vec<_>>().join(" ");
+    let mut invoer = Vec::new();
+    if m < s.len() {
+        let rest = &s[m + 1..];
+        if rest.is_empty() {
+            return Err(format!("Na \"met\" mis ik de invoer voor {}.", naam));
+        }
+        let mut begin = 0;
+        for i in 0..=rest.len() {
+            if i == rest.len() || (klein(rest, i) == "en" && klein(rest, i + 1) != "dan") {
+                if i == begin {
+                    return Err(format!("Bij de invoer voor {} mis ik een waarde rond \"en\".", naam));
+                }
+                invoer.push(uitdrukking(&rest[begin..i])?);
+                begin = i + 1;
+            }
+        }
+    }
+    Ok(Uitdrukking::Aanroep { naam, invoer })
+}
+
 fn operand(s: &[Stuk], negatief: bool) -> Result<Uitdrukking, String> {
     let u = if let Some(o) = onderdeel_operand(s) {
         o
+    } else if let Some(l) = lijst_of_stukje(s)? {
+        l
     } else if let [Stuk::Tekst(t)] = s {
         Uitdrukking::Vast(Waarde::Tekst(t.clone()))
     } else if s.iter().all(|x| matches!(x, Stuk::Woord(_))) {
@@ -306,6 +381,13 @@ const EN_OF: &str =
 pub(crate) fn voorwaarde(s: &[Stuk]) -> Result<Voorwaarde, String> {
     if s.is_empty() {
         return Err("Waar moet ik op letten? Schrijf bijvoorbeeld: Als teller is groter dan 5.".into());
+    }
+    // "de lijst boodschappen bevat "melk""
+    if let Some(p) = zoek(s, &["bevat"], 1) {
+        if p + 1 >= s.len() {
+            return Err("Wat moet er in de lijst staan? Schrijf bijvoorbeeld: Als de lijst boodschappen bevat \"melk\".".into());
+        }
+        return Ok(Voorwaarde::Bevat(uitdrukking(&s[..p])?, uitdrukking(&s[p + 1..])?));
     }
     // "het selectievakje Geluid is aangevinkt", "het tekstvak Naam is leeg" (ook met "niet").
     let laatste = klein(s, s.len() - 1);
@@ -492,6 +574,60 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     let n = |r: &[Stuk]| naam(r).map_err(fout);
 
     match w0.as_str() {
+        "maak" if begint(&s, &["maak", "de", "lijst"]) && klein(&s, s.len() - 1) == "leeg" && s.len() >= 5 => {
+            Ok(Vorm::Los(Soort::Verander { naam: n(&s[3..s.len() - 1])?, waarde: Uitdrukking::LegeLijst }))
+        }
+        "maak" if matches!(klein(&s, 1).as_str(), "een" | "nieuwe" | "lege") && matches!(klein(&s, 2).as_str(), "lijst" | "stukje") => {
+            let wat = klein(&s, 2);
+            let mut i = 3;
+            if klein(&s, i) == "met" {
+                i += 1;
+            }
+            if matches!(klein(&s, i).as_str(), "als" | "de") {
+                i += 1;
+            }
+            if klein(&s, i) == "naam" {
+                i += 1;
+            }
+            let voorbeeld = if wat == "lijst" {
+                "Maak een lijst met als naam boodschappen"
+            } else {
+                "Maak een stukje met als naam Verdubbel, met als invoer getal"
+            };
+            let eind_naam = zoek(&s, &["met"], i).unwrap_or(s.len());
+            if i >= eind_naam {
+                return Err(fout(format!("Welke naam moet de {} krijgen? Schrijf bijvoorbeeld: {}.", wat, voorbeeld)));
+            }
+            if wat == "lijst" {
+                if eind_naam != s.len() {
+                    return Err(fout("Een lijst begint altijd leeg. Voeg daarna dingen toe met: Voeg \"melk\" toe aan de lijst boodschappen."));
+                }
+                return Ok(Vorm::Los(Soort::Onthoud {
+                    naam: n(&s[i..])?,
+                    waarde: Uitdrukking::LegeLijst,
+                    bron: "een lege lijst".into(),
+                }));
+            }
+            let stukjenaam = s[i..eind_naam].iter().filter_map(|x| x.klein()).collect::<Vec<_>>().join(" ");
+            let mut invoer = Vec::new();
+            if eind_naam < s.len() {
+                let Some(p) = zoek(&s, &["invoer"], eind_naam) else {
+                    return Err(fout(format!("Schrijf het zo: {}.", voorbeeld)));
+                };
+                let rest = &s[p + 1..];
+                let mut begin = 0;
+                for j in 0..=rest.len() {
+                    if j == rest.len() || klein(rest, j) == "en" {
+                        if j == begin {
+                            return Err(fout("Bij de invoer mis ik een naam rond \"en\"."));
+                        }
+                        invoer.push(n(&rest[begin..j])?);
+                        begin = j + 1;
+                    }
+                }
+            }
+            Ok(Vorm::OpenStukje(stukjenaam, invoer))
+        }
         "maak" if matches!(klein(&s, 1).as_str(), "het" | "de")
             && klein(&s, s.len() - 1) == "leeg"
             && s.len() >= 5
@@ -635,6 +771,42 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             }
             Ok(Vorm::Los(Soort::VoegKeuzeToe { keuze, lijst: rest_tekst(&s[l + 1..]) }))
         }
+        "voeg" if zoek(&s, &["toe", "aan"], 1).map_or(false, |t| zoek(&s, &["lijst"], t).is_some()) => {
+            let t = zoek(&s, &["toe", "aan"], 1).unwrap();
+            let l = zoek(&s, &["lijst"], t).unwrap();
+            if t == 1 || l + 1 >= s.len() {
+                return Err(fout("Schrijf het zo: Voeg \"melk\" toe aan de lijst boodschappen."));
+            }
+            Ok(Vorm::Los(Soort::VoegToeAanLijst { waarde: u(&s[1..t])?, lijst: n(&s[l + 1..])? }))
+        }
+        "haal" => {
+            let (Some(w), Some(l)) = (zoek(&s, &["weg"], 1), zoek(&s, &["lijst"], 1)) else {
+                return Err(fout("Schrijf het zo: Haal \"melk\" weg uit de lijst boodschappen."));
+            };
+            if w == 1 || l + 1 >= s.len() || l < w {
+                return Err(fout("Schrijf het zo: Haal \"melk\" weg uit de lijst boodschappen."));
+            }
+            Ok(Vorm::Los(Soort::HaalUitLijst { waarde: u(&s[1..w])?, lijst: n(&s[l + 1..])? }))
+        }
+        "doe" => {
+            if s.len() < 2 {
+                return Err(fout("Welk stukje? Schrijf bijvoorbeeld: Doe Verdubbel met 5."));
+            }
+            Ok(Vorm::Los(Soort::Doe(aanroep(&s[1..]).map_err(fout)?)))
+        }
+        "geef" => {
+            let mut r = &s[1..];
+            if begint(r, &["als", "uitkomst"]) {
+                r = &r[2..];
+            } else if begint(r, &["de", "uitkomst"]) {
+                r = &r[2..];
+            } else if klein(r, r.len().wrapping_sub(1)) == "terug" {
+                r = &r[..r.len() - 1];
+            } else {
+                return Err(fout("Schrijf het zo: Geef als uitkomst getal keer 2."));
+            }
+            Ok(Vorm::Los(Soort::GeefUitkomst(u(r)?)))
+        }
         "voeg" => {
             // Voeg het bestand X toe aan de installatie
             let Some(t) = zoek(&s, &["toe"], 1) else {
@@ -775,6 +947,26 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             if matches!(klein(r, 0).as_str(), "dit" | "het") {
                 r = &r[1..];
             }
+            if klein(r, 0) == "voor" && matches!(klein(r, 1).as_str(), "elk" | "elke" | "ieder" | "iedere") {
+                let r = &r[2..];
+                if let Some(p) = (1..r.len()).find(|&i| matches!(klein(r, i).as_str(), "in" | "uit") && zoek(r, &["lijst"], i).is_some()) {
+                    let l = zoek(r, &["lijst"], p).unwrap();
+                    if l + 1 >= r.len() {
+                        return Err(fout("Welke lijst? Schrijf bijvoorbeeld: Herhaal voor elk ding in de lijst boodschappen."));
+                    }
+                    return Ok(Vorm::OpenVoorElk(n(&r[..p])?, Uitdrukking::Naam(n(&r[l + 1..])?)));
+                }
+                if let (Some(v), Some(t)) = (zoek(r, &["van"], 1), zoek(r, &["tot"], 2)) {
+                    let mut tot = t + 1;
+                    if begint(&r[tot..], &["en", "met"]) {
+                        tot += 2;
+                    }
+                    if v < t && tot < r.len() {
+                        return Ok(Vorm::OpenTel(n(&r[..v])?, u(&r[v + 1..t])?, u(&r[tot..])?));
+                    }
+                }
+                return Err(fout("Schrijf het zo: Herhaal voor elk ding in de lijst boodschappen. Of: Herhaal voor elk getal van 1 tot 10."));
+            }
             if klein(r, 0) == "zolang" {
                 let grens = (1..r.len()).find(|&i| matches!(klein(r, i).as_str(), "hoogstens" | "maximaal" | "maximum"))
                     .map(|i| (i, 1))
@@ -819,7 +1011,8 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 ["als"] | ["keuze"] => Ok(Vorm::Einde(Blok::Als)),
                 ["herhaal"] | ["herhaling"] => Ok(Vorm::Einde(Blok::Herhaal)),
                 ["knop"] => Ok(Vorm::Einde(Blok::Knop)),
-                _ => Err(fout("Ik weet niet welk blok je wilt sluiten. Schrijf: Einde als, Einde herhaal of Einde van de knop.")),
+                ["stukje"] => Ok(Vorm::Einde(Blok::Stukje)),
+                _ => Err(fout("Ik weet niet welk blok je wilt sluiten. Schrijf: Einde als, Einde herhaal, Einde van de knop of Einde van het stukje.")),
             }
         }
         _ => Err(onbekend()),
@@ -869,6 +1062,9 @@ enum KaderSoort {
     Herhaal(Uitdrukking),
     Zolang(Voorwaarde, Uitdrukking),
     Knop(String),
+    VoorElk(String, Uitdrukking),
+    Tel(String, Uitdrukking, Uitdrukking),
+    Stukje(String, Vec<String>),
 }
 
 struct Kader {
@@ -894,16 +1090,20 @@ impl Kader {
         match self.soort {
             KaderSoort::Hoofd => Blok::Elk,
             KaderSoort::Als(_) => Blok::Als,
-            KaderSoort::Herhaal(_) | KaderSoort::Zolang(..) => Blok::Herhaal,
+            KaderSoort::Herhaal(_) | KaderSoort::Zolang(..) | KaderSoort::VoorElk(..) | KaderSoort::Tel(..) => Blok::Herhaal,
             KaderSoort::Knop(_) => Blok::Knop,
+            KaderSoort::Stukje(..) => Blok::Stukje,
         }
     }
     fn beschrijving(&self) -> String {
         match &self.soort {
             KaderSoort::Hoofd => "het programma".into(),
             KaderSoort::Als(_) => format!("de keuze (Als) van regel {}", self.regel),
-            KaderSoort::Herhaal(_) | KaderSoort::Zolang(..) => format!("de herhaling van regel {}", self.regel),
+            KaderSoort::Herhaal(_) | KaderSoort::Zolang(..) | KaderSoort::VoorElk(..) | KaderSoort::Tel(..) => {
+                format!("de herhaling van regel {}", self.regel)
+            }
             KaderSoort::Knop(n) => format!("de knop {} van regel {}", n, self.regel),
+            KaderSoort::Stukje(n, _) => format!("het stukje {} van regel {}", n, self.regel),
         }
     }
     fn sluit(self, einde: usize) -> Opdracht {
@@ -915,6 +1115,9 @@ impl Kader {
             KaderSoort::Herhaal(aantal) => Soort::Herhaal { aantal, blok: self.dan, einde },
             KaderSoort::Zolang(voorwaarde, hoogstens) => Soort::HerhaalZolang { voorwaarde, hoogstens, blok: self.dan, einde },
             KaderSoort::Knop(naam) => Soort::BijKnop { naam, blok: self.dan, einde },
+            KaderSoort::VoorElk(naam, lijst) => Soort::VoorElk { naam, lijst, blok: self.dan, einde },
+            KaderSoort::Tel(naam, van, tot) => Soort::Tel { naam, van, tot, blok: self.dan, einde },
+            KaderSoort::Stukje(naam, invoer) => Soort::Stukje { naam, invoer, blok: self.dan, einde },
         };
         Opdracht { regel: self.regel, soort }
     }
@@ -925,6 +1128,7 @@ pub(crate) fn sluitzin(b: Blok) -> &'static str {
         Blok::Als => "Einde als",
         Blok::Herhaal => "Einde herhaal",
         Blok::Knop => "Einde van de knop",
+        Blok::Stukje => "Einde van het stukje",
         Blok::Elk => "Einde",
     }
 }
@@ -940,7 +1144,23 @@ pub(crate) fn lees_programma(bron: &str) -> (Programma, Vec<Melding>) {
         let norm = tekst::normaliseer(ruw);
         match ontleed_regel(&norm) {
             Ok(Vorm::Leeg) => {}
-            Ok(Vorm::Los(soort)) => stapel.last_mut().unwrap().lijst().push(Opdracht { regel: nr, soort }),
+            Ok(Vorm::Los(soort)) => {
+                if matches!(soort, Soort::GeefUitkomst(_)) && !stapel.iter().any(|k| matches!(k.soort, KaderSoort::Stukje(..))) {
+                    meldingen.push(Melding::fout(nr, "\"Geef als uitkomst\" kan alleen binnen een eigen stukje (tussen Maak een stukje en Einde van het stukje)."));
+                }
+                stapel.last_mut().unwrap().lijst().push(Opdracht { regel: nr, soort })
+            }
+            Ok(Vorm::OpenVoorElk(naam, l)) => stapel.push(Kader::nieuw(KaderSoort::VoorElk(naam, l), nr)),
+            Ok(Vorm::OpenTel(naam, van, tot)) => stapel.push(Kader::nieuw(KaderSoort::Tel(naam, van, tot), nr)),
+            Ok(Vorm::OpenStukje(naam, invoer)) => {
+                if stapel.len() > 1 {
+                    meldingen.push(Melding::fout(
+                        nr,
+                        format!("Een eigen stukje moet los staan, niet binnen een ander blok. Sluit eerst {}.", stapel.last().unwrap().beschrijving()),
+                    ));
+                }
+                stapel.push(Kader::nieuw(KaderSoort::Stukje(naam, invoer), nr));
+            }
             Ok(Vorm::OpenAls(v)) => stapel.push(Kader::nieuw(KaderSoort::Als(v), nr)),
             Ok(Vorm::OpenHerhaal(a)) => stapel.push(Kader::nieuw(KaderSoort::Herhaal(a), nr)),
             Ok(Vorm::OpenZolang(v, a)) => stapel.push(Kader::nieuw(KaderSoort::Zolang(v, a), nr)),
@@ -1045,7 +1265,35 @@ pub(crate) fn lees_programma(bron: &str) -> (Programma, Vec<Melding>) {
         stapel.last_mut().unwrap().lijst().push(opdracht);
     }
     let hoofd = stapel.pop().unwrap();
-    (Programma { opdrachten: hoofd.dan }, meldingen)
+    let mut programma = Programma { opdrachten: hoofd.dan };
+    verbind_stukjes(&mut programma);
+    (programma, meldingen)
+}
+
+/// Een naam van een eigen stukje zonder invoer ("Toon de uitkomst van Dobbelsteen") wordt een aanroep.
+fn verbind_stukjes(p: &mut Programma) {
+    let namen: Vec<String> = p
+        .opdrachten
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::Stukje { naam, .. } => Some(naam.clone()),
+            _ => None,
+        })
+        .collect();
+    if namen.is_empty() {
+        return;
+    }
+    fn lijst(l: &mut [Opdracht], namen: &[String]) {
+        for o in l {
+            for u in o.soort.uitdrukkingen_mut() {
+                u.verbind_stukjes(namen);
+            }
+            for blok in o.soort.blokken_mut() {
+                lijst(blok, namen);
+            }
+        }
+    }
+    lijst(&mut p.opdrachten, &namen);
 }
 
 fn hoofdletter(s: &str) -> String {
