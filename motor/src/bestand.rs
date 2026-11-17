@@ -44,3 +44,26 @@ pub fn schrijf_txt(pad: &Path, tekst: &str) -> io::Result<()> {
     fs::write(&tijdelijk, &inhoud)?;
     fs::rename(&tijdelijk, pad)
 }
+
+/// Staat er bovenaan "Dit is code voor het programma X" of "Dit is een omschrijving voor het programma X"?
+/// Geeft (is het code, naam van het programma). Zo weet het programma bij welk programma een
+/// bestand hoort dat je ergens anders schreef, bijvoorbeeld op je telefoon.
+pub fn hoort_bij(tekst: &str) -> Option<(bool, String)> {
+    let eerste = tekst.lines().map(|l| l.trim()).find(|l| !l.is_empty())?;
+    let zin = crate::tekst::normaliseer(eerste);
+    let klein = zin.to_lowercase();
+    for (voor, code) in [
+        ("dit is code voor het programma ", true),
+        ("dit is de code voor het programma ", true),
+        ("dit is een omschrijving voor het programma ", false),
+        ("dit is de omschrijving voor het programma ", false),
+    ] {
+        if klein.starts_with(voor) {
+            let naam = zin[voor.len()..].trim().trim_matches('"').to_string();
+            if !naam.is_empty() {
+                return Some((code, naam));
+            }
+        }
+    }
+    None
+}

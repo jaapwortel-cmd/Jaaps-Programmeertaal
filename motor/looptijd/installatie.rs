@@ -263,6 +263,13 @@ mod win {
         if vragen && vraag(&format!("Wil je {} installeren?{}", NAAM, if MAKER.is_empty() { String::new() } else { format!(" Gemaakt door {}.", MAKER) }), MB_YESNO | MB_ICONQUESTION) != IDYES {
             return Ok(());
         }
+        if !PRIVACY.is_empty() && vragen {
+            let tekst = format!("{}\n\nWil je verder met installeren?", PRIVACY);
+            if vraag(&tekst, MB_YESNO | MB_ICONINFORMATION) != IDYES {
+                zeg(k, "Ik heb niets geïnstalleerd.", false);
+                return Ok(());
+            }
+        }
         if !LICENTIE.is_empty() && vragen {
             let tekst = format!("{}\n\nGa je akkoord met deze licentie? Alleen als je Ja kiest, ga ik verder.", LICENTIE);
             if vraag(&tekst, MB_YESNO | MB_ICONQUESTION) != IDYES {
@@ -324,6 +331,11 @@ mod win {
             bytes.extend_from_slice(LICENTIE.replace('\n', "\r\n").as_bytes());
             schrijf("Licentie.txt", &bytes)?;
         }
+        if !PRIVACY.is_empty() {
+            let mut bytes = vec![0xEF, 0xBB, 0xBF];
+            bytes.extend_from_slice(PRIVACY.replace('\n', "\r\n").as_bytes());
+            schrijf("Privacyverklaring.txt", &bytes)?;
+        }
         let zelf = std::env::current_exe().map_err(|e| e.to_string())?;
         std::fs::copy(&zelf, map.join("Verwijderen.exe")).map_err(|e| format!("Ik kan het verwijderprogramma niet maken: {}", e))?;
         schrijf("installatie.txt", if iedereen { b"iedereen" } else { b"ik" })?;
@@ -362,7 +374,7 @@ mod win {
         unsafe {
             RegDeleteTreeW(if iedereen { HKEY_LOCAL_MACHINE } else { HKEY_CURRENT_USER }, w(&registersleutel()).as_ptr());
         }
-        let mut namen: Vec<&str> = vec![PROGRAMMA_BESTAND, "Licentie.txt", "installatie.txt"];
+        let mut namen: Vec<&str> = vec![PROGRAMMA_BESTAND, "Licentie.txt", "Privacyverklaring.txt", "installatie.txt"];
         namen.extend(BESTANDEN.iter().map(|b| b.0));
         for naam in namen {
             let _ = std::fs::remove_file(map.join(naam));

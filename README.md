@@ -149,6 +149,21 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 - `In de licentie staat: Je mag dit programma gratis gebruiken.` (zo veel regels als je wilt)
 - `De licentie staat in het bestand Licentie.txt`
 
+**Privacyverklaring**
+- `In de privacyverklaring staat: Dit programma verstuurt geen gegevens.` (zo veel regels als je wilt)
+- `De privacyverklaring staat in het bestand Privacy.txt`
+- Voorgelezen bij het installeren, als Privacyverklaring.txt bij het programma, en in je programma met Shift+F1.
+
+**Ondertekenen met een eigen certificaat**
+- `Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel`
+- Gebeurt bij F8 en Ctrl+F8. De eerste keer vraagt het programma of het het certificaat mag maken (met Windows zelf, geen internet nodig). Menu Programma: "Mijn certificaat vertrouwen op deze computer".
+- Eerlijk: op andere computers blijft Windows SmartScreen waarschuwen. Alleen een gekocht certificaat haalt dat weg.
+
+**Een bestand van elders (bijvoorbeeld van je telefoon)**
+- Zet bovenaan: `Dit is code voor het programma Rekenhulp` of `Dit is een omschrijving voor het programma Rekenhulp`.
+- Open het met Ctrl+O. Je hoort wat erin staat en kiest: toevoegen als code (en meteen controleren), bewaren als notitie (`Rekenhulp notities.txt`), of gewoon openen.
+- Je programma's staan standaard in `Documenten\Jaaps Programmeertaal`.
+
 **Leestekens dicteren**: `aanhalingsteken openen` en `aanhalingsteken sluiten` worden echte aanhalingstekens.
 
 ## 6. Wat er gebeurt als iets niet klopt
@@ -168,24 +183,21 @@ Hoofdletters maken niet uit. Een punt aan het eind mag. De volledige uitleg staa
 
 ## 8. Groottes (gemeten)
 
-Vaste bouwmethode: `cargo build --release` met opt-level z, lto, codegen-units 1, panic abort en strip. Een gebouwd programma: rustc met opt-level s, panic abort, strip.
+Vaste bouwmethode: `cargo build --release` met opt-level z, lto, codegen-units 1, panic abort en strip. Een programma dat je bouwt: rustc met opt-level s, panic abort en strip.
 
-Gemeten in deze sessie (Linux, de Windows-versie gebouwd met mingw, en de Windows-Rust-compiler getest in Wine):
+**Gemeten op een echte Windows-computer** (de bouwstraat op GitHub, 17 november 2026, Rust 1.97.0):
 
 | Wat | Grootte |
 |---|---|
-| Editor `JaapsProgrammeertaal.exe` (mingw-build) | 564.224 bytes (551 kB) |
-| Map `rust` met de Rust-compiler 1.97.0 (zonder cargo, rustdoc, lld) | 520.156.953 bytes (496 MB) |
-| Diezelfde map, ingepakt met xz | ongeveer 90 MB |
-| `Begroeting.exe`, gebouwd met F8 (klein) | 850.944 bytes (831 kB) |
-| `Begroeting.exe`, gebouwd met F5 (snel) | 930.816 bytes (909 kB) |
-| `Begroeting installatie.exe` met licentie en extra bestand | 1.707.008 bytes (1,6 MB) |
+| Installatiebestand `Jaaps Programmeertaal 0.1.0 installatie.exe` | 94.153.827 bytes (90 MB) |
+| Editor `JaapsProgrammeertaal.exe` | 604.160 bytes (590 kB) |
+| Opdrachtregel `jaaptaal.exe` | 553.472 bytes (540 kB) |
+| Map `rust` (de ingebouwde Rust-compiler) | 520.156.953 bytes (496 MB) op de schijf |
+| `Begroeting.exe`, gebouwd met F8 | 858.624 bytes (838 kB) |
+| `Begroeting installatie.exe` met licentie en uitlegbestand | 1.714.176 bytes (1,6 MB) |
+| Bouwtijd van `Begroeting.exe` (F8) | 1,2 seconden |
 
-Bouwtijd in Wine op deze computer (4 kernen): Begroeting snel 0,8 s, klein 1,2 s, installatiebestand 2,6 s. Op jouw computer kan dat anders zijn.
-
-De bouwstraat op GitHub meet de groottes ook op een echte Windows-computer (MSVC-build van de editor, en de grootte van het installatiebestand van Jaap's Programmeertaal). Die staan in de samenvatting van elke bouwronde en in `groottes.txt` bij de uitgave **proef**.
-
-Eerlijk: de editor zelf is klein, maar de Rust-compiler is groot (bijna 500 MB op de schijf). Dat komt omdat je echte programma's moet kunnen compileren. Rust is niet kleiner te krijgen zonder onderdelen weg te laten die nodig zijn.
+Eerlijk: de editor zelf is klein, maar de Rust-compiler is groot (bijna 500 MB op de schijf, 90 MB in het installatiebestand). Dat is de prijs voor echte programma's bouwen zonder iets apart te installeren. Kleiner gaat niet zonder onderdelen weg te laten die nodig zijn.
 
 ## 9. Testen en een .exe maken
 
@@ -197,7 +209,7 @@ Uitvoeren (met Rust op de computer):
 cargo test --workspace
 ```
 
-Uitslag in deze sessie (Linux): 89 tests, allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
+Uitslag in deze sessie (Linux): 93 tests (en op Windows ook de test die echt ondertekent), allemaal geslaagd. Op GitHub (echte Windows) slaagden de tests ook, en bouwde de ingebouwde Rust-compiler het voorbeeld dat "Hallo" zegt.
 
 **De opdrachtregel** (`jaaptaal.exe`, staat ook in de installatie):
 
@@ -218,6 +230,8 @@ jaaptaal installatie programma.txt "Programma installatie.exe"
 Ik kan in deze bouwomgeving geen JAWS of NVDA draaien. Ik claim dus niets over hoe het klinkt. Wat ik wel heb gedaan: alleen gewone Windows-onderdelen gebruikt (menubalk, tekstvakken, knoppen, meldingsvensters), en de editor, een gebouwd programma en een installatiebestand bekeken in een nagebootst Windows (Wine).
 
 De lijst met handmatige tests staat in `docs/Handmatige-tests.md`. Belangrijkste punten:
+
+De automatische controle op GitHub (UI Automation, dezelfde techniek als NVDA en JAWS) vond: beide vakken hebben een goede naam ("Opdrachten (je programma, één opdracht per regel):" en "Meldingen en uitvoer:"), en de Tab-volgorde loopt goed rond. De menu's kon die controle niet uitklappen. In de nabootsing (Wine) gaan ze wel open met F10 en pijltje omlaag. Het zijn gewone Windows-menu's. Test dit zelf.
 
 1. Leest de schermlezer bij de start "Opdrachten" als naam van het vak? En "Meldingen en uitvoer" bij het tweede vak?
 2. Hoor je elke melding (de vensters met OK of Ja/Nee) helemaal voorgelezen, met het regelnummer?
@@ -246,7 +260,7 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Overig**: extensies en drivers ("motorschrijver"), je bestaande programma's nabouwen, alles wat Rust kan.
 
-**Over de installatie**: een gebouwd installatiebestand is niet ondertekend (daarvoor is een betaald certificaat nodig). Een eigen pictogram (icoon) kan nog niet.
+**Over de installatie**: ondertekenen kan met een eigen certificaat, maar een gekocht certificaat (zonder waarschuwing op andere computers) kan nog niet. Een eigen pictogram (icoon) kan nog niet.
 
 ## 12. Wat ik heb gebouwd
 

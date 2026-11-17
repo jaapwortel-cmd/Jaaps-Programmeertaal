@@ -24,6 +24,10 @@ pub struct Installatie {
     pub bestanden: Vec<String>,
     pub licentie_regels: Vec<String>,
     pub licentie_bestand: Option<String>,
+    pub privacy_regels: Vec<String>,
+    pub privacy_bestand: Option<String>,
+    /// Ondertekenen met een eigen certificaat op deze naam.
+    pub onderteken: Option<String>,
 }
 
 /// Haalt de beschrijving van de installatie uit het programma. `None` als er geen naam is.
@@ -38,6 +42,9 @@ pub fn uit_programma(p: &Programma) -> Option<Installatie> {
         bestanden: Vec::new(),
         licentie_regels: Vec::new(),
         licentie_bestand: None,
+        privacy_regels: Vec::new(),
+        privacy_bestand: None,
+        onderteken: None,
     };
     for o in &p.opdrachten {
         if let Soort::Installatie(z) = &o.soort {
@@ -51,6 +58,9 @@ pub fn uit_programma(p: &Programma) -> Option<Installatie> {
                 InstallatieZin::Bestand(b) => i.bestanden.push(b.clone()),
                 InstallatieZin::LicentieRegel(t) => i.licentie_regels.push(t.clone()),
                 InstallatieZin::LicentieBestand(b) => i.licentie_bestand = Some(b.clone()),
+                InstallatieZin::PrivacyRegel(t) => i.privacy_regels.push(t.clone()),
+                InstallatieZin::PrivacyBestand(b) => i.privacy_bestand = Some(b.clone()),
+                InstallatieZin::Onderteken(n) => i.onderteken = Some(n.clone()),
             }
         }
     }
@@ -81,6 +91,24 @@ fn zoek_bestand(naam: &str, bronmap: Option<&Path>) -> Result<PathBuf, String> {
     }
 }
 
+/// De tekst van de privacyverklaring, met een kopje erboven. Leeg als er geen is.
+pub fn privacytekst(i: &Installatie, bronmap: Option<&Path>) -> Result<String, String> {
+    let inhoud = if let Some(b) = &i.privacy_bestand {
+        let pad = zoek_bestand(b, bronmap)?;
+        crate::bestand::lees_txt(&pad).map_err(|e| format!("Ik kan de privacyverklaring {} niet lezen: {}", pad.display(), e))?
+    } else if !i.privacy_regels.is_empty() {
+        i.privacy_regels.join("\n")
+    } else {
+        return Ok(String::new());
+    };
+    let mut kop = format!("Privacyverklaring van {}", i.naam);
+    if !i.maker.is_empty() {
+        kop.push_str(&format!(". Gemaakt door {}", i.maker));
+    }
+    kop.push('.');
+    Ok(format!("{}\n\n{}", kop, inhoud.replace("\r\n", "\n").trim_end()))
+}
+
 /// De tekst van de licentie, met een kopje erboven.
 pub fn licentietekst(i: &Installatie, bronmap: Option<&Path>) -> Result<String, String> {
     let inhoud = if let Some(b) = &i.licentie_bestand {
@@ -107,7 +135,7 @@ fn rs(s: &str) -> String {
 }
 
 /// Maakt de Rust-code van het installatieprogramma.
-pub fn maak_code(i: &Installatie, programma_exe: &Path, bestanden: &[(String, PathBuf)], licentie: &str) -> String {
+pub fn maak_code(i: &Installatie, programma_exe: &Path, bestanden: &[(String, PathBuf)], licentie: &str, privacy: &str) -> String {
     let naam = bestandsnaam(&i.naam);
     let rechten = match i.rechten {
         Rechten::MetEnZonder => 0,
@@ -126,6 +154,7 @@ pub fn maak_code(i: &Installatie, programma_exe: &Path, bestanden: &[(String, Pa
     c.push_str(&format!("const PROGRAMMA_NAAM_ZONDER_EXE: &str = {};\n", rs(&naam)));
     c.push_str(&format!("const PROGRAMMA_BESTAND: &str = {};\n", rs(&format!("{}.exe", naam))));
     c.push_str(&format!("const LICENTIE: &str = {};\n", rs(licentie)));
+    c.push_str(&format!("const PRIVACY: &str = {};\n", rs(privacy)));
     c.push_str(&format!("static PROGRAMMA: &[u8] = include_bytes!({});\n", rs(&programma_exe.to_string_lossy())));
     c.push_str("static BESTANDEN: &[(&str, &[u8])] = &[\n");
     for (doelnaam, pad) in bestanden {
@@ -153,6 +182,7 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
         extra.push((doelnaam, std::fs::canonicalize(&pad).unwrap_or(pad)));
     }
     let licentie = licentietekst(&inst, bronmap)?;
+    let privacy = privacytekst(&inst, bronmap)?;
 
     let regels: Vec<&str> = bron.lines().collect();
     let code = crate::rustcode::maak(&uitslag.programma, &regels);
@@ -160,9 +190,16 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
     let exe = programmamap.join(format!("{}.exe", bestandsnaam(&inst.naam)));
     bouwen::bouw(&code, &exe, rustc, Stand::Klein, &programmamap)?;
     let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
+    if let Some(naam) = &inst.onderteken {
+        crate::ondertekenen::onderteken(&exe, naam)?;
+    }
 
-    let installcode = maak_code(&inst, &exe, &extra, &licentie);
+    let installcode = maak_code(&inst, &exe, &extra, &licentie, &privacy);
     let installmap = werkmap.join("installatie");
     let v = bouwen::bouw(&installcode, uit, rustc, Stand::Klein, &installmap)?;
+    if let Some(naam) = &inst.onderteken {
+        let volledig = if uit.is_absolute() { uit.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(uit) };
+        crate::ondertekenen::onderteken(&volledig, naam)?;
+    }
     Ok(Verslag { duur: begin.elapsed(), grootte: v.grootte })
 }

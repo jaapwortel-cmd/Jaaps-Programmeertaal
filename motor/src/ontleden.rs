@@ -69,6 +69,7 @@ const WOORDENLIJST: &[&str] = &[
     "doe", "geef", "uitkomst", "invoer", "elk", "elke", "haal", "weg", "bevat", "tot", "aantal", "eerste", "laatste",
     "schrijf", "logboek", "map", "inhoud", "regels", "bestaat", "willekeurig", "tijd", "datum", "speel", "piep",
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
+    "privacyverklaring", "onderteken", "certificaat",
 ];
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
@@ -705,6 +706,23 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         }
         return Ok(Vorm::Los(Soort::Handleiding { regel: Some(tekst), bestand: None }));
     }
+    if laag.starts_with("in de privacyverklaring staat") {
+        let mut tekst = norm["in de privacyverklaring staat".len()..].trim_start_matches([':', ' ']).trim().to_string();
+        if tekst.len() >= 2 && tekst.starts_with('"') && tekst.ends_with('"') {
+            tekst = tekst[1..tekst.len() - 1].to_string();
+        }
+        if tekst.is_empty() {
+            return Err(fout("Wat staat er in de privacyverklaring? Schrijf bijvoorbeeld: In de privacyverklaring staat: Dit programma verstuurt geen gegevens."));
+        }
+        if !tekst.ends_with(['.', '!', '?', ':']) {
+            tekst.push('.');
+        }
+        return Ok(Vorm::Los(Soort::Installatie(InstallatieZin::PrivacyRegel(tekst))));
+    }
+    // "Dit is code voor het programma Rekenhulp": zegt bij welk programma dit bestand hoort.
+    if laag.starts_with("dit is code voor") || laag.starts_with("dit is een omschrijving voor") || laag.starts_with("dit is de code voor") {
+        return Ok(Vorm::Los(Soort::Opmerking(norm.to_string())));
+    }
     if laag.starts_with("in de licentie staat") {
         let mut tekst = norm["in de licentie staat".len()..].trim_start_matches([':', ' ']).trim().to_string();
         if tekst.len() >= 2 && tekst.starts_with('"') && tekst.ends_with('"') {
@@ -909,6 +927,29 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
                 return Err(fout("Welk bestand? Schrijf bijvoorbeeld: De handleiding staat in het bestand Handleiding.txt."));
             }
             Ok(Vorm::Los(Soort::Handleiding { regel: None, bestand: Some(rest_tekst(&s[p + 1..])) }))
+        }
+        "de" if klein(&s, 1) == "privacyverklaring" => {
+            let Some(p) = zoek(&s, &["bestand"], 2) else {
+                return Err(fout("Schrijf het zo: De privacyverklaring staat in het bestand Privacy.txt. Of: In de privacyverklaring staat: (jouw tekst)."));
+            };
+            if p + 1 >= s.len() {
+                return Err(fout("Welk bestand? Schrijf bijvoorbeeld: De privacyverklaring staat in het bestand Privacy.txt."));
+            }
+            Ok(Vorm::Los(Soort::Installatie(InstallatieZin::PrivacyBestand(rest_tekst(&s[p + 1..])))))
+        }
+        "onderteken" | "signeer" => {
+            // Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel
+            let Some(p) = zoek(&s, &["naam"], 1) else {
+                return Err(fout("Schrijf het zo: Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel."));
+            };
+            let mut b = p + 1;
+            if klein(&s, b) == "van" {
+                b += 1;
+            }
+            if b >= s.len() {
+                return Err(fout("Op welke naam? Schrijf bijvoorbeeld: Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel."));
+            }
+            Ok(Vorm::Los(Soort::Installatie(InstallatieZin::Onderteken(rest_tekst(&s[b..])))))
         }
         "de" | "het" if matches!(klein(&s, 1).as_str(), "installatie" | "versie" | "maker" | "programma" | "licentie") => {
             installatie_zin(&s)

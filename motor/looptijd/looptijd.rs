@@ -363,6 +363,15 @@ fn handleiding_tekst() -> String {
     String::new()
 }
 
+/// De privacyverklaring (Shift+F1): wat je in je programma schreef, of Privacyverklaring.txt naast het programma.
+fn privacy_tekst() -> String {
+    if !PRIVACY.is_empty() {
+        return PRIVACY.to_string();
+    }
+    let pad = geluidspad(&W::T("Privacyverklaring.txt".to_string()));
+    lees_tekstbestand(&pad).unwrap_or_default()
+}
+
 fn uitkomst_van(w: Option<W>, naam: &str, r: usize) -> R<W> {
     match w {
         Some(w) => Ok(w),
@@ -717,6 +726,11 @@ fn start_tekst(namen: &'static [&'static str], acties: &'static [&'static str], 
 fn start(namen: &'static [&'static str], acties: &'static [&'static str], hoofd: Hoofd, bij_knop: BijKnop) {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let tekststand = args.iter().any(|a| a == "--tekst") || !cfg!(windows);
+    if tekststand && args.iter().any(|a| a == "--privacy") {
+        let t = privacy_tekst();
+        println!("{}", if t.is_empty() { "Dit programma heeft geen privacyverklaring.".to_string() } else { t });
+        return;
+    }
     if tekststand && args.iter().any(|a| a == "--handleiding") {
         let t = handleiding_tekst();
         println!("{}", if t.is_empty() { "Dit programma heeft geen handleiding.".to_string() } else { t });
@@ -1557,6 +1571,19 @@ mod win {
                         SendMessageW(knop, BM_CLICK, 0, 0);
                         continue;
                     }
+                }
+                if msg.message == WM_KEYDOWN && msg.wParam == 0x70 && GetKeyState(0x10) < 0 {
+                    // Shift+F1: de privacyverklaring.
+                    let tekst = privacy_tekst();
+                    if tekst.is_empty() {
+                        melding(wortel, "Dit programma heeft geen privacyverklaring.", "Privacyverklaring");
+                    } else {
+                        let mut regels: Vec<String> = tekst.lines().map(|l| l.to_string()).collect();
+                        regels.push(String::new());
+                        regels.push("Druk op Escape om de privacyverklaring te sluiten.".to_string());
+                        tekstvenster("Privacyverklaring", &regels);
+                    }
+                    continue;
                 }
                 if msg.message == WM_KEYDOWN && msg.wParam == 0x70 {
                     // F1: de handleiding van dit programma.

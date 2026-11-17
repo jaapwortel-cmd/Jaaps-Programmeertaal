@@ -18,6 +18,7 @@ mod controle;
 pub mod getallen;
 pub mod installatie;
 pub mod melding;
+pub mod ondertekenen;
 mod ontleden;
 pub mod rustcode;
 pub mod scherm;

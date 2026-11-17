@@ -28,6 +28,7 @@ const ID_SCHERM: u16 = 208;
 const ID_PROBEER: u16 = 205;
 const ID_BOUW_EXE: u16 = 206;
 const ID_INSTALLATIE: u16 = 207;
+const ID_VERTROUW: u16 = 209;
 const ID_WELKE_REGEL: u16 = 301;
 const ID_NAAR_MELDINGEN: u16 = 302;
 const ID_HANDLEIDING: u16 = 401;
@@ -164,6 +165,22 @@ fn programmamap() -> Option<PathBuf> {
     std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf()))
 }
 
+/// Documenten\Jaaps Programmeertaal: hier staan je programma's en notities.
+fn mijn_programmas() -> PathBuf {
+    let mut buf = [0u16; 520];
+    let documenten = unsafe {
+        if SHGetFolderPathW(null_mut(), 0x05, null_mut(), 0, buf.as_mut_ptr()) == 0 {
+            let n = buf.iter().position(|&c| c == 0).unwrap_or(0);
+            PathBuf::from(String::from_utf16_lossy(&buf[..n]))
+        } else {
+            std::env::var_os("USERPROFILE").map(PathBuf::from).unwrap_or_default().join("Documents")
+        }
+    };
+    let map = documenten.join("Jaaps Programmeertaal");
+    let _ = std::fs::create_dir_all(&map);
+    map
+}
+
 fn werkmap() -> PathBuf {
     let basis = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
     basis.join("Jaaps Programmeertaal").join("bouw")
@@ -189,6 +206,8 @@ fn bestandskeuze(opslaan: bool, standaardnaam: &str, filter: &str, extensie: &st
         ofn.nMaxFile = buf.len() as u32;
         ofn.lpstrDefExt = ext.as_ptr();
         ofn.lpstrTitle = titel.as_ptr();
+        let begin = w(&mijn_programmas().to_string_lossy());
+        ofn.lpstrInitialDir = begin.as_ptr();
         ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
         let gelukt = if opslaan {
             ofn.Flags |= OFN_OVERWRITEPROMPT;
@@ -249,7 +268,105 @@ fn mag_doorgaan() -> bool {
     }
 }
 
+/// Een bestand van elders (bijvoorbeeld van je telefoon) dat bij een programma hoort.
+/// Eerst voorlezen, dan vragen wat ermee moet. Geeft true als het bestand zo is afgehandeld.
+fn behandel_van_elders(pad: &Path, tekst: &str) -> bool {
+    let Some((code, naam)) = motor::bestand::hoort_bij(tekst) else { return false };
+    let bestandsnaam = motor::installatie::bestandsnaam(&naam);
+    if pad.file_stem().map_or(false, |s| s.to_string_lossy().eq_ignore_ascii_case(&bestandsnaam)) {
+        return false; // Dit is het programma zelf.
+    }
+    let inhoud: Vec<&str> = tekst.lines().skip_while(|l| l.trim().is_empty()).skip(1).collect();
+    let mut voorbeeld = inhoud.join("\n").trim().to_string();
+    if voorbeeld.chars().count() > 1500 {
+        voorbeeld = voorbeeld.chars().take(1500).collect::<String>() + " ... (en meer)";
+    }
+    let vraag = format!(
+        "Dit bestand is {} voor het programma {}. Dit staat erin:\n\n{}\n\nWat zal ik doen?\nJa: toevoegen als code aan het programma {}.\nNee: bewaren als notitie bij het programma {}.\nAnnuleren: gewoon openen in de editor.",
+        if code { "code" } else { "een omschrijving" },
+        naam,
+        voorbeeld,
+        naam,
+        naam
+    );
+    match melding(&vraag, MB_YESNOCANCEL | MB_ICONQUESTION) {
+        IDYES => {
+            // Het programma zoeken: eerst in dezelfde map, dan in Documenten\Jaaps Programmeertaal.
+            let kandidaten = [
+                pad.parent().map(|m| m.join(format!("{}.txt", bestandsnaam))),
+                Some(mijn_programmas().join(format!("{}.txt", bestandsnaam))),
+            ];
+            let doel = kandidaten.iter().flatten().find(|p| p.is_file()).cloned();
+            let nieuw_stuk = inhoud.join("\n").trim().to_string();
+            match doel {
+                Some(doel) => {
+                    open_gewoon(&doel);
+                    let mut alles = editor_tekst().trim_end().to_string();
+                    alles.push_str(&format!("\n\nOpmerking: toegevoegd uit {}\n", pad.display()));
+                    alles.push_str(&nieuw_stuk);
+                    alles.push('\n');
+                    vervang_editor_tekst(&alles);
+                    zet_meldingen(&format!(
+                        "De regels staan onderaan het programma {}. Ik heb nog niet opgeslagen. Ik controleer ze nu. Ctrl+Z maakt het ongedaan.",
+                        naam
+                    ));
+                    controleer_met_vragen(false);
+                }
+                None => {
+                    let nieuw = mijn_programmas().join(format!("{}.txt", bestandsnaam));
+                    if melding(
+                        &format!("Er is nog geen programma {}. Zal ik het maken, in {}?", naam, nieuw.display()),
+                        MB_YESNO | MB_ICONQUESTION,
+                    ) != IDYES
+                    {
+                        open_gewoon(pad);
+                        return true;
+                    }
+                    zet_tekst(v().editor, &format!("{}\n", nieuw_stuk));
+                    PAD.with(|p| *p.borrow_mut() = Some(nieuw.clone()));
+                    opslaan();
+                    controleer_met_vragen(false);
+                }
+            }
+        }
+        IDNO => {
+            let notities = mijn_programmas().join(format!("{} notities.txt", bestandsnaam));
+            let mut oud = motor::bestand::lees_txt(&notities).unwrap_or_default();
+            if !oud.is_empty() && !oud.ends_with('\n') {
+                oud.push('\n');
+            }
+            let nieuw = format!(
+                "{}\nUit {}:\n{}\n",
+                oud,
+                pad.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+                inhoud.join("\n").trim()
+            );
+            match motor::bestand::schrijf_txt(&notities, &nieuw) {
+                Ok(()) => {
+                    let t = format!("Bewaard als notitie bij het programma {}, in {}.", naam, notities.display());
+                    zet_meldingen(&t);
+                    melding(&t, MB_ICONINFORMATION);
+                }
+                Err(e) => {
+                    melding(&format!("Bewaren is niet gelukt: {}", e), MB_ICONERROR);
+                }
+            }
+        }
+        _ => open_gewoon(pad),
+    }
+    true
+}
+
 fn open_bestand(pad: &Path) {
+    if let Ok(tekst) = motor::bestand::lees_txt(pad) {
+        if behandel_van_elders(pad, &tekst) {
+            return;
+        }
+    }
+    open_gewoon(pad);
+}
+
+fn open_gewoon(pad: &Path) {
     match motor::bestand::lees_txt(pad) {
         Ok(tekst) => {
             zet_tekst(v().editor, &tekst);
@@ -433,6 +550,33 @@ fn probeer() {
     });
 }
 
+/// Vraagt of er een eigen certificaat mag komen, als het programma wil ondertekenen en het er nog niet is.
+/// Geeft de naam terug als er ondertekend kan worden, of None om zonder te stoppen.
+fn certificaat_klaar(bron: &str) -> Result<Option<String>, ()> {
+    let Some(naam) = motor::installatie::uit_programma(&motor::lees(bron).programma).and_then(|i| i.onderteken) else {
+        return Ok(None);
+    };
+    match motor::ondertekenen::heeft_certificaat(&naam) {
+        Ok(true) => Ok(Some(naam)),
+        Ok(false) => {
+            let vraag = format!(
+                "Er is nog geen eigen certificaat op naam van {}. Zal ik er een maken? Het blijft op deze computer, alleen voor jou, en is 5 jaar geldig.\n\nLet op: op andere computers blijft Windows nog waarschuwen. Alleen een gekocht certificaat haalt die waarschuwing weg.",
+                naam
+            );
+            if melding(&vraag, MB_YESNO | MB_ICONQUESTION) == IDYES {
+                Ok(Some(naam))
+            } else {
+                zet_meldingen("Je zei nee. Ik heb niets gebouwd. Haal de regel Onderteken ... weg als je zonder ondertekenen wilt bouwen.");
+                Err(())
+            }
+        }
+        Err(e) => {
+            melding(&e, MB_ICONERROR);
+            Err(())
+        }
+    }
+}
+
 fn bouw_exe() {
     let Some(bron) = controleer_met_vragen(true) else { return };
     let Some(rustc) = rustc_of_melding() else { return };
@@ -442,9 +586,19 @@ fn bouw_exe() {
     let Some(uit) = bestandskeuze(true, &standaard, "Programma (*.exe)|*.exe", "exe", "Waar moet het programma komen?") else {
         return;
     };
+    let Ok(onderteken) = certificaat_klaar(&bron) else { return };
     let code = motor::rust_code(&bron).expect("gecontroleerd");
     zet_meldingen("Bezig met het bouwen van het .exe-bestand. Dit kan even duren.");
-    start_klus(move || Klaar::Exe(bouwen::bouw(&code, &uit, &rustc, Stand::Klein, &werkmap()).map(|v| (uit, v))));
+    start_klus(move || {
+        Klaar::Exe(
+            bouwen::bouw(&code, &uit, &rustc, Stand::Klein, &werkmap())
+                .and_then(|v| match &onderteken {
+                    Some(naam) => motor::ondertekenen::onderteken(&uit, naam).map(|_| v),
+                    None => Ok(v),
+                })
+                .map(|v| (uit, v)),
+        )
+    });
 }
 
 fn bouw_installatie() {
@@ -479,6 +633,9 @@ fn bouw_installatie() {
     let bronmap = PAD.with(|p| p.borrow().as_ref().and_then(|p| p.parent().map(|m| m.to_path_buf())));
     if bronmap.is_none() && (!inst.bestanden.is_empty() || inst.licentie_bestand.is_some()) {
         melding("Je installatie gebruikt een eigen bestand. Sla je programma eerst op (Ctrl+S) in de map waar dat bestand staat.", MB_ICONINFORMATION);
+        return;
+    }
+    if certificaat_klaar(&bron).is_err() {
         return;
     }
     let standaard = format!("{} installatie.exe", motor::installatie::bestandsnaam(&inst.naam));
@@ -641,6 +798,32 @@ fn opdracht(id: u16) {
         ID_PROBEER => probeer(),
         ID_BOUW_EXE => bouw_exe(),
         ID_INSTALLATIE => bouw_installatie(),
+        ID_VERTROUW => {
+            let naam = motor::installatie::uit_programma(&motor::lees(&editor_tekst()).programma).and_then(|i| i.onderteken);
+            match naam {
+                None => {
+                    melding(
+                        "Je programma heeft nog geen regel om te ondertekenen. Schrijf bijvoorbeeld: Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel.",
+                        MB_ICONINFORMATION,
+                    );
+                }
+                Some(naam) => {
+                    if melding(
+                        &format!(
+                            "Zal ik deze computer jouw certificaat op naam van {} laten vertrouwen? Windows vraagt daarna zelf nog om toestemming, in een eigen venster. Dit geldt alleen voor deze computer.",
+                            naam
+                        ),
+                        MB_YESNO | MB_ICONQUESTION,
+                    ) == IDYES
+                    {
+                        match motor::ondertekenen::vertrouw(&naam) {
+                            Ok(()) => melding("Klaar. Deze computer vertrouwt nu programma's met jouw certificaat.", MB_ICONINFORMATION),
+                            Err(e) => melding(&e, MB_ICONERROR),
+                        };
+                    }
+                }
+            }
+        }
         ID_BESCHRIJF => {
             let bron = editor_tekst();
             let u = motor::lees(&bron);
@@ -780,6 +963,7 @@ fn maak_menu() -> HANDLE {
         streep(prog);
         voeg(prog, ID_BOUW_EXE, "Bouw een .&exe-bestand...\tF8");
         voeg(prog, ID_INSTALLATIE, "Bouw een &installatiebestand...\tCtrl+F8");
+        voeg(prog, ID_VERTROUW, "Mijn certificaat &vertrouwen op deze computer...");
         AppendMenuW(balk, MF_POPUP, prog as usize, w("&Programma").as_ptr());
 
         let ga = CreatePopupMenu();

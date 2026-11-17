@@ -436,6 +436,15 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
     }
     m.uit.push_str(&format!("const HANDLEIDING: &str = {};\n", rust_tekst(&handleiding.join("\n"))));
     m.uit.push_str(&format!("const HANDLEIDING_BESTAND: &str = {};\n", rust_tekst(&handleiding_bestand)));
+    let privacy: Vec<String> = p
+        .opdrachten
+        .iter()
+        .filter_map(|o| match &o.soort {
+            Soort::Installatie(InstallatieZin::PrivacyRegel(t)) => Some(t.clone()),
+            _ => None,
+        })
+        .collect();
+    m.uit.push_str(&format!("const PRIVACY: &str = {};\n", rust_tekst(&privacy.join("\n"))));
 
     let namen: Vec<String> = m.namenlijst.iter().map(|n| rust_tekst(n)).collect();
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();

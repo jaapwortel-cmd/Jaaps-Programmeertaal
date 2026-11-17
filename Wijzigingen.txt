@@ -15,6 +15,10 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   en tijd (fouten komen er vanzelf in), de tijd, de datum en een willekeurig getal.
 - Geluid (piep en WAV), sneltoetsen voor knoppen, kleuren met een controle of tekst goed leesbaar is,
   een handleiding met F1 in je eigen programma, en Ctrl+F6: vertel wat er op het scherm komt, met tips.
+- Een eigen privacyverklaring (bij het installeren, als bestand, en met Shift+F1 in je programma).
+- Ondertekenen met een eigen certificaat op je naam, en dat certificaat laten vertrouwen op je computer.
+- Een bestand van elders openen met bovenaan "Dit is code voor het programma ..." of "Dit is een
+  omschrijving voor het programma ...": voorlezen en vragen wat ermee moet.
 - Een installatiebestand voor je eigen programma (Ctrl+F8), beschreven met zinnen: naam, versie, maker,
   snelkoppelingen, met of zonder beheerdersrechten, extra bestanden.
 - Een eigen licentie, met zinnen of uit een tekstbestand. Bij het installeren moet je akkoord gaan.

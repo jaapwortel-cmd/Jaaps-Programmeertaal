@@ -487,7 +487,60 @@ De licentie komt ook als Licentie.txt in de map van het geïnstalleerde programm
 Let op: het programma controleert niet of je licentie juridisch klopt. Dat is jouw eigen tekst.
 
 
-11. Bestanden
+10b. Een eigen privacyverklaring
+-------------------------------
+
+Een privacyverklaring zegt wat je programma met gegevens doet. Je schrijft hem zelf:
+
+In de privacyverklaring staat: Dit programma verstuurt geen gegevens.
+In de privacyverklaring staat: Wat je typt, blijft op je eigen computer.
+
+Of in een eigen tekstbestand, in dezelfde map als je programma:
+De privacyverklaring staat in het bestand Privacy.txt
+
+Bij het installeren wordt de privacyverklaring voorgelezen, met de vraag of je verder wilt.
+Hij komt ook als Privacyverklaring.txt bij het programma. In je programma opent Shift+F1 hem.
+
+
+10c. Je programma ondertekenen
+------------------------------
+
+Ondertekenen laat zien dat een programma van jou komt en niet is veranderd.
+
+Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel
+
+Bij F8 en bij Ctrl+F8 wordt je programma dan ondertekend (bij een installatiebestand ook het
+installatiebestand zelf). De eerste keer vraagt het programma of het een eigen certificaat op jouw naam
+mag maken. Dat certificaat blijft op je eigen computer en is 5 jaar geldig. Er is geen internet voor nodig.
+
+Wil je dat je eigen computer je certificaat vertrouwt? Kies in het menu Programma:
+Mijn certificaat vertrouwen op deze computer. Windows vraagt daarna zelf nog om toestemming.
+
+Eerlijk: op andere computers blijft Windows nog waarschuwen ("onbekende uitgever"). Die computers kennen
+jouw eigen certificaat niet. Alleen een gekocht certificaat haalt die waarschuwing weg.
+
+
+11. Een bestand van elders openen (bijvoorbeeld van je telefoon)
+-----------------------------------------------------------------
+
+Je kunt ergens anders schrijven, bijvoorbeeld op je telefoon in een gewoon tekstbestand.
+Zet dan bovenaan één van deze zinnen:
+
+Dit is code voor het programma Rekenhulp
+Dit is een omschrijving voor het programma Rekenhulp
+
+Open het bestand daarna met Ctrl+O. Het programma leest je voor wat erin staat, en vraagt wat het moet doen:
+Ja: toevoegen als code aan het programma Rekenhulp. Het programma Rekenhulp gaat open, de regels komen
+   eronder, en ze worden meteen gecontroleerd. Er wordt nog niets opgeslagen; Ctrl+Z maakt het ongedaan.
+   Is er nog geen programma Rekenhulp, dan vraagt het of het een nieuw programma mag maken.
+Nee: bewaren als notitie bij het programma Rekenhulp, in het bestand Rekenhulp notities.txt.
+Annuleren: gewoon openen in de editor.
+
+Het programma zoekt Rekenhulp.txt eerst in dezelfde map als het geopende bestand, en dan in
+Documenten\Jaaps Programmeertaal. Daar komen je programma's ook standaard als je opslaat.
+
+
+12. Bestanden
 -------------
 
 Je programma is een gewoon tekstbestand (TXT). Je kunt het ook in Kladblok schrijven
@@ -495,7 +548,7 @@ en dan openen met Ctrl+O. Opslaan gebeurt veilig: eerst in een tijdelijk bestand
 pas daarna wordt het echte bestand vervangen.
 
 
-12. Wat nog niet kan
+13. Wat nog niet kan
 --------------------
 
 Dit staat op de wensenlijst, maar zit nog niet in deze versie:

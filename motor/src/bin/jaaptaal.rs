@@ -90,7 +90,14 @@ fn main() {
             let code = code_of_stop(&bron);
             let stand = if args.iter().any(|a| a == "--snel") { Stand::Snel } else { Stand::Klein };
             let werk = std::env::temp_dir().join("jaaptaal-bouw");
-            match bouwen::bouw(&code, Path::new(uit), &rustc(), stand, &werk) {
+            let onderteken = motor::installatie::uit_programma(&motor::lees(&bron).programma).and_then(|i| i.onderteken);
+            match bouwen::bouw(&code, Path::new(uit), &rustc(), stand, &werk).and_then(|v| {
+                if let Some(naam) = &onderteken {
+                    motor::ondertekenen::onderteken(&std::env::current_dir().unwrap_or_default().join(uit), naam)?;
+                    println!("Ondertekend met het certificaat op naam van {}.", naam);
+                }
+                Ok(v)
+            }) {
                 Ok(v) => println!(
                     "Klaar: {} ({} bytes, {}), gebouwd in {:.1} seconden.",
                     uit,

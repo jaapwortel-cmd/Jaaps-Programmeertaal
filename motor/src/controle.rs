@@ -823,6 +823,19 @@ fn controleer_installatie(c: &mut Controle, p: &Programma) {
     dubbel(c, "de versie", regels_van(&|z| matches!(z, InstallatieZin::Versie(_))));
     dubbel(c, "de maker", regels_van(&|z| matches!(z, InstallatieZin::Maker(_))));
     dubbel(c, "het licentiebestand", regels_van(&|z| matches!(z, InstallatieZin::LicentieBestand(_))));
+    dubbel(c, "het bestand van de privacyverklaring", regels_van(&|z| matches!(z, InstallatieZin::PrivacyBestand(_))));
+    dubbel(c, "de naam van het certificaat", regels_van(&|z| matches!(z, InstallatieZin::Onderteken(_))));
+    let p_tekst = regels_van(&|z| matches!(z, InstallatieZin::PrivacyRegel(_)));
+    let p_bestand = regels_van(&|z| matches!(z, InstallatieZin::PrivacyBestand(_)));
+    if let (Some(t), Some(b)) = (p_tekst.first(), p_bestand.first()) {
+        c.meld(Melding::vraag(
+            *t.max(b),
+            format!(
+                "Je schrijft de privacyverklaring op regel {} zelf, en op regel {} zeg je dat hij in een bestand staat. Welke van de twee bedoel je?",
+                t, b
+            ),
+        ));
+    }
     let rechten: Vec<(usize, Rechten)> = zinnen
         .iter()
         .filter_map(|(r, z)| match z {

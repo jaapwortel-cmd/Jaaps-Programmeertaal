@@ -383,6 +383,12 @@ pub enum InstallatieZin {
     LicentieRegel(String),
     /// De licentie staat in een eigen tekstbestand.
     LicentieBestand(String),
+    /// Een regel van de privacyverklaring.
+    PrivacyRegel(String),
+    /// De privacyverklaring staat in een eigen tekstbestand.
+    PrivacyBestand(String),
+    /// Onderteken het programma met een eigen certificaat op deze naam.
+    Onderteken(String),
 }
 
 impl Soort {

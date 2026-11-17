@@ -132,6 +132,11 @@ extern "system" {
     pub fn GetDeviceCaps(dc: HANDLE, index: i32) -> i32;
 }
 
+#[link(name = "shell32")]
+extern "system" {
+    pub fn SHGetFolderPathW(h: HWND, csidl: i32, token: HANDLE, flags: u32, path: *mut u16) -> i32;
+}
+
 #[link(name = "comdlg32")]
 extern "system" {
     pub fn GetOpenFileNameW(ofn: *mut OPENFILENAMEW) -> i32;
