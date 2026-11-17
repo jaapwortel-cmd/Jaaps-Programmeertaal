@@ -70,7 +70,7 @@ use Functie::*;
 
 pub const ACTIES: &[Actie] = &[
     a(Nieuw, "Nieuw programma beginnen", "Control N", &["nieuw programma", "begin een nieuw programma", "maak een nieuw programma"], &[&["nieuw", "nieuwe", "leeg", "lege"]], &["installatie*", "exe", "zin", "zinnen", "woord*"]),
-    a(Openen, "Een programma openen", "Control O", &["open mijn programma Begroeting", "open de code van mijn programma", "laat mijn programma Rekenhulp zien"], &[&["open*", "laad", "pak", "haal"]], &["exe", "onlangs", "laatst*", "recent*", "handleiding", "woorden", "zinnen", "meldingen", "opdrachten"]),
+    a(Openen, "Een programma openen", "Control O", &["open mijn programma Begroeting", "open de code van mijn programma", "laat mijn programma Rekenhulp zien"], &[&["open*", "laad", "pak", "haal"]], &["exe", "onlangs", "laatst*", "recent*", "handleiding", "woorden", "zinnen", "meldingen", "opdrachten", "wens*"]),
     a(OpenExe, "De zinnen uit een gebouwd programma (.exe) halen", "", &["open de code uit een exe", "haal mijn zinnen uit het programma"], &[&["open*", "haal", "pak", "terug"], &["exe"]], &[]),
     a(Onlangs, "Onlangs geopende programma's", "", &["wat heb ik onlangs geopend", "mijn laatste programma's"], &[&["onlangs", "laatst*", "recent*", "vorige"]], &["regel", "fout*", "melding*"]),
     a(Verder, "Verder gaan waar je gebleven was", "", &["ga maar verder", "ga verder waar ik gebleven was", "doe maar verder"], &[&["verder", "gebleven", "doorgaan", "ga door"]], &[]),
@@ -97,7 +97,7 @@ pub const ACTIES: &[Actie] = &[
     a(Over, "Over Jaap's Programmeertaal (versie)", "", &["welke versie is dit", "over het programma"], &[&["versie", "over"]], &["installatie*", "omhoog", "ophogen", "hoger", "verhoog*", "nieuwe", "volgende", "moet", "worden", "wordt", "versienummer"]),
     a(VersieOmhoog, "Het versienummer van je programma ophogen", "", &["verhoog het versienummer", "maak een nieuwe versie", "versie omhoog"], &[&["versie", "versienummer"], &["omhoog", "ophogen", "hoger", "verhoog*", "nieuwe", "volgende"]], &[]),
     a(Wensenlijst, "Mijn wensenlijst openen (wat de taal nog niet kan)", "", &["open mijn wensenlijst", "wat staat er op mijn wensenlijst", "wat moet er nog gebeuren"], &[&["wensenlijst", "wensen", "wens", "lijstje", "nog gebeuren", "rest"]], &[]),
-    a(WatKanIkZeggen, "Zoeken in wat je kunt zeggen", "Control F", &["wat kan ik zeggen", "zoek een opdracht", "welke opdrachten zijn er"], &[&["zeggen", "opdrachten", "commando*", "zoek*", "lijst", "kan", "kun"]], &[]),
+    a(WatKanIkZeggen, "Zoeken in wat je kunt zeggen", "Control F", &["wat kan ik zeggen", "zoek een opdracht", "welke opdrachten zijn er"], &[&["zeggen", "opdrachten", "commando*", "zoek*", "lijst"]], &[]),
     a(Afsluiten, "Afsluiten", "Alt F4", &["sluit het programma af", "ik ben klaar", "stop maar"], &[&["afsluiten", "sluit", "ben klaar", "stop maar", "stoppen", "einde"]], &["herhaal*", "geluid", "opname", "voorlezen"]),
 ];
 
@@ -320,11 +320,54 @@ pub fn zoek(zoekwoorden: &str) -> Vec<&'static Actie> {
 pub enum Antwoord {
     Editor(Begrip),
     Taal(crate::wensen::Voorstel),
+    /// Je zin lijkt op iets wat Jaap eerder zei: eerst vragen of dat bedoeld is.
+    Lijkt { jaaps_zin: String, dan: Box<Antwoord> },
 }
 
-/// Begrijpt alles wat je zegt: eerst of het iets voor in je programma is ("zet er een knop
-/// Opslaan bij"), dan of het iets voor de editor is ("maak er een exe van").
+/// Wat een betekenis uit Jaaps zinnen inhoudt.
+fn betekenis(b: &str, eigen: &[(String, String)]) -> Antwoord {
+    use crate::wensen::Voorstel;
+    if let Some(u) = b.strip_prefix("uitleg:") {
+        return Antwoord::Taal(Voorstel::Uitleg(u.trim().to_string()));
+    }
+    if let Some(n) = b.strip_prefix("kan nog niet:") {
+        let mut n = n.trim().to_string();
+        if let Some(c) = n.get(..1) {
+            n = c.to_uppercase() + &n[1..];
+        }
+        return Antwoord::Taal(Voorstel::NogNiet(format!("{}: dat kan Jaap's Programmeertaal nog niet. Ik kan het op je wensenlijst zetten.", n)));
+    }
+    begrijp_regels(b, eigen)
+}
+
+/// Begrijpt alles wat je zegt. Eerst: lijkt het sterk op iets wat Jaap eerder zei? Dan de vaste
+/// regels: iets voor in je programma ("zet er een knop Opslaan bij") of voor de editor ("maak er
+/// een exe van"). Lijkt het een beetje op een zin van Jaap, dan wordt eerst gevraagd of dat bedoeld is.
 pub fn begrijp_alles(zin: &str, eigen: &[(String, String)]) -> Antwoord {
+    let lijkt = crate::jaaps_zinnen::lijkt_op(zin);
+    let r = begrijp_regels(zin, eigen);
+    // Een concrete zin voor je programma (met naam of bestand) gaat altijd voor.
+    if matches!(r, Antwoord::Taal(crate::wensen::Voorstel::Regels { .. })) {
+        return r;
+    }
+    // "Kan ik ook ...?" is een vraag of iets kan: dan telt het voorbeeld eerder.
+    let laag = zin.trim().to_lowercase();
+    let vraag_of_het_kan = ["kan ", "kun ", "kunnen ", "is het mogelijk", "lukt het", "werkt "].iter().any(|b| laag.starts_with(b));
+    if let Some((s, _, b)) = lijkt {
+        if s >= 0.75 || (vraag_of_het_kan && s >= 0.45) {
+            return betekenis(b, eigen);
+        }
+    }
+    if !matches!(r, Antwoord::Editor(Begrip::Onbekend) | Antwoord::Editor(Begrip::Kies(_))) {
+        return r;
+    }
+    match lijkt {
+        Some((s, jaap, b)) if s >= 0.3 => Antwoord::Lijkt { jaaps_zin: jaap.to_string(), dan: Box::new(betekenis(b, eigen)) },
+        _ => r,
+    }
+}
+
+fn begrijp_regels(zin: &str, eigen: &[(String, String)]) -> Antwoord {
     use crate::wensen::Voorstel;
     let editor = begrijp(zin, eigen);
     match crate::wensen::begrijp(zin) {

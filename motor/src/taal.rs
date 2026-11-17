@@ -183,6 +183,8 @@ pub enum Ingebouwd {
     Vervangen,
     /// Tekst zonder spaties aan het begin en eind.
     ZonderSpaties,
+    /// De tekst uit een Word- of PDF-bestand.
+    DocumentTekst,
 }
 
 impl Ingebouwd {
@@ -325,6 +327,10 @@ pub enum Soort {
     Wacht(Uitdrukking),
     /// Een vak waarin je in gewone zinnen zegt wat het programma moet doen.
     Opdrachtvak,
+    /// Een QR-code als PNG-afbeelding.
+    QrCode { waarde: Uitdrukking, pad: Uitdrukking },
+    /// Een werkbalk: knoppen naast elkaar bovenaan het venster.
+    Werkbalk(Vec<String>),
     /// Een ander programma starten.
     StartProgramma(Uitdrukking),
     /// Een bestand of map openen met het programma dat daarbij hoort.
@@ -343,7 +349,8 @@ pub enum Soort {
     /// Een piep: hoogte in hertz, duur in milliseconden.
     Piep { hoogte: Uitdrukking, duur: Uitdrukking },
     /// Een WAV-bestand afspelen.
-    SpeelGeluid { pad: Uitdrukking, wachten: bool },
+    /// `richting`: 0 gewoon; anders links/rechts + 3 × (achter/voor) + 9 × (boven/onder), zie `richting_naam`.
+    SpeelGeluid { pad: Uitdrukking, wachten: bool, richting: u8 },
     /// Het geluid stoppen.
     StopGeluid,
     /// De schermlezer iets laten zeggen, zonder meldingsvenster.
@@ -522,7 +529,7 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => vec![u],
-            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
+            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
             Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter_mut().collect(),
@@ -564,7 +571,7 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) => vec![u],
-            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } => vec![waarde, pad],
+            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
             Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter().collect(),
@@ -652,4 +659,32 @@ impl Programma {
     pub fn heeft_vensters(&self) -> bool {
         self.alle().iter().any(|o| matches!(o.soort, Soort::MaakVenster { .. }))
     }
+}
+
+/// Waar een geluid klinkt, in woorden. 0 = gewoon. Links/rechts (1, 2), achter/voor (×3), boven/onder (×9).
+pub fn richting_naam(r: u8) -> String {
+    if r == 0 {
+        return String::new();
+    }
+    let (h, d, v) = (r % 3, (r / 3) % 3, r / 9);
+    let mut delen = Vec::new();
+    match h {
+        1 => delen.push("links"),
+        2 => delen.push("rechts"),
+        _ => {}
+    }
+    match d {
+        1 => delen.push("achter je"),
+        2 => delen.push("voor je"),
+        _ => {}
+    }
+    match v {
+        1 => delen.push("boven je"),
+        2 => delen.push("onder je"),
+        _ => {}
+    }
+    if delen.is_empty() {
+        delen.push("in het midden");
+    }
+    delen.join(", ")
 }

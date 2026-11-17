@@ -19,6 +19,7 @@ pub mod eigen_zinnen;
 pub mod engels;
 pub mod getallen;
 pub mod installatie;
+pub mod jaaps_zinnen;
 pub mod melding;
 pub mod ondertekenen;
 pub mod opdrachten;

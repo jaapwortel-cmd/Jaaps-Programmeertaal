@@ -18,6 +18,8 @@ pub enum Voorstel {
     Vraag(String),
     /// De taal kan dit nog niet. De tekst zegt wat er wel kan.
     NogNiet(String),
+    /// Uitleg: zo doe je dat (of: dat kan al).
+    Uitleg(String),
 }
 
 /// Onderdelen: het woord dat je zegt, en hoe de zin het noemt.
@@ -47,7 +49,6 @@ const NOG_NIET: &[(&[&str], &str)] = &[
     (&["reservekopie", "back-up", "backup", "reservekopieën"], "Vanzelf reservekopieën maken"),
     (&["donkere stand", "donker thema", "hoog contrast", "dark mode"], "Een donkere stand of hoog contrast (wel kan: Geef het venster de kleur donkerblauw)"),
     (&["tooltip", "tooltips", "zwevende tip"], "Tips die verschijnen als je met de muis ergens op staat"),
-    (&["werkbalk", "toolbar"], "Een werkbalk"),
     (&["spraakherkenning", "dicteren", "whisper", "uitschrijven"], "Spraakherkenning in je eigen programma (dicteren in Jaap's Programmeertaal zelf kan wel, met je eigen dicteerprogramma)"),
     (&["taalmodel", "kunstmatige intelligentie", " ai ", "chatgpt", "claude", "llm"], "AI of een taalmodel: dat zit bewust niet in Jaap's Programmeertaal"),
     (&["qr", "streepjescode", "barcode"], "QR-codes en streepjescodes"),
@@ -240,7 +241,7 @@ pub fn begrijp(zin: &str) -> Option<Voorstel> {
 
     // Geluid, voorlezen, schermlezer.
     let noemt_onderdeel = ONDERDELEN.iter().any(|(ws, _)| ws.iter().any(|w| heeft(&t, w)));
-    if !noemt_onderdeel && (heeft(&t, "piep") || heeft(&t, "piepje") || heeft(&t, "geluidje") || (heeft(&t, "geluid") && !zin.contains('.'))) {
+    if !noemt_onderdeel && (heeft(&t, "piep") || heeft(&t, "piepje") || heeft(&t, "geluidje")) {
         if let Some(b) = tekst::normaliseer(zin).split_whitespace().find(|w| [".wav", ".mp3", ".wma", ".m4a"].iter().any(|e| w.to_lowercase().ends_with(e))) {
             return Some(Voorstel::Regels { regels: vec![format!("Speel het geluid {}", b)], uitleg: format!("Je programma speelt {} af.", b) });
         }

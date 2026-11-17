@@ -279,7 +279,7 @@ fn onbekende_zin_geeft_vraag_en_geen_gok() {
 
 #[test]
 fn nog_niet_gebouwd_wordt_eerlijk_gezegd() {
-    let m = eerste_melding("Maak een werkbalk met als naam Knoppen\n");
+    let m = eerste_melding("Maak een streepjescode met als naam Prijs\n");
     assert!(m.tekst.contains("nog niet"));
 }
 

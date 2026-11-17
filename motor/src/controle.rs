@@ -133,7 +133,7 @@ impl<'a> Controle<'a> {
                     }
                     Ingebouwd::AlsGetal | Ingebouwd::Lengte => Type::Getal,
                     Ingebouwd::AlsTekst | Ingebouwd::Hoofdletters | Ingebouwd::KleineLetters | Ingebouwd::EersteTekens | Ingebouwd::LaatsteTekens
-                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties => Type::Tekst,
+                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst => Type::Tekst,
                     Ingebouwd::Woorden | Ingebouwd::Gesplitst => Type::Lijst,
                     Ingebouwd::Willekeurig => {
                         for i in invoer {
@@ -490,6 +490,31 @@ impl<'a> Controle<'a> {
                     }
                 }
                 Soort::BeginOpname => {}
+                Soort::QrCode { waarde, pad } => {
+                    for u in [waarde, pad] {
+                        let mut namen = Vec::new();
+                        u.namen(&mut namen);
+                        self.controleer_namen(r, namen, in_knop, None);
+                    }
+                    if let Uitdrukking::Vast(Waarde::Tekst(t)) = pad {
+                        if !t.to_lowercase().ends_with(".png") {
+                            self.meld(Melding::fout(r, format!("Een QR-code wordt een PNG-afbeelding. Bedoel je {}.png?", t.trim_end_matches(".jpg"))));
+                        }
+                    }
+                    if let Uitdrukking::Vast(Waarde::Tekst(t)) = waarde {
+                        if t.len() > 213 {
+                            self.meld(Melding::fout(r, format!("Deze tekst is te lang voor een QR-code ({} tekens; hoogstens 213).", t.len())));
+                        }
+                    }
+                }
+                Soort::Werkbalk(namen) => {
+                    if in_knop {
+                        self.meld(Melding::fout(r, "Een werkbalk maak je in het venster zelf, niet binnen een knop."));
+                    }
+                    if namen.len() > 8 {
+                        self.meld(Melding::vraag(r, "Een werkbalk met meer dan 8 knoppen past niet goed in een venster. Kun je er een paar in een menu zetten?"));
+                    }
+                }
                 Soort::Opdrachtvak => {
                     if in_knop {
                         self.meld(Melding::fout(r, "Een opdrachtvak maak je in het venster zelf, niet binnen een knop."));
@@ -568,6 +593,9 @@ impl<'a> Controle<'a> {
                             }
                         }
                     }
+                }
+                Soort::SpeelGeluid { pad: Uitdrukking::Vast(Waarde::Tekst(t)), richting, .. } if *richting != 0 && !t.to_lowercase().ends_with(".wav") => {
+                    self.meld(Melding::fout(r, format!("Links, rechts, achter of voor kan ik alleen met WAV-bestanden. {} is een ander soort bestand.", t)));
                 }
                 Soort::SpeelGeluid { pad, .. } => {
                     let mut namen = Vec::new();
@@ -893,20 +921,22 @@ pub(crate) fn controleer(p: &Programma, regels: &[&str]) -> Vec<Melding> {
         alle.iter().filter(|o| matches!(o.soort, Soort::MaakVenster { .. })).map(|o| o.regel).collect();
     let knoppen: Vec<(String, usize)> = alle
         .iter()
-        .filter_map(|o| match &o.soort {
-            Soort::MaakKnop { naam } | Soort::MaakMenuregel { naam } => Some((naam.clone(), o.regel)),
-            _ => None,
+        .flat_map(|o| match &o.soort {
+            Soort::MaakKnop { naam } | Soort::MaakMenuregel { naam } => vec![(naam.clone(), o.regel)],
+            Soort::Werkbalk(namen) => namen.iter().map(|n| (n.clone(), o.regel)).collect(),
+            _ => Vec::new(),
         })
         .collect();
     let mut op_scherm: Vec<(String, usize)> = alle
         .iter()
-        .filter_map(|o| match &o.soort {
+        .flat_map(|o| match &o.soort {
             Soort::MaakKnop { naam }
             | Soort::MaakOnderdeel { naam, .. }
             | Soort::MaakMenu { naam }
             | Soort::MaakTabblad { naam }
-            | Soort::MaakMenuregel { naam } => Some((naam.clone(), o.regel)),
-            _ => None,
+            | Soort::MaakMenuregel { naam } => vec![(naam.clone(), o.regel)],
+            Soort::Werkbalk(namen) => namen.iter().map(|n| (n.clone(), o.regel)).collect(),
+            _ => Vec::new(),
         })
         .collect();
     op_scherm.sort_by_key(|x| x.1);
@@ -1199,9 +1229,10 @@ fn controleer_scherm(c: &mut Controle, p: &Programma) {
     alle.sort_by_key(|o| o.regel);
     let knoppen: Vec<String> = alle
         .iter()
-        .filter_map(|o| match &o.soort {
-            Soort::MaakKnop { naam } | Soort::MaakMenuregel { naam } => Some(naam.to_lowercase()),
-            _ => None,
+        .flat_map(|o| match &o.soort {
+            Soort::MaakKnop { naam } | Soort::MaakMenuregel { naam } => vec![naam.to_lowercase()],
+            Soort::Werkbalk(namen) => namen.iter().map(|n| n.to_lowercase()).collect(),
+            _ => Vec::new(),
         })
         .collect();
     let mut toetsen: Vec<(String, String, usize)> = Vec::new();

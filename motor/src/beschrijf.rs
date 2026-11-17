@@ -49,6 +49,7 @@ fn uitdrukking(u: &Uitdrukking) -> String {
                 Ingebouwd::Samengevoegd => format!("de lijst {} aan elkaar geplakt met {} ertussen", a(0), a(1)),
                 Ingebouwd::Vervangen => format!("{} waarin {} vervangen is door {}", a(0), a(1), a(2)),
                 Ingebouwd::ZonderSpaties => format!("{} zonder spaties aan het begin en eind", a(0)),
+                Ingebouwd::DocumentTekst => format!("de tekst uit het Word- of PDF-bestand {}", a(0)),
             }
         }
         Uitdrukking::Aantal(a) => format!("het aantal dingen in {}", uitdrukking(a)),
@@ -114,6 +115,8 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 TabelActie::Inlezen(p) => format!("lees de tabel {} in uit het CSV-bestand {}.", tabel, uitdrukking(p)),
             },
             Soort::BeginOpname => "begin met opnemen van de microfoon.".into(),
+            Soort::QrCode { waarde, pad } => format!("maak een QR-code van {} en bewaar die als afbeelding in {}.", uitdrukking(waarde), uitdrukking(pad)),
+            Soort::Werkbalk(namen) => format!("maak een werkbalk bovenaan het laatste venster, met de knoppen {}. Met Tab ga je van knop naar knop.", namen.join(", ")),
             Soort::Opdrachtvak => "maak een opdrachtvak: een tekstvak Opdracht en een knop Doe het. Daar typ of dicteer je wat het programma moet doen; je knoppen, menuregels en eigen zinnen werken daar.".into(),
             Soort::Wacht(u) => format!("wacht {} seconden.", uitdrukking(u)),
             Soort::StartProgramma(u) => format!("start het programma {}.", uitdrukking(u)),
@@ -125,9 +128,10 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
             Soort::ZoekUpdates => "kijk op internet of er een nieuwe versie is, en vraag of die geïnstalleerd mag worden.".into(),
             Soort::MaakMap(p) => format!("maak de map {}.", uitdrukking(p)),
             Soort::Piep { hoogte, duur } => format!("laat een piep horen van {} hertz, {} milliseconden lang.", uitdrukking(hoogte), uitdrukking(duur)),
-            Soort::SpeelGeluid { pad, wachten } => format!(
-                "speel het geluid {} af{}.",
+            Soort::SpeelGeluid { pad, wachten, richting } => format!(
+                "speel het geluid {} af{}{}.",
                 uitdrukking(pad),
+                if *richting == 0 { String::new() } else { format!(" ({})", crate::taal::richting_naam(*richting)) },
                 if *wachten { " en wacht tot het klaar is" } else { " (het programma gaat meteen verder)" }
             ),
             Soort::StopGeluid => "stop het geluid.".into(),

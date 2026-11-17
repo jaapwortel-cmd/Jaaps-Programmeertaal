@@ -1537,10 +1537,32 @@ fn opdrachtvenster_enter(in_lijst: bool) {
 }
 
 fn behandel_zin(zin: &str) {
+    behandel_antwoord(zin, motor::opdrachten::begrijp_alles(zin, &eigen_opdrachten()));
+}
+
+fn behandel_antwoord(zin: &str, antwoord: motor::opdrachten::Antwoord) {
     use motor::opdrachten::{Antwoord, Begrip};
     use motor::wensen::Voorstel;
     let Some(o) = OPDRACHTVENSTER.with(|o| o.get()) else { return };
-    match motor::opdrachten::begrijp_alles(zin, &eigen_opdrachten()) {
+    match antwoord {
+        Antwoord::Lijkt { jaaps_zin, dan } => {
+            if melding(&format!("Bedoel je zoiets als: {}?", jaaps_zin), MB_YESNO | MB_ICONQUESTION) == IDYES {
+                behandel_antwoord(zin, *dan);
+            } else {
+                melding("Zeg het dan op een andere manier, of kies met Tab uit de lijst met wat je kunt zeggen.", MB_ICONINFORMATION);
+                unsafe {
+                    SetFocus(o.vak);
+                    SendMessageW(o.vak, EM_SETSEL, 0, -1);
+                }
+            }
+        }
+        Antwoord::Taal(Voorstel::Uitleg(u)) => {
+            melding(&u, MB_ICONINFORMATION);
+            unsafe {
+                SetFocus(o.vak);
+                SendMessageW(o.vak, EM_SETSEL, 0, -1);
+            }
+        }
         Antwoord::Editor(Begrip::Doe { functie, extra }) => {
             sluit_opdrachtvenster();
             voer_functie_uit(functie, extra);

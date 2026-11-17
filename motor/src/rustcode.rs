@@ -240,10 +240,10 @@ impl<'a> Maker<'a> {
                     let d = self.uitdrukking(duur, r);
                     self.regel(diepte, &format!("{{ let h = {}; let d = {}; s.piep(h, d, {})?; }}", h, d, r));
                 }
-                Soort::SpeelGeluid { pad, wachten } => {
+                Soort::SpeelGeluid { pad, wachten, richting } => {
                     self.opmerking(diepte, r);
                     let p = self.uitdrukking(pad, r);
-                    self.regel(diepte, &format!("{{ let p = {}; s.speel(p, {}, {})?; }}", p, wachten, r));
+                    self.regel(diepte, &format!("{{ let p = {}; s.speel(p, {}, {}, {})?; }}", p, wachten, richting, r));
                 }
                 Soort::Zip { inpakken, map, zip } => {
                     self.opmerking(diepte, r);
@@ -372,6 +372,17 @@ impl<'a> Maker<'a> {
                     let w = self.uitdrukking(u, r);
                     let programma = matches!(o.soort, Soort::StartProgramma(_));
                     self.regel(diepte, &format!("{{ let w = {}; s.open(w, {}, {})?; }}", w, programma, r));
+                }
+                Soort::QrCode { waarde, pad } => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(waarde, r);
+                    let p = self.uitdrukking(pad, r);
+                    self.regel(diepte, &format!("{{ let w = {}; let p = {}; maak_qr(w, p, {})?; }}", w, p, r));
+                }
+                Soort::Werkbalk(namen) => {
+                    self.opmerking(diepte, r);
+                    let n: Vec<String> = namen.iter().map(|x| rust_tekst(x)).collect();
+                    self.regel(diepte, &format!("s.werkbalk(&[{}]);", n.join(", ")));
                 }
                 Soort::Opdrachtvak => {
                     self.opmerking(diepte, r);

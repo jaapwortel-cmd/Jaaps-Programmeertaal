@@ -439,7 +439,718 @@ fn functie(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
             }
             Ok(W::T(tekst(0).replace(zoek.as_str(), &tekst(2))))
         }
+        29 => {
+            let pad = volledig_pad(&invoer[0]);
+            let data = std::fs::read(&pad).or_else(|e| fout(r, format!("Ik kan het bestand {} niet lezen. Reden: {}", pad.display(), e)))?;
+            let laag = pad.to_string_lossy().to_lowercase();
+            let uit = if laag.ends_with(".pdf") { pdf_lezen(&data) } else { docx_lezen(&data) };
+            match uit {
+                Some(t) => Ok(W::T(t)),
+                None if laag.ends_with(".pdf") => fout(r, format!("Uit het PDF-bestand {} kan ik geen tekst halen. Misschien is het een scan (een plaatje van tekst), of gebruikt het een lettertype dat ik niet kan lezen.", pad.display())),
+                None => fout(r, format!("{} is geen Word-bestand (DOCX) dat ik kan lezen. Oude .doc-bestanden kan ik niet lezen.", pad.display())),
+            }
+        }
         _ => Ok(W::T(tekst(0).trim().to_string())),
+    }
+}
+
+/// Een QR-code maken (byte-stand, foutcorrectie M, versie 1 tot 10: tot 213 tekens).
+/// Geeft een rooster: true = zwart vakje. Zelf gemaakt volgens de QR-norm, zonder hulpprogramma's.
+fn qr_code(tekst: &[u8]) -> Option<Vec<Vec<bool>>> {
+    const EC: [usize; 11] = [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26];
+    const BLOKKEN: [usize; 11] = [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
+    let ruwe = |v: usize| -> usize {
+        let mut r = (16 * v + 128) * v + 64;
+        if v >= 2 {
+            let n = v / 7 + 2;
+            r -= (25 * n - 10) * n - 55;
+            if v >= 7 {
+                r -= 36;
+            }
+        }
+        r
+    };
+    let data_cw = |v: usize| ruwe(v) / 8 - EC[v] * BLOKKEN[v];
+    let versie = (1..=10).find(|&v| 4 + (if v < 10 { 8 } else { 16 }) + tekst.len() * 8 <= data_cw(v) * 8)?;
+    // Bits: stand 0100, lengte, de bytes, eindteken en opvulling.
+    let mut bits: Vec<bool> = Vec::new();
+    let mut zet = |w: u32, n: u32, bits: &mut Vec<bool>| {
+        for i in (0..n).rev() {
+            bits.push((w >> i) & 1 == 1);
+        }
+    };
+    zet(4, 4, &mut bits);
+    zet(tekst.len() as u32, if versie < 10 { 8 } else { 16 }, &mut bits);
+    for &b in tekst {
+        zet(b as u32, 8, &mut bits);
+    }
+    let capaciteit = data_cw(versie) * 8;
+    let eind = (capaciteit - bits.len()).min(4) as u32;
+    zet(0, eind, &mut bits);
+    let rest = (8 - bits.len() % 8) % 8;
+    zet(0, rest as u32, &mut bits);
+    let mut vul = 0xEC;
+    while bits.len() < capaciteit {
+        zet(vul, 8, &mut bits);
+        vul ^= 0xEC ^ 0x11;
+    }
+    let data: Vec<u8> = bits.chunks(8).map(|c| c.iter().fold(0u8, |a, &b| (a << 1) | b as u8)).collect();
+    // Reed-Solomon in GF(256).
+    let maal = |x: u8, y: u8| -> u8 {
+        let mut z: u32 = 0;
+        for i in (0..8).rev() {
+            z = (z << 1) ^ ((z >> 7) * 0x11D);
+            z ^= ((y as u32 >> i) & 1) * x as u32;
+        }
+        z as u8
+    };
+    let graad = EC[versie];
+    let mut deler = vec![0u8; graad];
+    deler[graad - 1] = 1;
+    let mut wortel = 1u8;
+    for _ in 0..graad {
+        for j in 0..graad {
+            deler[j] = maal(deler[j], wortel);
+            if j + 1 < graad {
+                deler[j] ^= deler[j + 1];
+            }
+        }
+        wortel = maal(wortel, 0x02);
+    }
+    let rest_van = |d: &[u8]| -> Vec<u8> {
+        let mut r = vec![0u8; graad];
+        for &b in d {
+            let f = b ^ r[0];
+            r.remove(0);
+            r.push(0);
+            for (x, &y) in r.iter_mut().zip(&deler) {
+                *x ^= maal(y, f);
+            }
+        }
+        r
+    };
+    // Blokken maken en door elkaar zetten.
+    let aantal = BLOKKEN[versie];
+    let totaal = ruwe(versie) / 8;
+    let kort = aantal - totaal % aantal;
+    let kort_len = totaal / aantal;
+    let mut blokken: Vec<Vec<u8>> = Vec::new();
+    let mut k = 0;
+    for i in 0..aantal {
+        let n = kort_len - graad + if i < kort { 0 } else { 1 };
+        let mut blok = data[k..k + n].to_vec();
+        k += n;
+        let ec = rest_van(&blok);
+        if i < kort {
+            blok.push(0);
+        }
+        blok.extend(ec);
+        blokken.push(blok);
+    }
+    let mut alle = Vec::new();
+    for i in 0..blokken[0].len() {
+        for (j, b) in blokken.iter().enumerate() {
+            if i != kort_len - graad || j >= kort {
+                alle.push(b[i]);
+            }
+        }
+    }
+    // Het rooster.
+    let maat = versie * 4 + 17;
+    let mut zw = vec![vec![false; maat]; maat];
+    let mut vast = vec![vec![false; maat]; maat];
+    let mut zetv = |x: usize, y: usize, z: bool, zw: &mut Vec<Vec<bool>>, vast: &mut Vec<Vec<bool>>| {
+        zw[y][x] = z;
+        vast[y][x] = true;
+    };
+    for i in 0..maat {
+        zetv(6, i, i % 2 == 0, &mut zw, &mut vast);
+        zetv(i, 6, i % 2 == 0, &mut zw, &mut vast);
+    }
+    for &(cx, cy) in &[(3i32, 3i32), (maat as i32 - 4, 3), (3, maat as i32 - 4)] {
+        for dy in -4..=4i32 {
+            for dx in -4..=4i32 {
+                let (x, y) = (cx + dx, cy + dy);
+                if x >= 0 && y >= 0 && (x as usize) < maat && (y as usize) < maat {
+                    let d = dx.abs().max(dy.abs());
+                    zetv(x as usize, y as usize, d != 2 && d != 4, &mut zw, &mut vast);
+                }
+            }
+        }
+    }
+    if versie >= 2 {
+        let n = versie / 7 + 2;
+        let stap = if versie == 32 { 26 } else { (versie * 4 + n * 2 + 1) / (n * 2 - 2) * 2 };
+        let mut pos = vec![6usize];
+        let mut p = maat - 7;
+        let mut tussen = Vec::new();
+        for _ in 0..n - 1 {
+            tussen.push(p);
+            p -= stap;
+        }
+        tussen.reverse();
+        pos.extend(tussen);
+        for (i, &a) in pos.iter().enumerate() {
+            for (j, &b) in pos.iter().enumerate() {
+                if (i == 0 && j == 0) || (i == 0 && j == n - 1) || (i == n - 1 && j == 0) {
+                    continue;
+                }
+                for dy in -2..=2i32 {
+                    for dx in -2..=2i32 {
+                        zetv((a as i32 + dx) as usize, (b as i32 + dy) as usize, dx.abs().max(dy.abs()) != 1, &mut zw, &mut vast);
+                    }
+                }
+            }
+        }
+    }
+    // Opmaak (foutcorrectie M = 00, masker 0) en versie-informatie.
+    let masker = 0u32;
+    let mut f = masker;
+    let mut r = f;
+    for _ in 0..10 {
+        r = (r << 1) ^ ((r >> 9) * 0x537);
+    }
+    f = ((f << 10) | r) ^ 0x5412;
+    let bit = |w: u32, i: u32| (w >> i) & 1 == 1;
+    for i in 0..6 {
+        zetv(8, i, bit(f, i as u32), &mut zw, &mut vast);
+    }
+    zetv(8, 7, bit(f, 6), &mut zw, &mut vast);
+    zetv(8, 8, bit(f, 7), &mut zw, &mut vast);
+    zetv(7, 8, bit(f, 8), &mut zw, &mut vast);
+    for i in 9..15 {
+        zetv(14 - i, 8, bit(f, i as u32), &mut zw, &mut vast);
+    }
+    for i in 0..8 {
+        zetv(maat - 1 - i, 8, bit(f, i as u32), &mut zw, &mut vast);
+    }
+    for i in 8..15 {
+        zetv(8, maat - 15 + i, bit(f, i as u32), &mut zw, &mut vast);
+    }
+    zetv(8, maat - 8, true, &mut zw, &mut vast);
+    if versie >= 7 {
+        let mut r = versie as u32;
+        for _ in 0..12 {
+            r = (r << 1) ^ ((r >> 11) * 0x1F25);
+        }
+        let v = ((versie as u32) << 12) | r;
+        for i in 0..18 {
+            let (a, b) = (maat - 11 + i % 3, i / 3);
+            zetv(a, b, bit(v, i as u32), &mut zw, &mut vast);
+            zetv(b, a, bit(v, i as u32), &mut zw, &mut vast);
+        }
+    }
+    // De gegevens in een zigzag, met masker 0 ((x + y) even = omdraaien).
+    let mut i = 0usize;
+    let mut rechts = maat as i32 - 1;
+    while rechts >= 1 {
+        if rechts == 6 {
+            rechts = 5;
+        }
+        for vert in 0..maat {
+            for j in 0..2 {
+                let x = (rechts - j) as usize;
+                let omhoog = (rechts + 1) & 2 == 0;
+                let y = if omhoog { maat - 1 - vert } else { vert };
+                if !vast[y][x] {
+                    let b = i < alle.len() * 8 && (alle[i >> 3] >> (7 - (i & 7))) & 1 == 1;
+                    zw[y][x] = b ^ ((x + y) % 2 == 0);
+                    i += 1;
+                }
+            }
+        }
+        rechts -= 2;
+    }
+    Some(zw)
+}
+
+/// Een zwart-wit PNG-bestand van een rooster (zonder compressie, wel een geldig PNG).
+fn qr_png(rooster: &[Vec<bool>], vak: usize) -> Vec<u8> {
+    let rand = 4;
+    let n = (rooster.len() + 2 * rand) * vak;
+    let mut ruw = Vec::with_capacity((n + 1) * n);
+    for y in 0..n {
+        ruw.push(0u8);
+        for x in 0..n {
+            let (rx, ry) = ((x / vak) as isize - rand as isize, (y / vak) as isize - rand as isize);
+            let zwart = rx >= 0 && ry >= 0 && (rx as usize) < rooster.len() && (ry as usize) < rooster.len() && rooster[ry as usize][rx as usize];
+            ruw.push(if zwart { 0 } else { 255 });
+        }
+    }
+    let mut z = vec![0x78u8, 0x01];
+    for (k, stuk) in ruw.chunks(65535).enumerate() {
+        let laatste = (k + 1) * 65535 >= ruw.len();
+        z.push(laatste as u8);
+        z.extend_from_slice(&(stuk.len() as u16).to_le_bytes());
+        z.extend_from_slice(&(!(stuk.len() as u16)).to_le_bytes());
+        z.extend_from_slice(stuk);
+    }
+    let (mut a, mut b) = (1u32, 0u32);
+    for &x in &ruw {
+        a = (a + x as u32) % 65521;
+        b = (b + a) % 65521;
+    }
+    z.extend_from_slice(&((b << 16) | a).to_be_bytes());
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    let mut stuk = |soort: &[u8], data: &[u8], png: &mut Vec<u8>| {
+        png.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        let mut c = soort.to_vec();
+        c.extend_from_slice(data);
+        png.extend_from_slice(&c);
+        png.extend_from_slice(&crc32(&c).to_be_bytes());
+    };
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&(n as u32).to_be_bytes());
+    ihdr.extend_from_slice(&(n as u32).to_be_bytes());
+    ihdr.extend_from_slice(&[8, 0, 0, 0, 0]);
+    stuk(b"IHDR", &ihdr, &mut png);
+    stuk(b"IDAT", &z, &mut png);
+    stuk(b"IEND", &[], &mut png);
+    png
+}
+
+fn maak_qr(waarde: W, pad: W, r: usize) -> R<()> {
+    let t = waarde.tekst();
+    if t.is_empty() {
+        return fout(r, "Een QR-code van lege tekst kan niet.".to_string());
+    }
+    let Some(rooster) = qr_code(t.as_bytes()) else {
+        return fout(r, format!("Deze tekst is te lang voor een QR-code ({} tekens; hoogstens 213).", t.len()));
+    };
+    let p = volledig_pad(&pad);
+    if let Some(m) = p.parent() {
+        let _ = std::fs::create_dir_all(m);
+    }
+    std::fs::write(&p, qr_png(&rooster, 8)).or_else(|e| fout(r, format!("Ik kan {} niet schrijven: {}", p.display(), e)))
+}
+
+/// Waar een geluid klinkt, in woorden (zelfde als in de motor).
+fn richting_naam(r: u8) -> String {
+    let (h, d, v) = (r % 3, (r / 3) % 3, r / 9);
+    let mut delen = Vec::new();
+    match h {
+        1 => delen.push("links"),
+        2 => delen.push("rechts"),
+        _ => {}
+    }
+    match d {
+        1 => delen.push("achter je"),
+        2 => delen.push("voor je"),
+        _ => {}
+    }
+    match v {
+        1 => delen.push("boven je"),
+        2 => delen.push("onder je"),
+        _ => {}
+    }
+    if delen.is_empty() {
+        delen.push("in het midden");
+    }
+    delen.join(", ")
+}
+
+/// Een WAV-geluid ruimtelijk maken: links, rechts, achter of voor je. Eenvoudig, zonder HRTF:
+/// links/rechts met het volume per oor (en een heel kleine vertraging), achter je wat zachter en
+/// doffer. Geeft een nieuw WAV-bestand (16 bit, stereo) in het geheugen.
+fn ruimtelijk_geluid(data: &[u8], richting: u8) -> Result<Vec<u8>, String> {
+    if data.len() < 12 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
+        return Err("is geen gewoon WAV-bestand.".into());
+    }
+    let (mut kanalen, mut freq, mut bits, mut vorm) = (0u16, 0u32, 0u16, 0u16);
+    let mut monsters: Option<&[u8]> = None;
+    let mut p = 12;
+    while p + 8 <= data.len() {
+        let id = &data[p..p + 4];
+        let len = u32::from_le_bytes(data[p + 4..p + 8].try_into().unwrap()) as usize;
+        let body = &data[p + 8..(p + 8 + len).min(data.len())];
+        if id == b"fmt " && body.len() >= 16 {
+            vorm = u16::from_le_bytes([body[0], body[1]]);
+            kanalen = u16::from_le_bytes([body[2], body[3]]);
+            freq = u32::from_le_bytes(body[4..8].try_into().unwrap());
+            bits = u16::from_le_bytes([body[14], body[15]]);
+        } else if id == b"data" {
+            monsters = Some(body);
+        }
+        p += 8 + len + (len & 1);
+    }
+    let Some(m) = monsters else { return Err("heeft geen geluid.".into()) };
+    if !(vorm == 1 || vorm == 0xFFFE) || bits != 16 || kanalen == 0 || kanalen > 2 {
+        return Err("moet een gewoon WAV-bestand zijn met 16 bits, mono of stereo, voor links, rechts of achter.".into());
+    }
+    // Eerst alles naar mono, als getallen tussen -1 en 1.
+    let k = kanalen as usize;
+    let mono: Vec<f32> = m
+        .chunks_exact(2 * k)
+        .map(|c| (0..k).map(|i| i16::from_le_bytes([c[2 * i], c[2 * i + 1]]) as f32).sum::<f32>() / (k as f32 * 32768.0))
+        .collect();
+    // Volume per oor, vertraging in monsters voor het verre oor (ongeveer 0,6 ms).
+    let vertraging = (freq as f32 * 0.0006) as usize;
+    let (h, d, v) = (richting % 3, (richting / 3) % 3, richting / 9);
+    let (mut links, mut rechts, vert_l, vert_r) = match h {
+        1 => (0.95f32, 0.30f32, 0, vertraging),
+        2 => (0.30, 0.95, vertraging, 0),
+        _ => (0.707, 0.707, 0, 0),
+    };
+    // Achter je: zachter en doffer. Onder je: nog doffer. Boven je: helderder.
+    let dof = d == 1 || v == 2;
+    let sterk_dof = v == 2;
+    let helder = v == 1;
+    if d == 1 {
+        links *= 0.8;
+        rechts *= 0.8;
+    }
+    let lengte = mono.len() + vertraging;
+    let mut l = vec![0f32; lengte];
+    let mut rr = vec![0f32; lengte];
+    let mut vorige = 0f32;
+    for (i, &x) in mono.iter().enumerate() {
+        // Achter je: hoge tonen zachter (een eenvoudig laagdoorlaatfilter).
+        let x = if dof {
+            vorige += if sterk_dof { 0.12 } else { 0.25 } * (x - vorige);
+            vorige
+        } else if helder {
+            // Hoge tonen harder: het verschil met het vorige monster erbij.
+            let y = x + 0.8 * (x - vorige);
+            vorige = x;
+            y * 0.8
+        } else {
+            x
+        };
+        l[i + vert_l] += x * links;
+        rr[i + vert_r] += x * rechts;
+    }
+    let mut uit = Vec::with_capacity(44 + lengte * 4);
+    let grootte = (lengte * 4) as u32;
+    uit.extend_from_slice(b"RIFF");
+    uit.extend_from_slice(&(36 + grootte).to_le_bytes());
+    uit.extend_from_slice(b"WAVEfmt ");
+    uit.extend_from_slice(&16u32.to_le_bytes());
+    uit.extend_from_slice(&1u16.to_le_bytes());
+    uit.extend_from_slice(&2u16.to_le_bytes());
+    uit.extend_from_slice(&freq.to_le_bytes());
+    uit.extend_from_slice(&(freq * 4).to_le_bytes());
+    uit.extend_from_slice(&4u16.to_le_bytes());
+    uit.extend_from_slice(&16u16.to_le_bytes());
+    uit.extend_from_slice(b"data");
+    uit.extend_from_slice(&grootte.to_le_bytes());
+    for i in 0..lengte {
+        for v in [l[i], rr[i]] {
+            uit.extend_from_slice(&((v.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+        }
+    }
+    Ok(uit)
+}
+
+/// Uitpakken van "deflate" (zoals in zip, docx en pdf). Zelf gemaakt, zonder hulpprogramma's.
+fn inflate(data: &[u8]) -> Option<Vec<u8>> {
+    struct Bits<'a> {
+        d: &'a [u8],
+        pos: usize,
+        bit: u32,
+        n: u32,
+    }
+    impl Bits<'_> {
+        fn lees(&mut self, aantal: u32) -> Option<u32> {
+            while self.n < aantal {
+                let b = *self.d.get(self.pos)? as u32;
+                self.pos += 1;
+                self.bit |= b << self.n;
+                self.n += 8;
+            }
+            let v = self.bit & ((1u32 << aantal) - 1);
+            self.bit >>= aantal;
+            self.n -= aantal;
+            Some(v)
+        }
+    }
+    // Een Huffman-tabel: aantal codes per lengte, en de symbolen op volgorde.
+    fn maak(lengtes: &[u8]) -> (Vec<u16>, Vec<u16>) {
+        let mut tel = vec![0u16; 16];
+        for &l in lengtes {
+            tel[l as usize] += 1;
+        }
+        tel[0] = 0;
+        let mut begin = vec![0u16; 16];
+        for i in 1..16 {
+            begin[i] = begin[i - 1] + tel[i - 1];
+        }
+        let mut sym = vec![0u16; lengtes.len()];
+        for (s, &l) in lengtes.iter().enumerate() {
+            if l != 0 {
+                sym[begin[l as usize] as usize] = s as u16;
+                begin[l as usize] += 1;
+            }
+        }
+        (tel, sym)
+    }
+    fn decodeer(b: &mut Bits, t: &(Vec<u16>, Vec<u16>)) -> Option<u16> {
+        let (mut code, mut eerste, mut index) = (0i32, 0i32, 0i32);
+        for len in 1..16 {
+            code |= b.lees(1)? as i32;
+            let aantal = t.0[len] as i32;
+            if code - aantal < eerste {
+                return t.1.get((index + code - eerste) as usize).copied();
+            }
+            index += aantal;
+            eerste += aantal;
+            eerste <<= 1;
+            code <<= 1;
+        }
+        None
+    }
+    const LBASIS: [u16; 29] = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+    const LEXTRA: [u8; 29] = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+    const DBASIS: [u16; 30] = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+    const DEXTRA: [u8; 30] = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+    let mut b = Bits { d: data, pos: 0, bit: 0, n: 0 };
+    let mut uit: Vec<u8> = Vec::new();
+    loop {
+        let laatste = b.lees(1)?;
+        let soort = b.lees(2)?;
+        match soort {
+            0 => {
+                b.bit = 0;
+                b.n = 0;
+                let len = u16::from_le_bytes([*data.get(b.pos)?, *data.get(b.pos + 1)?]) as usize;
+                b.pos += 4;
+                uit.extend_from_slice(data.get(b.pos..b.pos + len)?);
+                b.pos += len;
+            }
+            1 | 2 => {
+                let (lit, afst) = if soort == 1 {
+                    let mut l = [0u8; 288];
+                    for (i, x) in l.iter_mut().enumerate() {
+                        *x = if i < 144 { 8 } else if i < 256 { 9 } else if i < 280 { 7 } else { 8 };
+                    }
+                    (maak(&l), maak(&[5u8; 30]))
+                } else {
+                    let hlit = b.lees(5)? as usize + 257;
+                    let hdist = b.lees(5)? as usize + 1;
+                    let hclen = b.lees(4)? as usize + 4;
+                    const ORDE: [usize; 19] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+                    let mut cl = [0u8; 19];
+                    for &o in ORDE.iter().take(hclen) {
+                        cl[o] = b.lees(3)? as u8;
+                    }
+                    let clt = maak(&cl);
+                    let mut lengtes = Vec::with_capacity(hlit + hdist);
+                    while lengtes.len() < hlit + hdist {
+                        let s = decodeer(&mut b, &clt)?;
+                        match s {
+                            0..=15 => lengtes.push(s as u8),
+                            16 => {
+                                let vorige = *lengtes.last()?;
+                                for _ in 0..3 + b.lees(2)? {
+                                    lengtes.push(vorige);
+                                }
+                            }
+                            17 => lengtes.extend(std::iter::repeat(0).take(3 + b.lees(3)? as usize)),
+                            _ => lengtes.extend(std::iter::repeat(0).take(11 + b.lees(7)? as usize)),
+                        }
+                    }
+                    (maak(&lengtes[..hlit]), maak(&lengtes[hlit..hlit + hdist]))
+                };
+                loop {
+                    let s = decodeer(&mut b, &lit)? as usize;
+                    if s < 256 {
+                        uit.push(s as u8);
+                    } else if s == 256 {
+                        break;
+                    } else {
+                        let i = s - 257;
+                        let len = *LBASIS.get(i)? as usize + b.lees(*LEXTRA.get(i)? as u32)? as usize;
+                        let d = decodeer(&mut b, &afst)? as usize;
+                        let afstand = *DBASIS.get(d)? as usize + b.lees(*DEXTRA.get(d)? as u32)? as usize;
+                        if afstand > uit.len() {
+                            return None;
+                        }
+                        let start = uit.len() - afstand;
+                        for k in 0..len {
+                            let c = uit[start + k];
+                            uit.push(c);
+                        }
+                    }
+                }
+            }
+            _ => return None,
+        }
+        if laatste == 1 {
+            return Some(uit);
+        }
+    }
+}
+
+/// Eén bestand uit een zip halen (via de inhoudsopgave achteraan).
+fn uit_zip(zip: &[u8], naam: &str) -> Option<Vec<u8>> {
+    let u16_ = |p: usize| -> Option<usize> { Some(u16::from_le_bytes([*zip.get(p)?, *zip.get(p + 1)?]) as usize) };
+    let u32_ = |p: usize| -> Option<usize> { Some(u32::from_le_bytes(zip.get(p..p + 4)?.try_into().ok()?) as usize) };
+    let eind = (0..zip.len().saturating_sub(21)).rev().find(|&i| zip[i..].starts_with(b"PK\x05\x06"))?;
+    let aantal = u16_(eind + 10)?;
+    let mut p = u32_(eind + 16)?;
+    for _ in 0..aantal {
+        if !zip.get(p..)?.starts_with(b"PK\x01\x02") {
+            return None;
+        }
+        let methode = u16_(p + 10)?;
+        let grootte = u32_(p + 20)?;
+        let (nl, el, cl) = (u16_(p + 28)?, u16_(p + 30)?, u16_(p + 32)?);
+        let lokaal = u32_(p + 42)?;
+        let bestandsnaam = zip.get(p + 46..p + 46 + nl)?;
+        if bestandsnaam == naam.as_bytes() {
+            let begin = lokaal + 30 + u16_(lokaal + 26)? + u16_(lokaal + 28)?;
+            let data = zip.get(begin..begin + grootte)?;
+            return match methode {
+                0 => Some(data.to_vec()),
+                8 => inflate(data),
+                _ => None,
+            };
+        }
+        p += 46 + nl + el + cl;
+    }
+    None
+}
+
+/// XML-tekens terug naar gewone tekens.
+fn xml_tekst(t: &str) -> String {
+    t.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+}
+
+/// De tekst uit een Word-bestand (DOCX): elke alinea op een eigen regel.
+fn docx_lezen(data: &[u8]) -> Option<String> {
+    let xml = String::from_utf8(uit_zip(data, "word/document.xml")?).ok()?;
+    let mut uit = String::new();
+    let mut rest = xml.as_str();
+    while let Some(p) = rest.find('<') {
+        let Some(e) = rest[p..].find('>') else { break };
+        let tag = &rest[p + 1..p + e];
+        let naam = tag.trim_start_matches('/').split([' ', '/']).next().unwrap_or("");
+        let na = &rest[p + e + 1..];
+        match naam {
+            "w:t" if !tag.starts_with('/') && !tag.ends_with('/') => {
+                let eind = na.find("</w:t>").unwrap_or(na.len());
+                uit.push_str(&xml_tekst(&na[..eind]));
+                rest = &na[eind..];
+                continue;
+            }
+            "w:tab" if !tag.starts_with('/') => uit.push('\t'),
+            "w:br" | "w:cr" if !tag.starts_with('/') => uit.push('\n'),
+            "w:p" if tag.starts_with('/') => uit.push('\n'),
+            _ => {}
+        }
+        rest = na;
+    }
+    Some(uit.trim_end().to_string())
+}
+
+/// De tekst uit een PDF-bestand. Werkt met gewone PDF's met tekst (niet met scans).
+fn pdf_lezen(data: &[u8]) -> Option<String> {
+    if !data.starts_with(b"%PDF") {
+        return None;
+    }
+    let mut uit = String::new();
+    let mut p = 0;
+    while let Some(s) = data[p..].windows(6).position(|w| w == b"stream") {
+        let begin_dict = data[..p + s].iter().rposition(|&c| c == b'<').unwrap_or(p);
+        let dict = String::from_utf8_lossy(&data[begin_dict.saturating_sub(200)..p + s]).to_string();
+        let mut b = p + s + 6;
+        if data.get(b) == Some(&b'\r') {
+            b += 1;
+        }
+        if data.get(b) == Some(&b'\n') {
+            b += 1;
+        }
+        let Some(e) = data[b..].windows(9).position(|w| w == b"endstream") else { break };
+        let ruw = &data[b..b + e];
+        p = b + e + 9;
+        let inhoud = if dict.contains("/FlateDecode") {
+            match ruw.get(2..).and_then(inflate) {
+                Some(x) => x,
+                None => continue,
+            }
+        } else if dict.contains("/Filter") {
+            continue;
+        } else {
+            ruw.to_vec()
+        };
+        pdf_tekst_uit(&inhoud, &mut uit);
+    }
+    let uit = uit.trim().to_string();
+    (!uit.is_empty()).then_some(uit)
+}
+
+/// Tekst uit een PDF-inhoud: (tekst) Tj, [(tekst)] TJ, en T* of Td voor een nieuwe regel.
+fn pdf_tekst_uit(d: &[u8], uit: &mut String) {
+    const WIN: [(u8, char); 10] = [(0x80, '€'), (0x82, '‚'), (0x84, '„'), (0x85, '…'), (0x91, '‘'), (0x92, '’'), (0x93, '“'), (0x94, '”'), (0x96, '–'), (0x97, '—')];
+    let teken = |b: u8| WIN.iter().find(|x| x.0 == b).map(|x| x.1).unwrap_or(b as char);
+    let mut i = 0;
+    let mut in_tekst = false;
+    let mut regel = String::new();
+    while i < d.len() {
+        match d[i] {
+            b'(' => {
+                let mut diepte = 1;
+                i += 1;
+                while i < d.len() && diepte > 0 {
+                    match d[i] {
+                        b'\\' if i + 1 < d.len() => {
+                            i += 1;
+                            match d[i] {
+                                b'n' => regel.push('\n'),
+                                b'(' | b')' | b'\\' => regel.push(d[i] as char),
+                                b'0'..=b'7' => {
+                                    let mut v = 0u32;
+                                    let mut k = 0;
+                                    while k < 3 && i < d.len() && (b'0'..=b'7').contains(&d[i]) {
+                                        v = v * 8 + (d[i] - b'0') as u32;
+                                        i += 1;
+                                        k += 1;
+                                    }
+                                    regel.push(teken(v as u8));
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
+                        b'(' => {
+                            diepte += 1;
+                            regel.push('(');
+                        }
+                        b')' => {
+                            diepte -= 1;
+                            if diepte > 0 {
+                                regel.push(')');
+                            }
+                        }
+                        c => regel.push(teken(c)),
+                    }
+                    i += 1;
+                }
+                in_tekst = true;
+                continue;
+            }
+            b'T' if i + 1 < d.len() && matches!(d[i + 1], b'*' | b'd' | b'D') => {
+                if in_tekst {
+                    uit.push_str(regel.trim_end());
+                    uit.push('\n');
+                    regel.clear();
+                    in_tekst = false;
+                }
+            }
+            b'E' if d.get(i + 1) == Some(&b'T') => {
+                if !regel.is_empty() {
+                    uit.push_str(regel.trim_end());
+                    uit.push('\n');
+                    regel.clear();
+                }
+                in_tekst = false;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    if !regel.is_empty() {
+        uit.push_str(&regel);
+        uit.push('\n');
     }
 }
 
@@ -1042,13 +1753,30 @@ impl Staat {
         win::piep(h, d);
         Ok(())
     }
-    fn speel(&mut self, p: W, wachten: bool, r: usize) -> R<()> {
+    fn speel(&mut self, p: W, wachten: bool, richting: u8, r: usize) -> R<()> {
         let pad = geluidspad(&p);
         if !pad.is_file() {
             return fout(r, format!("Ik kan het geluid {} niet vinden. Zet het naast je programma, of in Documenten.", p.tekst()));
         }
+        let ruimtelijk = if richting == 0 {
+            None
+        } else {
+            let data = std::fs::read(&pad).or_else(|e| fout(r, format!("Ik kan het geluid {} niet lezen: {}", p.tekst(), e)))?;
+            Some(ruimtelijk_geluid(&data, richting).or_else(|e| fout(r, format!("{} {}", p.tekst(), e)))?)
+        };
         if self.scherm.tekststand {
-            println!("[geluid] {}{}", p.tekst(), if wachten { " (wacht tot het klaar is)" } else { "" });
+            let waar = if richting == 0 { String::new() } else { format!(" ({})", richting_naam(richting)) };
+            println!("[geluid] {}{}{}", p.tekst(), waar, if wachten { " (wacht tot het klaar is)" } else { "" });
+            if let (Some(wav), Ok(naar)) = (&ruimtelijk, std::env::var("JAAPTAAL_GELUID_BEWAAR")) {
+                let _ = std::fs::write(naar, wav);
+            }
+            return Ok(());
+        }
+        #[cfg(windows)]
+        if let Some(wav) = ruimtelijk {
+            if !win::speel_geheugen(wav, wachten) {
+                return fout(r, format!("Het geluid {} kan ik niet afspelen.", p.tekst()));
+            }
             return Ok(());
         }
         #[cfg(windows)]
@@ -1060,6 +1788,22 @@ impl Staat {
             }
         }
         Ok(())
+    }
+    /// Een werkbalk: knoppen naast elkaar.
+    fn werkbalk(&mut self, namen: &[&str]) {
+        if self.scherm.tekststand {
+            println!("[werkbalk] {}", namen.join(", "));
+        }
+        let mut nummers = Vec::new();
+        for naam in namen {
+            let actie = self.acties.iter().position(|a| a.to_lowercase() == naam.to_lowercase());
+            self.scherm.knoppen.push((naam.to_string(), actie));
+            nummers.push(self.scherm.knoppen.len() - 1);
+        }
+        #[cfg(windows)]
+        if !self.scherm.tekststand {
+            self.scherm.win.werkbalk(namen, &nummers);
+        }
     }
     /// Het opdrachtvak: een tekstvak Opdracht en een knop Doe het.
     fn opdrachtvak(&mut self) {
@@ -2004,6 +2748,8 @@ mod win {
         /// Per venster: waar het volgende onderdeel komt, en of er al iets de focus heeft.
         volgende_y: Vec<i32>,
         heeft_focus: Vec<bool>,
+        /// Per venster: hoe breed het minstens moet zijn (voor een werkbalk).
+        breedte: Vec<(HWND, i32)>,
         pub(super) klik_venster: Option<HWND>,
         lettertype: Option<HANDLE>,
         schaal: f32,
@@ -2064,6 +2810,22 @@ mod win {
         unsafe {
             Beep(h, d);
         }
+    }
+
+    thread_local! {
+        /// Het geluid in het geheugen moet blijven bestaan zolang het speelt.
+        static GELUID: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    pub(super) fn speel_geheugen(wav: Vec<u8>, wachten: bool) -> bool {
+        unsafe {
+            // Eerst het vorige geluid stoppen, dan pas het geheugen vervangen.
+            PlaySoundW(null(), null_mut(), 0);
+        }
+        GELUID.with(|g| *g.borrow_mut() = wav);
+        // SND_MEMORY | SND_NODEFAULT, en SND_ASYNC als we niet wachten.
+        let vlaggen = 0x0004 | 0x0002 | if wachten { 0 } else { 0x0001 };
+        GELUID.with(|g| unsafe { PlaySoundW(g.borrow().as_ptr() as *const u16, null_mut(), vlaggen) != 0 })
     }
 
     pub(super) fn speel(pad: &std::path::Path, wachten: bool) -> bool {
@@ -2653,7 +3415,8 @@ mod win {
                     }),
                     None => *self.volgende_y.last_mut().unwrap() = nieuw_y,
                 }
-                SetWindowPos(venster, null_mut(), 0, 0, self.s(460), hoogste + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
+                let breed = self.breedte.iter().find(|b| b.0 == venster).map_or(self.s(460), |b| b.1.max(self.s(460)));
+                SetWindowPos(venster, null_mut(), 0, 0, breed, hoogste + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
                 let op_ander_tabblad = tab.map_or(false, |t| t.0 != 0);
                 if focus && !op_ander_tabblad && !*self.heeft_focus.last().unwrap() {
                     *self.heeft_focus.last_mut().unwrap() = true;
@@ -2680,6 +3443,45 @@ mod win {
             });
             unsafe {
                 RedrawWindow(venster, null(), null_mut(), 0x0001 | 0x0004 | 0x0080);
+            }
+        }
+
+        /// Knoppen naast elkaar, op de plek waar het volgende onderdeel zou komen.
+        pub(super) fn werkbalk(&mut self, namen: &[&str], nummers: &[usize]) {
+            let Some(&venster) = self.vensters.last() else { return };
+            let y = *self.volgende_y.last().unwrap();
+            let breedte = self.s(130);
+            unsafe {
+                for (i, (naam, nummer)) in namen.iter().zip(nummers).enumerate() {
+                    let h = CreateWindowExW(
+                        0,
+                        w("BUTTON").as_ptr(),
+                        w(naam).as_ptr(),
+                        WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                        self.s(20) + i as i32 * (breedte + self.s(8)),
+                        y,
+                        breedte,
+                        self.s(44),
+                        venster,
+                        (KNOP_ID + nummer) as HANDLE,
+                        GetModuleHandleW(null()),
+                        null_mut(),
+                    );
+                    if let Some(f) = self.lettertype {
+                        SendMessageW(h, WM_SETFONT, f as usize, 1);
+                    }
+                    KNOP_HWNDS.with(|k| k.borrow_mut().push(h));
+                    if i == 0 && !*self.heeft_focus.last().unwrap() {
+                        *self.heeft_focus.last_mut().unwrap() = true;
+                        SetFocus(h);
+                    }
+                }
+                let nieuw_y = y + self.s(44) + self.s(12);
+                *self.volgende_y.last_mut().unwrap() = nieuw_y;
+                let breed = (self.s(40) + namen.len() as i32 * (breedte + self.s(8))).max(self.s(460));
+                self.breedte.retain(|b| b.0 != venster);
+                self.breedte.push((venster, breed));
+                SetWindowPos(venster, null_mut(), 0, 0, breed, nieuw_y + self.s(60), SWP_NOMOVE | SWP_NOZORDER);
             }
         }
 

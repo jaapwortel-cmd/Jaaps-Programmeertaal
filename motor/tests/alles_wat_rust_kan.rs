@@ -141,3 +141,115 @@ fn verzoeken_in_gewone_taal() {
     }
     assert!(matches!(begrijp_alles("Jaap wil geen Microsoft Edge", &[]), Antwoord::Taal(Voorstel::NogNiet(_))));
 }
+
+#[test]
+fn word_en_pdf_lezen() {
+    let m = map("lezen");
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("data");
+    std::fs::copy(data.join("brief.docx"), m.join("brief.docx")).unwrap();
+    std::fs::copy(data.join("brief.pdf"), m.join("brief.pdf")).unwrap();
+    // Ook een PDF die het programma zelf maakt, weer lezen.
+    let bron = "Schrijf \"Dag Jaap\" in het PDF-bestand eigen.pdf\nOnthoud w is de tekst van het Word-bestand brief.docx\nToon de eerste 30 tekens van w\nToon de tekst van het PDF-bestand brief.pdf\nToon de tekst van het PDF-bestand eigen.pdf\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let uit = voer_uit(bron, &m);
+    assert_eq!(uit, "Beste Piet,\nDank je wel voor j\nHallo uit een PDF\nTweede regel met (haakjes) en é\nDag Jaap\n", "{}", uit);
+    let docx = voer_uit("Toon de tekst van het Word-bestand brief.docx\n", &m);
+    assert!(docx.contains("brief & de foto's. Groetjes, Jaap\nherhaling herhaling"), "{}", docx);
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+/// Een korte toon als WAV (mono, 16 bit).
+fn toon_wav() -> Vec<u8> {
+    let monsters: Vec<i16> = (0..4410).map(|i| ((i as f32 * 0.06).sin() * 12000.0) as i16).collect();
+    let mut w = Vec::new();
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36 + monsters.len() as u32 * 2).to_le_bytes());
+    w.extend_from_slice(b"WAVEfmt ");
+    for x in [16u32.to_le_bytes().to_vec(), 1u16.to_le_bytes().to_vec(), 1u16.to_le_bytes().to_vec(), 44100u32.to_le_bytes().to_vec(), 88200u32.to_le_bytes().to_vec(), 2u16.to_le_bytes().to_vec(), 16u16.to_le_bytes().to_vec()] {
+        w.extend_from_slice(&x);
+    }
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&(monsters.len() as u32 * 2).to_le_bytes());
+    for m in monsters {
+        w.extend_from_slice(&m.to_le_bytes());
+    }
+    w
+}
+
+#[test]
+fn geluid_links_rechts_achter() {
+    let m = map("ruimte");
+    std::fs::write(m.join("toon.wav"), toon_wav()).unwrap();
+    let bron = "Speel het geluid toon.wav links\nSpeel het geluid toon.wav aan de rechterkant\nSpeel het geluid toon.wav achter me af en wacht\nSpeel het geluid toon.wav boven me\nSpeel het geluid toon.wav links onder me\nSpeel het geluid toon.wav rechts achter en boven mij\nSpeel het geluid toon.wav\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    assert_eq!(
+        voer_uit(bron, &m),
+        "[geluid] toon.wav (links)\n[geluid] toon.wav (rechts)\n[geluid] toon.wav (achter je) (wacht tot het klaar is)\n[geluid] toon.wav (boven je)\n[geluid] toon.wav (links, onder je)\n[geluid] toon.wav (rechts, achter je, boven je)\n[geluid] toon.wav\n"
+    );
+    // Links: het linkeroor hoort het harder dan het rechteroor.
+    let exe = bouw("Speel het geluid toon.wav links\n", &m, motor::bouwen::Stand::Snel);
+    let uitvoer = m.join("uit.wav");
+    Command::new(&exe).arg("--tekst").env("JAAPTAAL_MAP", &m).env("JAAPTAAL_GELUID_BEWAAR", &uitvoer).output().unwrap();
+    let wav = std::fs::read(&uitvoer).expect("ruimtelijk geluid gemaakt");
+    assert_eq!(u16::from_le_bytes([wav[22], wav[23]]), 2, "stereo");
+    let (mut l, mut r) = (0f64, 0f64);
+    for c in wav[44..].chunks_exact(4) {
+        l += (i16::from_le_bytes([c[0], c[1]]) as f64).abs();
+        r += (i16::from_le_bytes([c[2], c[3]]) as f64).abs();
+    }
+    assert!(l > r * 2.5, "links {} rechts {}", l, r);
+    assert!(!lees("Speel het geluid muziek.mp3 links\n").is_goed(), "mp3 kan nog niet links");
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn werkbalk() {
+    let m = map("werkbalk");
+    let bron = "Maak een venster met als titel Tekst\nMaak een werkbalk met de knoppen Nieuw, Openen en Opslaan\nMaak een groot tekstvak met als naam Brief\nAls ik op de knop Opslaan druk\nToon \"opgeslagen\"\nEinde van de knop\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let exe = bouw(bron, &m, motor::bouwen::Stand::Snel);
+    let uit = Command::new(&exe).args(["--tekst", "--druk", "Opslaan"]).env("JAAPTAAL_MAP", &m).output().unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.contains("[werkbalk] Nieuw, Openen, Opslaan\n"), "{}", uit);
+    assert!(uit.ends_with("opgeslagen\n"), "{}", uit);
+    // Een knop op de werkbalk zonder venster, of een onbekende knop: eerst vragen.
+    assert!(!lees("Maak een werkbalk met de knoppen A en B\n").is_goed());
+    assert!(!lees("Maak een venster met als titel A\nMaak een werkbalk met de knoppen A en B\nAls ik op de knop C druk\nToon 1\nEinde van de knop\n").is_goed());
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn qr_code_maken() {
+    let m = map("qr");
+    let bron = "Maak een QR-code van \"https://www.voorbeeld.nl\" in het bestand link.png\nOnthoud lang is \"abcdefghij\"\nMaak een QR-code van lang en dan lang in het bestand twee.png\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    voer_uit(bron, &m);
+    for naam in ["link.png", "twee.png"] {
+        let png = std::fs::read(m.join(naam)).expect("PNG gemaakt");
+        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"), "{} is geen PNG", naam);
+        // Versie 2 (25 vakjes) met een rand van 4 en 8 beeldpunten per vakje: 264 breed.
+        assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), (25 + 8) * 8, "{}", naam);
+    }
+    assert!(!lees("Maak een QR-code van \"x\" in het bestand qr.jpg\n").is_goed());
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn jaaps_eigen_zinnen_als_voorbeeld() {
+    use motor::opdrachten::{begrijp_alles, Antwoord, Begrip, Functie};
+    use motor::wensen::Voorstel;
+    // Precies zoals Jaap het zei.
+    assert!(matches!(begrijp_alles("Ga maar verder met de punten van de lijst.", &[]), Antwoord::Editor(Begrip::Doe { functie: Functie::Wensenlijst, .. })));
+    assert!(matches!(begrijp_alles("Geef mij hier het installatie best direct", &[]), Antwoord::Editor(Begrip::Doe { functie: Functie::Installatie, .. })));
+    // Een vraag of iets kan: uitleg met de zin die je kunt gebruiken.
+    match begrijp_alles("Kan ik ook QR-codes maken?", &[]) {
+        Antwoord::Taal(Voorstel::Uitleg(u)) => assert!(u.contains("Maak een QR-code"), "{}", u),
+        Antwoord::Lijkt { dan, .. } => assert!(matches!(*dan, Antwoord::Taal(Voorstel::Uitleg(_)))),
+        ander => panic!("{:?}", ander),
+    }
+    match begrijp_alles("ruimtelijk geluid boven en onder mij", &[]) {
+        Antwoord::Taal(Voorstel::Uitleg(u)) => assert!(u.contains("boven me"), "{}", u),
+        Antwoord::Lijkt { dan, .. } => assert!(matches!(*dan, Antwoord::Taal(Voorstel::Uitleg(ref u)) if u.contains("boven"))),
+        ander => panic!("{:?}", ander),
+    }
+}

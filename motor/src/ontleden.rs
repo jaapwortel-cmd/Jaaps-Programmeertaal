@@ -71,7 +71,7 @@ const WOORDENLIJST: &[&str] = &[
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
     "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
     "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga", "verstuur", "download", "adres", "webpagina",
-    "opdrachtvak", "zeg", "opdracht",
+    "opdrachtvak", "zeg", "opdracht", "werkbalk", "knoppen",
     "wortel", "macht", "afgerond", "decimalen", "rest", "delen", "absolute", "lengte", "tekens", "hoofdletters", "kleine", "letters",
     "woorden", "gesplitst", "samengevoegd", "vervangen", "waarin", "spaties", "seconden", "programma", "open",
     "updates", "zoek", "opnemen", "opname", "begin", "start", "afbeelding", "beschrijving", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
@@ -79,8 +79,7 @@ const WOORDENLIJST: &[&str] = &[
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "werkbalk",
-    "tekstverwerker", "qr-code", "streepjescode",
+    "tekstverwerker", "streepjescode",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -255,6 +254,12 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
     ] {
         if begint(s, voor) {
             return ib(wat, vec![pad(&s[voor.len()..])?]);
+        }
+    }
+    // De tekst van het Word-bestand brief.docx / van het PDF-bestand brief.pdf
+    if begint(s, &["de", "tekst", "van", "het"]) || begint(s, &["de", "tekst", "uit", "het"]) {
+        if s.len() > 5 && is_documentwoord(&klein(s, 4)) {
+            return ib(Ingebouwd::DocumentTekst, vec![pad(&s[5..])?]);
         }
     }
     // Tabellen: de gekozen rij, het aantal rijen, rij nummer 2.
@@ -1102,6 +1107,46 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::ZetIn { waarde: Uitdrukking::Vast(Waarde::Tekst(String::new())), naam: rest_tekst(&s[3..s.len() - 1]) }))
         }
         "geef" | "maak" if zoek(&s, &["opdrachtvak"], 1).is_some() => Ok(Vorm::Los(Soort::Opdrachtvak)),
+        "maak" if matches!(klein(&s, 2).as_str(), "qr-code" | "qrcode") || (klein(&s, 2) == "qr" && klein(&s, 3) == "code") => {
+            // Maak een QR-code van "https://..." in het bestand link.png
+            let vb = "Schrijf het zo: Maak een QR-code van \"https://www.voorbeeld.nl\" in het bestand link.png";
+            let b = if klein(&s, 2) == "qr" { 4 } else { 3 };
+            if !matches!(klein(&s, b).as_str(), "van" | "met") {
+                return Err(fout(vb));
+            }
+            let Some(p) = zoek(&s, &["bestand"], b + 1) else { return Err(fout(vb)) };
+            let mut tot = p;
+            while tot > b + 1 && matches!(klein(&s, tot - 1).as_str(), "het" | "in" | "naar" | "als") {
+                tot -= 1;
+            }
+            if tot <= b + 1 || p + 1 >= s.len() {
+                return Err(fout(vb));
+            }
+            Ok(Vorm::Los(Soort::QrCode { waarde: tekst_of_uitdrukking(&s[b + 1..tot]).map_err(fout)?, pad: pad(&s[p + 1..]).map_err(fout)? }))
+        }
+        "maak" if zoek(&s, &["werkbalk"], 1).is_some_and(|p| p <= 2) => {
+            // Maak een werkbalk met de knoppen Nieuw, Openen en Opslaan
+            let vb = "Schrijf het zo: Maak een werkbalk met de knoppen Nieuw, Openen en Opslaan.";
+            let Some(k) = (2..s.len()).find(|&i| matches!(klein(&s, i).as_str(), "knoppen" | "knop")) else {
+                return Err(fout(vb));
+            };
+            let woord = klein(&s, k);
+            let laag = norm.to_lowercase();
+            let rest = match laag.find(&format!("{} ", woord)) {
+                Some(p) => norm[p + woord.len() + 1..].trim_end_matches(['.', '!']).to_string(),
+                None => bron_tekst(&s[k + 1..]),
+            };
+            let namen: Vec<String> = rest
+                .split(',')
+                .flat_map(|d| d.split(" en "))
+                .map(|n| n.trim().trim_matches('"').trim().to_string())
+                .filter(|n| !n.is_empty())
+                .collect();
+            if namen.is_empty() {
+                return Err(fout(vb));
+            }
+            Ok(Vorm::Los(Soort::Werkbalk(namen)))
+        }
         "maak" => {
             let mut i = 1;
             if is_lidwoord(&klein(&s, i)) {
@@ -1532,10 +1577,51 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             if klein(&s, eind - 1) == "af" {
                 eind -= 1;
             }
+            // Waar het geluid klinkt: links, rechts, achter, voor, boven, onder (ook samen).
+            let (mut h, mut d, mut v, mut midden) = (0u8, 0u8, 0u8, false);
+            loop {
+                if eind <= g + 2 {
+                    break;
+                }
+                match klein(&s, eind - 1).as_str() {
+                    "me" | "mij" | "je" | "jou" | "en" | "van" | "naar" | "aan" | "de" | "het" | "in" | "op" | "uit" | "kant" | "," => {}
+                    "links" | "linkerkant" => h = 1,
+                    "rechts" | "rechterkant" => h = 2,
+                    "achter" | "achteren" | "achterkant" => d = 1,
+                    "voor" | "voren" | "voorkant" => d = 2,
+                    "boven" | "bovenkant" | "omhoog" => v = 1,
+                    "onder" | "onderkant" | "beneden" | "omlaag" => v = 2,
+                    "midden" => midden = true,
+                    "linksachter" => (h, d) = (1, 1),
+                    "rechtsachter" => (h, d) = (2, 1),
+                    "linksvoor" => (h, d) = (1, 2),
+                    "rechtsvoor" => (h, d) = (2, 2),
+                    "linksboven" => (h, v) = (1, 1),
+                    "rechtsboven" => (h, v) = (2, 1),
+                    "linksonder" => (h, v) = (1, 2),
+                    "rechtsonder" => (h, v) = (2, 2),
+                    _ => break,
+                }
+                eind -= 1;
+            }
+            // Alleen kleine woorden weggehaald, maar geen richting? Dan horen ze bij de naam.
+            let mut richting = h + 3 * d + 9 * v;
+            if richting == 0 && midden {
+                richting = 3 * 2; // midden = voor je
+            }
+            if richting == 0 {
+                eind = s.len();
+                if wachten {
+                    eind -= 2;
+                }
+            }
+            if klein(&s, eind - 1) == "af" {
+                eind -= 1;
+            }
             if g + 1 >= eind {
                 return Err(fout("Welk geluid? Schrijf bijvoorbeeld: Speel het geluid deurbel.wav."));
             }
-            Ok(Vorm::Los(Soort::SpeelGeluid { pad: pad(&s[g + 1..eind]).map_err(fout)?, wachten }))
+            Ok(Vorm::Los(Soort::SpeelGeluid { pad: pad(&s[g + 1..eind]).map_err(fout)?, wachten, richting }))
         }
         "stop" if zoek(&s, &["geluid"], 1).is_some() => Ok(Vorm::Los(Soort::StopGeluid)),
         "pak" if zoek(&s, &["zipbestand"], 1).is_some() => {
