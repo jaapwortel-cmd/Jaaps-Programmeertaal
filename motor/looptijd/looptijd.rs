@@ -301,6 +301,22 @@ fn toeval() -> u64 {
     })
 }
 
+thread_local! {
+    /// Het klembord in de tekststand (proeven zonder venster).
+    static KLEMBORD_PROEF: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+    /// Waar het laatst gevonden woord stond: (onderdeel, woord, plek erna), zodat zoeken verder zoekt.
+    static ZOEKPLEK: std::cell::RefCell<Vec<(usize, String, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// De tekst op het klembord.
+fn klembord_lezen() -> String {
+    #[cfg(windows)]
+    if let Some(t) = win::klembord_lees() {
+        return t;
+    }
+    KLEMBORD_PROEF.with(|k| k.borrow().clone())
+}
+
 fn ingebouwd(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
     match wat {
         0 | 1 => {
@@ -477,6 +493,7 @@ fn functie(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
             powershell(&script, "").map(|t| W::T(t.trim().to_string())).or_else(|e| fout(r, format!("Van de poort {} komt niets: {}", poort, e)))
         }
         38 => code_lezen(invoer[0].clone(), true, r),
+        40 => Ok(W::T(klembord_lezen())),
         39 => code_lezen(invoer[0].clone(), false, r),
         30 => Ok(W::L(ZENDERLIJST.iter().map(|(n, _, _)| W::T(n.to_string())).collect())),
         31 => zenders_van_land(&tekst(0)).map(W::L).or_else(|e| fout(r, e)),
@@ -2561,7 +2578,8 @@ impl Staat {
         #[cfg(windows)]
         {
             let laag = pad.to_string_lossy().to_lowercase();
-            let gelukt = if laag.ends_with(".wav") { win::speel(&pad, wachten) } else { win::speel_mci(&pad, wachten) };
+            // Ook WAV via MCI, zodat pauzeren en verder spelen werken; lukt dat niet, dan de gewone manier.
+            let gelukt = win::speel_mci(&pad, wachten) || (laag.ends_with(".wav") && win::speel(&pad, wachten));
             if !gelukt {
                 return fout(r, format!("Het geluid {} kan ik niet afspelen. Is het een gewoon WAV- of MP3-bestand?", p.tekst()));
             }
@@ -2639,6 +2657,7 @@ impl Staat {
                 5 => println!("[naast] {} naast {}", a, b),
                 1 => println!("[vraag bij afsluiten] {}", a),
                 2 => println!("[maar één keer open]"),
+                6 => println!("[{}] {}", b, a),
                 _ => println!("[tip bij {}] {}", a, b),
             }
             return;
@@ -2920,6 +2939,90 @@ Wil je de nieuwe versie downloaden en installeren?", PROGRAMMANAAM, versie, VERS
                     std::process::exit(0);
                 }
                 return fout(r, "Ik kan de update niet starten.".to_string());
+            }
+        }
+        Ok(())
+    }
+    /// Het geluid pauzeren, of verder laten spelen.
+    fn pauze_geluid(&mut self, verder: bool) {
+        if self.scherm.tekststand {
+            println!("{}", if verder { "[geluid speelt verder]" } else { "[geluid gepauzeerd]" });
+            return;
+        }
+        #[cfg(windows)]
+        win::pauze_geluid(verder);
+    }
+    /// Tekst op het klembord zetten.
+    fn kopieer(&mut self, w: W, r: usize) -> R<()> {
+        let t = w.tekst();
+        if self.scherm.tekststand {
+            println!("[klembord] {}", t);
+            KLEMBORD_PROEF.with(|k| *k.borrow_mut() = t);
+            return Ok(());
+        }
+        #[cfg(windows)]
+        if !win::klembord_schrijf(&t) {
+            return fout(r, "Ik kan de tekst niet op het klembord zetten. Probeer het nog eens.".to_string());
+        }
+        let _ = r;
+        Ok(())
+    }
+    /// Tekst afdrukken: via een tijdelijk tekstbestand en de standaardprinter van Windows.
+    fn druk_af(&mut self, w: W, r: usize) -> R<()> {
+        let t = w.tekst();
+        if self.scherm.tekststand {
+            println!("[afdrukken] {}", t);
+            return Ok(());
+        }
+        let pad = std::env::temp_dir().join(format!("{} afdrukken.txt", PROGRAMMANAAM));
+        let inhoud: String = std::iter::once('\u{FEFF}').chain(t.replace("\r\n", "\n").replace('\n', "\r\n").chars()).collect();
+        std::fs::write(&pad, inhoud).or_else(|e| fout(r, format!("Ik kan niet afdrukken: {}", e)))?;
+        #[cfg(windows)]
+        if !win::druk_af(&pad) {
+            return fout(r, "Afdrukken is niet gelukt. Staat er een printer aan, en is er een standaardprinter gekozen in Windows?".to_string());
+        }
+        Ok(())
+    }
+    /// Een woord zoeken in een tekstvak: de cursor gaat ernaartoe en de schermlezer zegt waar.
+    fn zoek_in(&mut self, naam: &str, w: W, r: usize) -> R<()> {
+        let i = self.zoek(naam, r)?;
+        if !matches!(self.scherm.onderdelen[i].soort, 0 | 1) {
+            return fout(r, format!("Zoeken kan alleen in een tekstvak, en {} is geen tekstvak.", naam));
+        }
+        let wat = w.tekst();
+        if wat.trim().is_empty() {
+            self.zeg(W::T("Wat moet ik zoeken? Er is geen woord.".into()));
+            return Ok(());
+        }
+        let tekst = self.scherm.lees(i).tekst().replace("\r\n", "\n");
+        let laag = tekst.to_lowercase();
+        let zoek = wat.to_lowercase();
+        // Verder zoeken na de vorige plek, en dan weer van voren af aan.
+        let vanaf = ZOEKPLEK.with(|z| z.borrow().iter().find(|x| x.0 == i && x.1 == zoek).map(|x| x.2)).unwrap_or(0);
+        let gevonden = laag.get(vanaf..).and_then(|d| d.find(&zoek)).map(|p| p + vanaf).or_else(|| laag.find(&zoek));
+        match gevonden {
+            Some(p) => {
+                ZOEKPLEK.with(|z| {
+                    let mut z = z.borrow_mut();
+                    z.retain(|x| x.0 != i);
+                    z.push((i, zoek.clone(), p + zoek.len()));
+                });
+                let regel = tekst[..p].matches('\n').count() + 1;
+                let begin = tekst[..p].chars().count();
+                if self.scherm.tekststand {
+                    println!("[gevonden] {} op regel {}", wat, regel);
+                } else {
+                    #[cfg(windows)]
+                    win::selecteer(self.scherm.onderdelen[i].h, begin, wat.chars().count(), &tekst);
+                }
+                let _ = begin;
+                self.zeg(W::T(format!("Gevonden op regel {}.", regel)));
+            }
+            None => {
+                if self.scherm.tekststand {
+                    println!("[niet gevonden] {}", wat);
+                }
+                self.zeg(W::T(format!("{} staat er niet in.", wat)));
             }
         }
         Ok(())
@@ -4095,6 +4198,111 @@ mod win {
         }
     }
 
+    pub(super) fn pauze_geluid(verder: bool) {
+        unsafe {
+            if verder {
+                if mciSendStringW(w("resume jaapgeluid").as_ptr(), null_mut(), 0, null_mut()) != 0 {
+                    mciSendStringW(w("play jaapgeluid").as_ptr(), null_mut(), 0, null_mut());
+                }
+            } else {
+                mciSendStringW(w("pause jaapgeluid").as_ptr(), null_mut(), 0, null_mut());
+            }
+        }
+    }
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn OpenClipboard(h: HWND) -> i32;
+        fn CloseClipboard() -> i32;
+        fn EmptyClipboard() -> i32;
+        fn SetClipboardData(soort: u32, data: HANDLE) -> HANDLE;
+        fn GetClipboardData(soort: u32) -> HANDLE;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GlobalAlloc(vlaggen: u32, grootte: usize) -> HANDLE;
+        fn GlobalLock(h: HANDLE) -> *mut c_void;
+        fn GlobalUnlock(h: HANDLE) -> i32;
+        fn GlobalFree(h: HANDLE) -> HANDLE;
+    }
+
+    /// Klembord openen; een ander programma kan het even vasthouden, dus een paar keer proberen.
+    fn open_klembord() -> bool {
+        for _ in 0..10 {
+            if unsafe { OpenClipboard(null_mut()) } != 0 {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        false
+    }
+
+    pub(super) fn klembord_schrijf(t: &str) -> bool {
+        let data: Vec<u16> = t.replace("\r\n", "\n").replace('\n', "\r\n").encode_utf16().chain([0]).collect();
+        unsafe {
+            if !open_klembord() {
+                return false;
+            }
+            EmptyClipboard();
+            let h = GlobalAlloc(0x0002, data.len() * 2);
+            let mut gelukt = false;
+            if !h.is_null() {
+                let p = GlobalLock(h) as *mut u16;
+                if !p.is_null() {
+                    std::ptr::copy_nonoverlapping(data.as_ptr(), p, data.len());
+                    GlobalUnlock(h);
+                    gelukt = !SetClipboardData(13, h).is_null();
+                }
+                if !gelukt {
+                    GlobalFree(h);
+                }
+            }
+            CloseClipboard();
+            gelukt
+        }
+    }
+
+    pub(super) fn klembord_lees() -> Option<String> {
+        unsafe {
+            if !open_klembord() {
+                return None;
+            }
+            let h = GetClipboardData(13);
+            let mut uit = String::new();
+            if !h.is_null() {
+                let p = GlobalLock(h) as *const u16;
+                if !p.is_null() {
+                    let mut n = 0;
+                    while *p.add(n) != 0 {
+                        n += 1;
+                    }
+                    uit = String::from_utf16_lossy(std::slice::from_raw_parts(p, n)).replace("\r\n", "\n");
+                    GlobalUnlock(h);
+                }
+            }
+            CloseClipboard();
+            Some(uit)
+        }
+    }
+
+    /// Afdrukken met het programma dat Windows voor tekstbestanden gebruikt (meestal Kladblok).
+    pub(super) fn druk_af(pad: &std::path::Path) -> bool {
+        unsafe { ShellExecuteW(null_mut(), w("print").as_ptr(), w(&pad.to_string_lossy()).as_ptr(), null(), null(), 0) > 32 }
+    }
+
+    /// Tekst in een tekstvak kiezen en de cursor ernaartoe brengen. `begin` en `lengte` in tekens (zonder \r).
+    pub(super) fn selecteer(h: usize, begin: usize, lengte: usize, tekst: &str) {
+        // In een Windows-tekstvak telt een nieuwe regel als twee tekens (\r\n).
+        let regels_ervoor = tekst.chars().take(begin).filter(|c| *c == '\n').count();
+        let b = begin + regels_ervoor;
+        let h = h as HWND;
+        unsafe {
+            SetFocus(h);
+            SendMessageW(h, 0x00B1, b, (b + lengte) as isize);
+            SendMessageW(h, 0x00B7, 0, 0);
+        }
+    }
+
     pub(super) fn sneltoets(knop: usize, code: u16, ctrl: bool, alt: bool, shift: bool, tekst: &str) {
         let Some(h) = KNOP_HWNDS.with(|k| k.borrow().get(knop).copied()) else { return };
         if h.is_null() {
@@ -4150,6 +4358,55 @@ mod win {
         /// 5: een knop rechts naast een andere knop.
         pub(super) fn plaatsing(&mut self, soort: u8, a: &str, b: &str, onderdelen: &[super::Ond]) {
             unsafe {
+                // 6: een onderdeel groter of kleiner (letters en hoogte); wat eronder staat schuift mee.
+                if soort == 6 {
+                    let (Some(h), Some(&venster)) = (self.h_van(a, onderdelen), self.vensters.last()) else { return };
+                    let factor = if b == "groter" { 1.5 } else { 0.8 };
+                    let mut rk = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    GetWindowRect(h, &mut rk);
+                    let mut punt = [rk];
+                    MapWindowPoints(null_mut(), venster, punt.as_mut_ptr() as *mut i32, 2);
+                    let rk = punt[0];
+                    let oud = rk.bottom - rk.top;
+                    let nieuw = (oud as f32 * factor) as i32;
+                    let verschil = nieuw - oud;
+                    let letter = CreateFontW(-((22.0 * self.schaal * factor) as i32), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, w("Segoe UI").as_ptr());
+                    SendMessageW(h, WM_SETFONT, letter as usize, 1);
+                    MoveWindow(h, rk.left, rk.top, rk.right - rk.left, nieuw, 1);
+                    let mut k = GetWindow(venster, 5);
+                    while !k.is_null() {
+                        if k != h {
+                            let mut r2 = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                            GetWindowRect(k, &mut r2);
+                            let mut p2 = [r2];
+                            MapWindowPoints(null_mut(), venster, p2.as_mut_ptr() as *mut i32, 2);
+                            let r2 = p2[0];
+                            if r2.top >= rk.bottom - 1 {
+                                MoveWindow(k, r2.left, r2.top + verschil, r2.right - r2.left, r2.bottom - r2.top, 1);
+                            }
+                        }
+                        k = GetWindow(k, 2);
+                    }
+                    if let Some(y) = self.volgende_y.last_mut() {
+                        *y += verschil;
+                    }
+                    TABS.with(|t| {
+                        if let Some(tabs) = t.borrow_mut().iter_mut().find(|x| x.venster == venster) {
+                            for y in tabs.y.iter_mut() {
+                                if *y >= rk.bottom {
+                                    *y += verschil;
+                                }
+                            }
+                        }
+                    });
+                    if IsZoomed(venster) == 0 {
+                        let mut rv = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                        GetWindowRect(venster, &mut rv);
+                        SetWindowPos(venster, null_mut(), 0, 0, rv.right - rv.left, rv.bottom - rv.top + verschil, 0x0002 | 0x0004);
+                    }
+                    RedrawWindow(venster, null(), null_mut(), 0x0001 | 0x0004 | 0x0080);
+                    return;
+                }
                 if soort == 4 {
                     let mut vorige: Option<HWND> = None;
                     for naam in a.split('\u{1}') {

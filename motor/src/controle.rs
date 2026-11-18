@@ -117,7 +117,7 @@ impl<'a> Controle<'a> {
                     self.type_van(i)?;
                 }
                 Ok(match wat {
-                    Ingebouwd::Inhoud | Ingebouwd::LogboekPlek | Ingebouwd::Tijd | Ingebouwd::Datum | Ingebouwd::Webpagina | Ingebouwd::WebTekst => {
+                    Ingebouwd::Inhoud | Ingebouwd::LogboekPlek | Ingebouwd::Tijd | Ingebouwd::Klembord | Ingebouwd::Datum | Ingebouwd::Webpagina | Ingebouwd::WebTekst => {
                         Type::Tekst
                     }
                     Ingebouwd::Regels | Ingebouwd::GekozenRij | Ingebouwd::RijNummer => Type::Lijst,
@@ -491,6 +491,16 @@ impl<'a> Controle<'a> {
                     }
                 }
                 Soort::BeginOpname => {}
+                Soort::Venstergedrag(Gedrag::Grootte { naam, .. }) => {
+                    let bestaat = self.programma.alle().iter().any(|o| match &o.soort {
+                        Soort::MaakKnop { naam: n } | Soort::MaakOnderdeel { naam: n, .. } => n.to_lowercase() == naam.to_lowercase(),
+                        Soort::Werkbalk(w) => w.iter().any(|x| x.to_lowercase() == naam.to_lowercase()),
+                        _ => false,
+                    });
+                    if !bestaat {
+                        self.meld(Melding::vraag(r, format!("Er is geen knop of onderdeel met de naam {}. Welk onderdeel moet groter of kleiner?", naam)));
+                    }
+                }
                 Soort::Venstergedrag(Gedrag::Tip { knop, .. }) => {
                     let bestaat = self.programma.alle().iter().any(|o| match &o.soort {
                         Soort::MaakKnop { naam } => naam.to_lowercase() == knop.to_lowercase(),
@@ -726,7 +736,7 @@ impl<'a> Controle<'a> {
                         }
                     }
                 }
-                Soort::Zeg(u) | Soort::LeesVoor(u) => {
+                Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Kopieer(u) | Soort::DrukAf(u) => {
                     if let Uitdrukking::Naam(n) = u {
                         if !self.is_bekend(n, r, in_knop) && !self.onthoud.iter().any(|o| tekst::mag_tikfout_zijn(n, &o.0)) {
                             if let Some(nieuw) = aanhalen(self.regels.get(r - 1).copied().unwrap_or(""), n) {
@@ -750,7 +760,19 @@ impl<'a> Controle<'a> {
                         self.meld(Melding::fout(r, format!("Een pictogram is een .ico-bestand, maar hier staat {}.", b)));
                     }
                 }
-                Soort::StopGeluid | Soort::Sneltoets { .. } | Soort::Kleur { .. } | Soort::Handleiding { .. } => {}
+                Soort::StopGeluid | Soort::PauzeGeluid { .. } | Soort::Sneltoets { .. } | Soort::Kleur { .. } | Soort::Handleiding { .. } => {}
+                Soort::Zoek { onderdeel, wat } => {
+                    let bestaat = self.programma.alle().iter().any(|o| matches!(&o.soort, Soort::MaakOnderdeel { naam, .. } if naam.to_lowercase() == onderdeel.to_lowercase()));
+                    if !bestaat {
+                        self.meld(Melding::vraag(r, format!("Er is geen tekstvak met de naam {}. In welk tekstvak moet ik zoeken?", onderdeel)));
+                    }
+                    let mut namen = Vec::new();
+                    wat.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                    if let Err(t) = self.type_van(wat) {
+                        self.meld(Melding::fout(r, t));
+                    }
+                }
                 Soort::MaakOnderdeel { .. } => {}
                 Soort::VoegKeuzeToe { keuze, lijst } => {
                     let mut namen = Vec::new();

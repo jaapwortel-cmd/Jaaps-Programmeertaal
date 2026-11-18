@@ -23,6 +23,7 @@ fn uitdrukking(u: &Uitdrukking) -> String {
                 Ingebouwd::LogboekPlek => "de plek van het logboek".into(),
                 Ingebouwd::Willekeurig => format!("een willekeurig getal van {} tot en met {}", a(0), a(1)),
                 Ingebouwd::Tijd => "de tijd van dit moment".into(),
+                Ingebouwd::Klembord => "de tekst die op het klembord staat".into(),
                 Ingebouwd::Datum => "de datum van vandaag".into(),
                 Ingebouwd::Webpagina => format!("wat er op de webpagina {} staat", a(0)),
                 Ingebouwd::WebTekst => format!("de leesbare tekst van de webpagina {}", a(0)),
@@ -131,6 +132,7 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
             Soort::Venstergedrag(Gedrag::VraagBijAfsluiten(v)) => format!("als je het programma afsluit, vraag eerst: {} (Ja of Nee).", v),
             Soort::Venstergedrag(Gedrag::MaarEenKeerOpen) => "het programma kan maar één keer tegelijk open zijn. Start je het nog eens, dan zegt het dat het al open is.".into(),
             Soort::Venstergedrag(Gedrag::Tip { knop, tekst }) => format!("de knop {} krijgt de tip: {} (zichtbaar als je met de muis op de knop staat).", knop, tekst),
+            Soort::Venstergedrag(Gedrag::Grootte { naam, groter }) => format!("maak {} {}: {} letters.", naam, if *groter { "groter" } else { "kleiner" }, if *groter { "grotere" } else { "kleinere" }),
             Soort::Radio(None) => "stop de radio.".into(),
             Soort::Stuur { waarde, naar } => match naar.strip_prefix("poort:") {
                 Some(p) => format!("stuur {} naar het apparaat aan de poort {}.", uitdrukking(waarde), p),
@@ -162,6 +164,11 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
                 if *wachten { " en wacht tot het klaar is" } else { " (het programma gaat meteen verder)" }
             ),
             Soort::StopGeluid => "stop het geluid.".into(),
+            Soort::PauzeGeluid { verder: false } => "pauzeer het geluid (het kan later verder spelen).".into(),
+            Soort::PauzeGeluid { verder: true } => "laat het geluid verder spelen waar het was gepauzeerd.".into(),
+            Soort::Kopieer(u) => format!("zet {} op het klembord (kopiëren).", uitdrukking(u)),
+            Soort::DrukAf(u) => format!("druk {} af op de printer.", uitdrukking(u)),
+            Soort::Zoek { onderdeel, wat } => format!("zoek {} in het tekstvak {}; de cursor gaat naar het woord.", uitdrukking(wat), onderdeel),
             Soort::LeesVoor(u) => format!("lees {} voor met de stem van Windows.", uitdrukking(u)),
             Soort::StopVoorlezen => "stop met voorlezen.".into(),
             Soort::Volume(u) => format!("zet het volume op {} (van 0 tot 100).", uitdrukking(u)),

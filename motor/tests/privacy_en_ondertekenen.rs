@@ -66,3 +66,10 @@ fn echt_ondertekenen_met_eigen_certificaat() {
         .status();
     let _ = std::fs::remove_dir_all(&map);
 }
+
+#[test]
+fn certificaat_als_tekst_lezen() {
+    assert_eq!(motor::ondertekenen::base64("aGFsbG8=").unwrap(), b"hallo");
+    assert_eq!(motor::ondertekenen::base64("-----BEGIN-----\r\naGFs\r\nbG8gamFhcA==\r\n-----END-----\r\n").unwrap(), b"hallo jaap");
+    assert!(motor::ondertekenen::base64("geen base64!").is_none());
+}

@@ -503,6 +503,15 @@ impl Gesprek {
             let genoemd = self.zoek_onderdeel(t);
             let verwijst = bevat_een(t, &[" dat ", " het ", " hem ", " die ", " deze ", " dit "]);
             let nieuw_onderdeel = genoemd.is_none() && !soorten_in(t).is_empty();
+            // "Maak de knop Afdrukken groter" terwijl die knop nog alleen bij wat het programma kan hoort:
+            // dan komt hij als onderdeel erbij, en wordt hij meteen groter.
+            if nieuw_onderdeel && wat != "anders" && bevat_een(t, &[" de ", " het "]) {
+                if let Some(o) = onderdelen_in(zin).into_iter().next() {
+                    self.onderdelen.push(o);
+                    let i = self.onderdelen.len() - 1;
+                    return self.wijzig(i, &wat);
+                }
+            }
             if !nieuw_onderdeel {
                 if wat == "anders" {
                     // Te vaag: eerst vragen welk onderdeel. Niet zelf kiezen.
@@ -1327,7 +1336,9 @@ impl Gesprek {
         let mut namen: Vec<String> = Vec::new();
         let mut vak: Option<String> = None;
         let heeft_knop = |n: &str| self.onderdelen.iter().any(|o| o.soort == "knop" && o.naam.as_deref().map(|x| x.eq_ignore_ascii_case(n)) == Some(true));
-        let tekst_nodig = !geluid && (["opslaan", "openen", "voorlezen"].iter().any(|k| kan(k) || heeft_knop(k)) || heeft_knop("wissen"));
+        let tekst_nodig = !geluid
+            && (["opslaan", "openen", "voorlezen", "afdrukken", "kopiëren", "plakken", "zoeken"].iter().any(|k| kan(k) || heeft_knop(k))
+                || ["wissen", "kopieer", "plak", "zoek", "print"].iter().any(|k| heeft_knop(k)));
         let mut onderdelen = self.onderdelen.clone();
         if tekst_nodig && !onderdelen.iter().any(|o| o.soort == "tekstvak") {
             onderdelen.insert(0, Onderdeel { soort: "tekstvak".into(), naam: None, doel: None, groot: true });
@@ -1345,6 +1356,18 @@ impl Gesprek {
                 "afspelen" => erbij("Speel", &mut onderdelen),
                 "stoppen" => erbij("Stop", &mut onderdelen),
                 "opslaan" => erbij("Opslaan", &mut onderdelen),
+                "pauzeren" => {
+                    erbij("Pauze", &mut onderdelen);
+                    erbij("Verder", &mut onderdelen);
+                }
+                "afdrukken" => erbij("Afdrukken", &mut onderdelen),
+                "kopiëren" => erbij("Kopiëren", &mut onderdelen),
+                "plakken" => erbij("Plakken", &mut onderdelen),
+                "zoeken" => erbij("Zoek", &mut onderdelen),
+                "opnemen" => {
+                    erbij("Opnemen", &mut onderdelen);
+                    erbij("Stop opnemen", &mut onderdelen);
+                }
                 "openen" => erbij("Openen", &mut onderdelen),
                 "voorlezen" => erbij("Voorlezen", &mut onderdelen),
                 "rekenen" | "optellen" => {
@@ -1358,6 +1381,13 @@ impl Gesprek {
                 }
                 _ => niet.push(k.clone()),
             }
+        }
+        // Zoeken heeft een vak voor het zoekwoord nodig.
+        if onderdelen.iter().any(|o| o.soort == "knop" && o.naam.as_deref().map_or(false, |n| n.eq_ignore_ascii_case("zoek") || n.eq_ignore_ascii_case("zoeken")))
+            && !onderdelen.iter().any(|o| o.naam.as_deref() == Some("Zoekwoord"))
+        {
+            let p = onderdelen.iter().position(|o| o.soort == "knop" && o.naam.as_deref().map_or(false, |n| n.eq_ignore_ascii_case("zoek") || n.eq_ignore_ascii_case("zoeken"))).unwrap();
+            onderdelen.insert(p, Onderdeel { soort: "tekstvak".into(), naam: Some("Zoekwoord".into()), doel: None, groot: false });
         }
         if geluid && !onderdelen.iter().any(|o| o.naam.as_deref() == Some("Stop")) && onderdelen.iter().any(|o| o.naam.as_deref() == Some("Speel")) {
             erbij("Stop", &mut onderdelen);
@@ -1381,7 +1411,7 @@ impl Gesprek {
                 i += 1;
             }
             namen.push(uniek.clone());
-            if o.soort == "tekstvak" && vak.is_none() && !uniek.starts_with("Getal") {
+            if o.soort == "tekstvak" && vak.is_none() && !uniek.starts_with("Getal") && uniek != "Zoekwoord" {
                 vak = Some(uniek.clone());
             }
             uniek_van.push(uniek);
@@ -1391,7 +1421,7 @@ impl Gesprek {
                 "venster" => continue,
                 "tekstvak" => {
                     let groot = o.groot || o.doel.as_deref().map_or(false, |d| bevat_een(d, &["verhaal", "brief", "notitie", "tekst"])) || o.naam.is_none() && o.doel.is_none();
-                    let groot = groot && !(uniek.starts_with("Getal"));
+                    let groot = groot && !uniek.starts_with("Getal") && uniek != "Zoekwoord";
                     regels.push(format!("Maak een {}tekstvak met als naam {}", if groot { "groot " } else { "" }, uniek));
                 }
                 "menuregel" | "tabblad" | "label" | "selectievakje" | "keuzelijst" | "uitklaplijst" | "menu" | "tabel" | "knop" => {
@@ -1425,6 +1455,20 @@ impl Gesprek {
                 ("speel" | "afspelen", _) if namen.iter().any(|n| n == "Kies") => vec!["Als liedje is niet \"\"".into(), "Speel het geluid met de naam liedje".into(), "Einde als".into()],
                 ("speel" | "afspelen", _) => vec!["Onthoud liedje is een bestand dat ik kies".into(), "Als liedje is niet \"\"".into(), "Speel het geluid met de naam liedje".into(), "Einde als".into()],
                 ("stop" | "stoppen", _) => vec!["Stop het geluid".into()],
+                ("pauze" | "pauzeer" | "pauzeren", _) => vec!["Pauzeer het geluid".into()],
+                ("verder" | "verder spelen", _) => vec!["Ga verder met het geluid".into()],
+                ("afdrukken" | "print" | "printen" | "druk af", Some(v)) => vec![format!("Druk de tekst in het tekstvak {} af", v), "Zeg \"Ik druk het af\"".into()],
+                ("kopiëren" | "kopieer" | "kopieren", Some(v)) => vec![format!("Kopieer de tekst in het tekstvak {}", v), "Zeg \"Gekopieerd\"".into()],
+                ("plakken" | "plak", Some(v)) => vec![format!("Zet de tekst van het klembord in het tekstvak {}", v), "Zeg \"Geplakt\"".into()],
+                ("zoek" | "zoeken", Some(v)) => vec![format!("Zoek de tekst in het tekstvak Zoekwoord in het tekstvak {}", v)],
+                ("opnemen" | "neem op", _) => vec!["Begin met opnemen".into(), "Zeg \"De opname is begonnen\"".into()],
+                ("stop opnemen", _) => vec![
+                    "Onthoud plek is de plek die ik kies om op te slaan".into(),
+                    "Als plek is niet \"\"".into(),
+                    "Stop met opnemen en sla het op in het bestand met de naam plek".into(),
+                    "Zeg \"De opname is bewaard\"".into(),
+                    "Einde als".into(),
+                ],
                 ("tijd", _) => vec!["Zeg \"Het is\" en dan de tijd".into()],
                 ("optellen", _) => vec![
                     "Onthoud uitkomst is het getal in het tekstvak Getal 1 plus het getal in het tekstvak Getal 2".into(),
@@ -1446,8 +1490,22 @@ impl Gesprek {
         if namen.iter().any(|n| n == "Kies") && namen.iter().any(|n| n == "Speel") {
             regels.insert(1, "Onthoud liedje is \"\"".into());
         }
-        // Veranderingen die de taal nog niet kan (zoals een knop groter maken).
-        niet.extend(self.wijzigingen.iter().cloned());
+        // Veranderingen: groter en kleiner kan de taal; andere (zoals een kleur voor één knop) nog niet.
+        let mut aanpassen: Vec<String> = Vec::new();
+        for wz in &self.wijzigingen {
+            let woord = wz.split_whitespace().last().unwrap_or("");
+            let wie = wz[..wz.len() - woord.len()].trim();
+            let doel = onderdelen.iter().zip(uniek_van.iter()).find(|(o, _)| o.kort() == wie);
+            match (woord, doel) {
+                ("groter" | "kleiner" | "breder" | "hoger" | "smaller" | "lager", Some((o, n))) if o.soort != "venster" => {
+                    let lid = if lidwoord(&o.soort) == "het" { "het" } else { "de" };
+                    let groter = matches!(woord, "groter" | "breder" | "hoger");
+                    aanpassen.push(format!("Maak {} {} {} {}", lid, o.soort, n, if groter { "groter" } else { "kleiner" }));
+                }
+                _ => niet.push(wz.clone()),
+            }
+        }
+        regels.extend(aanpassen);
         niet.extend(self.wensen.iter().cloned());
         let mut bron: Vec<String> = Vec::new();
         bron.push(format!("Opmerking: gemaakt in het gesprek met de assistent: {}", self.samenvatting()));
