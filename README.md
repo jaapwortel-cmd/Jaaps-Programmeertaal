@@ -278,6 +278,10 @@ De automatische controle op GitHub (UI Automation, dezelfde techniek als NVDA en
 
 In de editor: **Ctrl+E** om in gewone woorden te zeggen wat je wilt ("maak er een exe van", "ga maar verder", "zet er een knop Opslaan bij"), **Ctrl+F** om te zoeken in alles wat je kunt zeggen. De verzoeken komen uit hoe Jaap tegen Claude Code praat in zijn programma's. Werkt zonder AI: `motor/src/opdrachten.rs` (de editor) en `motor/src/wensen.rs` (zinnen voor je programma). Een programma kan ook een opdrachtvak krijgen: `Geef mijn programma een opdrachtvak` en `Als ik zeg "..."`.
 
+## 10c. Gesprek met de assistent (proef, stap 0.2)
+
+In de editor: **Ctrl+G** om gewoon te praten over het programma dat je wilt maken. De assistent ziet het verschil tussen een vraag, een idee, een uitleg en een opdracht, onthoudt het gesprek ("die knop", "maak dat groter", "ga maar verder"), herstelt dicteerfouten ("tekstpak" = tekstvak), stelt één vraag tegelijk en vertelt wat hij denkt dat je bedoelt. Zonder AI: `motor/src/gesprek.rs`, proeven in `motor/tests/gesprek.rs` (de vijf testvoorbeelden uit het ontwerp). In deze stap voert hij **niets** uit: de volgende stap (een veilig plan om code te schrijven) komt pas na Jaaps toestemming.
+
 ## 11. Wat nog niet werkt
 
 Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo'n zin, dan zegt het programma dat eerlijk.

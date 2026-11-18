@@ -17,6 +17,7 @@ pub mod bouwen;
 mod controle;
 pub mod eigen_zinnen;
 pub mod engels;
+pub mod gesprek;
 pub mod getallen;
 pub mod installatie;
 pub mod jaaps_zinnen;
