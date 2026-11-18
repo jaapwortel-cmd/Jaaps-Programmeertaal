@@ -72,6 +72,8 @@ thread_local! {
     static KEUZES: RefCell<Vec<Keuze>> = const { RefCell::new(Vec::new()) };
     static PRAATVENSTER: Cell<Option<Praatvenster>> = const { Cell::new(None) };
     static GESPREK: RefCell<Option<motor::gesprek::Gesprek>> = const { RefCell::new(None) };
+    /// Het programma dat het gesprek het laatst in de editor zette.
+    static GESPREK_PROGRAMMA: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 /// Wat een achtergrondklus (bouwen) teruggeeft.
@@ -1331,7 +1333,7 @@ fn maak_menu() -> HANDLE {
         let prog = CreatePopupMenu();
         voeg(prog, ID_OPDRACHT, "&Opdracht geven in gewone zinnen...\tCtrl+E");
         voeg(prog, ID_ZOEK_OPDRACHT, "&Zoeken in wat je kunt zeggen...\tCtrl+F");
-        voeg(prog, ID_GESPREK, "&Gesprek met de assistent (proef, voert niets uit)...\tCtrl+G");
+        voeg(prog, ID_GESPREK, "&Gesprek met de assistent...\tCtrl+G");
         voeg(prog, ID_OMSCHRIJVING, "Maak een programma van deze &omschrijving\tCtrl+Shift+E");
         streep(prog);
         voeg(prog, ID_CONTROLEER, "&Controleren (testen)\tF7");
@@ -2016,7 +2018,8 @@ fn opdrachtvenster_toets(msg: &MSG) -> bool {
 // ------------------------------------------------------------------ gesprek met de assistent (proefstap 0.2)
 //
 // Een venster om in gewone zinnen te praten. De motor (motor::gesprek) begrijpt de zinnen met vaste regels,
-// zonder AI. In deze proefstap voert het venster NIETS uit: het laat alleen het antwoord zien en voorlezen.
+// zonder AI. Weet de assistent precies wat je wilt, dan zet het venster het programma in de editor en start het
+// (F5). Een opdracht voor de editor (zoals een exe bouwen) wordt ook uitgevoerd.
 
 #[derive(Clone, Copy)]
 struct Praatvenster {
@@ -2039,7 +2042,7 @@ fn open_praatvenster() {
         let h = CreateWindowExW(
             0,
             w("JaapsPraatVenster").as_ptr(),
-            w("Gesprek met de assistent (proef: voert niets uit) - Escape sluit").as_ptr(),
+            w("Gesprek met de assistent - Escape sluit").as_ptr(),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -2064,7 +2067,7 @@ fn open_praatvenster() {
         toon_gesprek();
         SetFocus(vak);
     }
-    zeg_hardop("Gesprek met de assistent. Dit is een proef: ik begrijp wat je zegt, maar ik voer nog niets uit. Typ of dicteer, en druk Enter.");
+    zeg_hardop("Gesprek met de assistent. Vertel wat voor programma je wilt. Als ik precies weet wat je bedoelt, maak ik het en start ik het. Typ of dicteer, en druk Enter.");
 }
 
 /// Zet het hele gesprek in het vak en gaat naar het eind.
@@ -2089,6 +2092,31 @@ fn praatvenster_enter() {
     zet_tekst(p.vak, "");
     toon_gesprek();
     zeg_hardop(&antwoord.tekst);
+    if let Some(bron) = antwoord.maak {
+        zet_gesprek_programma(&bron);
+    }
+    if let Some(f) = antwoord.doe {
+        voer_functie_uit(f, String::new());
+    }
+}
+
+/// Zet het programma uit het gesprek in de editor en start het (zoals F5).
+/// Staan er andere zinnen in de editor, dan wordt eerst gevraagd of je die wilt opslaan; het wordt een nieuw programma.
+fn zet_gesprek_programma(bron: &str) {
+    let nu = editor_tekst().replace("\r\n", "\n");
+    let van_gesprek = GESPREK_PROGRAMMA.with(|g| g.borrow().as_deref().map(|b| b.replace("\r\n", "\n")) == Some(nu.clone()));
+    if !nu.trim().is_empty() && !van_gesprek {
+        if !mag_doorgaan() {
+            zeg_hardop("Goed, ik heb je zinnen in de editor laten staan. Het programma is niet gemaakt.");
+            return;
+        }
+        PAD.with(|p| *p.borrow_mut() = None);
+        zet_titel();
+    }
+    vervang_editor_tekst(bron);
+    GESPREK_PROGRAMMA.with(|g| *g.borrow_mut() = Some(editor_tekst()));
+    zet_meldingen("Het programma uit het gesprek staat in het vak Opdrachten. Het wordt nu gebouwd en gestart.");
+    uitvoeren();
 }
 
 /// Laat de schermlezer een tekst voorlezen (UI Automation-melding, voor JAWS, NVDA en Verteller).

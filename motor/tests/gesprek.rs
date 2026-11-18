@@ -13,7 +13,8 @@ fn test_1_gewone_spreektaal() {
     let r = g.zeg("Kun je een klein programma maken waar ik tekst in kan typen?");
     assert_eq!(r.soort, Soort::Opdracht, "{}", r.tekst);
     assert!(r.tekst.contains("een klein programma met een tekstvak"), "{}", r.tekst);
-    assert!(r.tekst.contains("Ik maak nog niets"), "{}", r.tekst);
+    assert!(r.tekst.contains("Zeg ja, dan maak ik het"), "{}", r.tekst);
+    assert!(r.maak.is_none(), "eerst vragen of het klopt");
     een_vraag(&r.tekst);
 }
 
@@ -77,8 +78,14 @@ fn test_5_verdergaan() {
     let r = g.zeg("Ga maar verder.");
     assert!(r.tekst.contains("we gaan verder vanaf wat we hebben afgesproken"), "{}", r.tekst);
     assert!(r.tekst.contains("tekstvak") && r.tekst.contains("knop Opslaan"), "begint opnieuw: {}", r.tekst);
-    assert!(r.tekst.contains("nog niet"), "{}", r.tekst);
+    let bron = r.maak.expect("hij weet precies wat je wilt, dus hij maakt het programma");
+    assert!(motor::lees(&bron).is_goed(), "{}", bron);
+    assert!(bron.contains("Maak een groot tekstvak met als naam Tekst"), "{}", bron);
+    assert!(bron.contains("Maak een knop met als naam Opslaan") && bron.contains("Als ik op de knop Opslaan druk"), "{}", bron);
+    assert!(r.tekst.contains("Ik maak het programma nu en start het."), "{}", r.tekst);
     assert_eq!(g.onderdelen.len(), 2);
+    // Nog een keer "ga maar verder": opnieuw maken en starten, niet opnieuw beginnen.
+    assert!(g.zeg("ga maar verder").maak.is_some());
     // Zonder afspraak: eerlijk zeggen.
     let mut g = Gesprek::nieuw();
     let r = g.zeg("ga maar verder");
@@ -109,7 +116,7 @@ fn vraag_idee_uitleg_en_opdracht() {
     assert!(r.tekst.contains("je bent blind"), "{}", r.tekst);
     assert_eq!(g.zeg("Maak een programma met een knop Stoppen").soort, Soort::Opdracht);
     let r = g.zeg("Heb je het al gemaakt?");
-    assert!(r.tekst.starts_with("Nee."), "eerlijk: {}", r.tekst);
+    assert!(r.tekst.starts_with("Nee, nog niet."), "eerlijk: {}", r.tekst);
 }
 
 #[test]
@@ -143,11 +150,10 @@ fn niet_raden_en_nieuw_programma() {
 }
 
 #[test]
-fn editoropdracht_wordt_niet_uitgevoerd() {
+fn editoropdracht_wordt_doorgegeven() {
     let mut g = Gesprek::nieuw();
     let r = g.zeg("maak er een exe van");
-    assert!(r.tekst.contains("Dat voer ik hier niet uit"), "{}", r.tekst);
-    assert!(r.tekst.contains("F8"), "{}", r.tekst);
+    assert_eq!(r.doe, Some(motor::opdrachten::Functie::BouwExe), "{}", r.tekst);
 }
 
 #[test]
@@ -159,4 +165,82 @@ fn het_gesprek_staat_in_de_geschiedenis() {
     assert!(t.contains("Assistent: Je wilt dus"), "{}", t);
     let r = g.zeg("waar waren we?");
     assert!(r.tekst.contains("Ik begrijp je opdracht nu als"), "{}", r.tekst);
+}
+
+#[test]
+fn na_ja_maakt_hij_het_programma() {
+    let mut g = Gesprek::nieuw();
+    g.zeg("Maak een programma met een knop Opslaan en een tekstvak voor mijn verhaal");
+    let r = g.zeg("ja");
+    let bron = r.maak.expect("programma");
+    assert!(motor::lees(&bron).is_goed(), "{}", bron);
+    assert!(bron.contains("Maak een groot tekstvak met als naam Verhaal"), "{}", bron);
+    assert!(bron.contains("Schrijf de tekst in het tekstvak Verhaal in het bestand met de naam plek"), "{}", bron);
+    // Iets erbij: meteen opnieuw maken.
+    let r = g.zeg("zet er ook een knop Voorlezen bij");
+    let bron = r.maak.expect("opnieuw");
+    assert!(bron.contains("Lees de tekst in het tekstvak Verhaal voor"), "{}", bron);
+    // Een knop waarvan niet bekend is wat hij doet: wel maken, eerlijk zeggen.
+    let r = g.zeg("en een knop Hallo");
+    assert!(r.tekst.contains("wat de knop Hallo moet doen"), "{}", r.tekst);
+    assert!(motor::lees(r.maak.as_ref().unwrap()).is_goed());
+    // Een vraag maakt niets.
+    assert!(g.zeg("wat is een label?").maak.is_none());
+}
+
+#[test]
+fn programmas_die_hij_kan_maken() {
+    for gesprek in [
+        vec!["Ik wil dat het programma mijn geluidsbestanden kan openen en afspelen.", "Ja, en ik wil ook kunnen stoppen."],
+        vec!["Maak een rekenmachine waarmee ik kan optellen", "ja"],
+        vec!["Kun je een klein programma maken waar ik tekst in kan typen?", "Zet er ook een knop Opslaan bij.", "en een knop Openen", "ga maar verder"],
+        vec!["Maak een programma met een keuzelijst en een selectievakje", "klopt"],
+    ] {
+        let mut g = Gesprek::nieuw();
+        let mut laatste = None;
+        for z in &gesprek {
+            let r = g.zeg(z);
+            if r.maak.is_some() {
+                laatste = r.maak;
+            }
+        }
+        let bron = laatste.unwrap_or_else(|| panic!("niets gemaakt: {:?}\n{}", gesprek, g.als_tekst()));
+        let u = motor::lees(&bron);
+        assert!(u.is_goed(), "{}\n{:#?}", bron, u.meldingen);
+    }
+    // Pauzeren kan de taal nog niet: eerlijk zeggen.
+    let mut g = Gesprek::nieuw();
+    g.zeg("Ik wil dat het programma mijn geluidsbestanden kan afspelen en pauzeren.");
+    let r = g.zeg("ja");
+    assert!(r.tekst.contains("pauzeren"), "{}", r.tekst);
+    assert!(r.maak.is_some());
+}
+
+#[test]
+fn gemaakte_programmas_bouwen_echt() {
+    let rustc = motor::bouwen::zoek_rustc(None).expect("rustc nodig");
+    for (i, gesprek) in [
+        vec!["Kun je een klein programma maken waar ik tekst in kan typen?", "Zet er ook een knop Opslaan bij.", "en een knop Openen en een knop Voorlezen", "ga maar verder"],
+        vec!["Ik wil dat het programma mijn geluidsbestanden kan openen en afspelen.", "Ja, en ik wil ook kunnen stoppen."],
+        vec!["Maak een rekenmachine waarmee ik kan optellen", "ja"],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut g = Gesprek::nieuw();
+        let mut bron = None;
+        for z in &gesprek {
+            if let Some(b) = g.zeg(z).maak {
+                bron = Some(b);
+            }
+        }
+        let bron = bron.expect("programma");
+        let code = motor::rust_code(&bron).unwrap_or_else(|m| panic!("{}\n{:#?}", bron, m));
+        let werk = std::env::temp_dir().join(format!("jaaptaal-gesprek-{}-{}", i, std::process::id()));
+        std::fs::create_dir_all(&werk).unwrap();
+        let exe = werk.join(if cfg!(windows) { "p.exe" } else { "p" });
+        motor::bouwen::bouw(&code, &exe, &rustc, motor::bouwen::Stand::Snel, &werk).unwrap_or_else(|e| panic!("{}\n{:?}", bron, e));
+        assert!(exe.exists());
+        let _ = std::fs::remove_dir_all(&werk);
+    }
 }

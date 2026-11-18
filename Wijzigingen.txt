@@ -1,15 +1,17 @@
 ﻿Wijzigingen in Jaap's Programmeertaal
 =====================================
 
-Gesprek met de assistent (eerste ontwikkelstap 0.2, proef, 18 november 2026)
+Gesprek met de assistent (18 november 2026)
 - Nieuw: Ctrl+G (menu Programma), Gesprek met de assistent. Je praat in gewone zinnen over het programma
   dat je wilt maken. Zonder AI: vaste regels in motor/src/gesprek.rs.
 - De assistent ziet het verschil tussen een vraag, een idee, een uitleg en een opdracht, onthoudt het gesprek,
   begrijpt "die knop", "maak dat groter" en "ga maar verder", herstelt dicteerfouten zoals "tekstpak",
   stelt één vraag tegelijk en vertelt wat hij denkt dat je bedoelt.
-- Hij voert in deze stap niets uit (geen bestanden, geen code, niets bouwen of starten).
+- Weet hij precies wat je wilt (je zei ja of "ga maar verder"), dan schrijft hij de zinnen en start hij
+  het programma meteen. Wat de taal nog niet kan, zegt hij eerlijk en zet hij als opmerking in het programma.
+- Opdrachten voor de editor (zoals een exe bouwen) voert hij ook uit.
 - Het antwoord wordt voorgelezen door je schermlezer en staat in het vak Het gesprek.
-- Proeven: de vijf testvoorbeelden uit het ontwerp (motor/tests/gesprek.rs).
+- Proeven: de vijf testvoorbeelden uit het ontwerp, en gemaakte programma's worden echt gebouwd (motor/tests/gesprek.rs).
 - Handleiding: hoofdstuk 19.
 
 Versie 0.1.0 (proefversie, 17 november 2026)

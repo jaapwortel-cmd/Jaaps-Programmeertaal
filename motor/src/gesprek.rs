@@ -10,8 +10,10 @@
 //! - het herstelt dicteerfouten (zoals "tekstpak" voor "tekstvak") of vraagt het vriendelijk na;
 //! - het stelt één vraag tegelijk en vertelt in gewone taal wat het denkt dat je wilt.
 //!
-//! Wat het NIET doet (afspraak voor deze stap): bestanden maken of veranderen, code aanpassen,
-//! programma's bouwen of starten, iets installeren of instellingen veranderen. Het geeft alleen tekst terug.
+//! Weet de assistent precies wat je wilt (je zei "ja" op de samenvatting, of "ga maar verder"), dan maakt hij
+//! het programma: hij schrijft de zinnen van de taal ([`Reactie::maak`]) en de editor start het meteen.
+//! Wat de taal nog niet kan, zegt hij eerlijk en zet hij als opmerking in het programma.
+//! Een opdracht voor de editor (zoals "maak er een exe van") geeft hij door in [`Reactie::doe`].
 
 use crate::opdrachten::{self, Begrip};
 use crate::wensen::Voorstel;
@@ -34,6 +36,10 @@ pub enum Soort {
 pub struct Reactie {
     pub soort: Soort,
     pub tekst: String,
+    /// Het programma (zinnen van de taal) dat de editor nu moet neerzetten en starten.
+    pub maak: Option<String>,
+    /// Een opdracht voor de editor die nu moet gebeuren (bijvoorbeeld een exe bouwen).
+    pub doe: Option<opdrachten::Functie>,
 }
 
 /// Een onderdeel van het programma waar je over praat, zoals "een knop Opslaan".
@@ -119,12 +125,14 @@ pub struct Gesprek {
     /// Het onderdeel waar het laatst over ging ("die knop", "maak dat groter").
     laatste: Option<usize>,
     wacht: Option<Wacht>,
+    /// De samenvatting van het programma dat het laatst is gemaakt.
+    laatst_gemaakt: Option<String>,
+    /// Zei je "ga maar verder"? Dan wordt het programma (opnieuw) gemaakt.
+    verder_gevraagd: bool,
     /// Alles wat er gezegd is: (jij, assistent).
     pub geschiedenis: Vec<(String, String)>,
 }
 
-/// Vaste zin die zegt dat er niets wordt uitgevoerd.
-pub const NIETS_UITGEVOERD: &str = "In deze proefstap voer ik niets uit: ik maak, bouw en verander nog niets. Ik vertel alleen wat ik denk dat je bedoelt.";
 
 impl Gesprek {
     pub fn nieuw() -> Self {
@@ -133,7 +141,28 @@ impl Gesprek {
 
     /// Wat je zegt. Geeft het antwoord van de assistent. Voert nooit iets uit.
     pub fn zeg(&mut self, zin: &str) -> Reactie {
-        let r = self.verwerk(zin);
+        self.verder_gevraagd = false;
+        let mut r = self.verwerk(zin);
+        // Weet ik precies wat je wilt? Dan maak ik het programma.
+        let samen = self.samenvatting();
+        if matches!(r.soort, Soort::Opdracht | Soort::Antwoord)
+            && self.bevestigd
+            && self.heeft_opdracht()
+            && self.wacht.is_none()
+            && (self.verder_gevraagd || self.laatst_gemaakt.as_deref() != Some(samen.as_str()))
+        {
+            match self.maak_programma() {
+                Ok((bron, niet)) => {
+                    r.tekst.push_str(" Ik maak het programma nu en start het.");
+                    if !niet.is_empty() {
+                        r.tekst.push_str(&format!(" Dit zit er nog niet in, want dat kan de taal nog niet: {}.", opsomming(&niet)));
+                    }
+                    r.maak = Some(bron);
+                    self.laatst_gemaakt = Some(samen);
+                }
+                Err(e) => r.tekst.push_str(&format!(" Ik kan het programma nog niet maken: {}", e)),
+            }
+        }
         self.geschiedenis.push((zin.trim().to_string(), r.tekst.clone()));
         r
     }
@@ -257,10 +286,8 @@ impl Gesprek {
             );
         }
         self.bevestigd = true;
-        let tekst = format!(
-            "Goed, we gaan verder vanaf wat we hebben afgesproken: {}. De volgende stap is: van deze afspraak de zinnen voor je programma maken. Dat doe ik in deze proefstap nog niet. Wil je nog iets veranderen of erbij hebben, zeg het dan.",
-            self.samenvatting()
-        );
+        self.verder_gevraagd = true;
+        let tekst = format!("Goed, we gaan verder vanaf wat we hebben afgesproken: {}.", self.samenvatting());
         reactie(Soort::Opdracht, &tekst)
     }
 
@@ -291,7 +318,7 @@ impl Gesprek {
                     Some(reactie(
                         Soort::Antwoord,
                         &format!(
-                            "Fijn. Dan is dit afgesproken: {}. Wil je nog iets erbij, zeg het dan. Of zeg: ga maar verder.",
+                            "Fijn. Dan is dit afgesproken: {}.",
                             self.samenvatting()
                         ),
                     ))
@@ -392,7 +419,10 @@ impl Gesprek {
             );
         }
         if bevat_een(t, &["heb je", "is het", "ben je"]) && bevat_een(t, &["gemaakt", "gedaan", "gebouwd", "uitgevoerd", "veranderd", "opgeslagen", "klaar", "aangepast"]) {
-            return reactie(Soort::Vraag, &format!("Nee. {}", NIETS_UITGEVOERD));
+            if self.laatst_gemaakt.is_some() {
+                return reactie(Soort::Vraag, &format!("Ja. Ik heb dit programma gemaakt en gestart: {}. De zinnen staan in de editor.", self.laatst_gemaakt.clone().unwrap_or_default()));
+            }
+            return reactie(Soort::Vraag, "Nee, nog niet. Zeg ja als mijn samenvatting klopt, of: ga maar verder. Dan maak ik het en start ik het.");
         }
         // Kan ik een knop maken?
         if bevat_een(t, &["kan ik", "kun ik", "mag ik", "kan het", "is het mogelijk", "lukt het"]) {
@@ -414,7 +444,7 @@ impl Gesprek {
                 let toets = if a.toets.is_empty() { String::new() } else { format!(" (sneltoets {})", a.toets) };
                 return reactie(
                     Soort::Vraag,
-                    &format!("Dat gaat met: {}{}. Je kunt dat in het venster Opdracht geven (Ctrl+E) zeggen. Hier in het gesprek voer ik het niet uit.", kleine_letter(a.naam), toets),
+                    &format!("Dat gaat met: {}{}. Wil je dat ik het doe, zeg het dan als opdracht, bijvoorbeeld: {}.", kleine_letter(a.naam), toets, a.voorbeelden.first().copied().unwrap_or("doe het maar")),
                 );
             }
             _ => {}
@@ -519,11 +549,9 @@ impl Gesprek {
         match opdrachten::begrijp_alles(zin, &[]) {
             opdrachten::Antwoord::Editor(Begrip::Doe { functie, .. }) => {
                 let a = opdrachten::actie(functie);
-                let toets = if a.toets.is_empty() { "Ctrl+E".to_string() } else { a.toets.to_string() };
-                return reactie(
-                    Soort::Opdracht,
-                    &format!("Je wilt: {}. Dat voer ik hier niet uit. {} Wil je het echt doen, gebruik dan {}.", kleine_letter(a.naam), NIETS_UITGEVOERD, toets),
-                );
+                let mut r = reactie(Soort::Opdracht, &format!("Goed, ik doe het: {}.", kleine_letter(a.naam)));
+                r.doe = Some(functie);
+                return r;
             }
             opdrachten::Antwoord::Taal(Voorstel::NogNiet(n)) => return reactie(Soort::Opdracht, &n),
             opdrachten::Antwoord::Taal(Voorstel::Uitleg(u)) => return reactie(Soort::Uitleg, &u),
@@ -563,6 +591,10 @@ impl Gesprek {
             let oud = o.kort();
             o.naam = Some(hoofdletter(n));
             tekst = format!("Dan krijgt {} de naam {}.", oud, hoofdletter(n));
+        } else if wat == "groter" && o.soort == "tekstvak" && !o.groot {
+            let oud = o.kort();
+            o.groot = true;
+            tekst = format!("Dan wordt {} een groot tekstvak, met meer regels.", oud);
         } else {
             let w = format!("{} {}", o.kort(), wat);
             tekst = format!("Dan wordt {}.", w);
@@ -683,7 +715,7 @@ impl Gesprek {
             self.wacht = Some(Wacht::Bevestiging);
             return reactie(
                 Soort::Opdracht,
-                &format!("Je wilt dus {}. Klopt dat? Ik maak nog niets: ik wil eerst zeker weten dat ik je goed begrijp.", self.samenvatting()),
+                &format!("Je wilt dus {}. Klopt dat? Zeg ja, dan maak ik het en start ik het.", self.samenvatting()),
             );
         }
 
@@ -809,7 +841,7 @@ fn uitleg_soort(soort: &str) -> &'static str {
 // ------------------------------------------------------------------ hulpjes voor zinnen
 
 fn reactie(soort: Soort, tekst: &str) -> Reactie {
-    Reactie { soort, tekst: tekst.to_string() }
+    Reactie { soort, tekst: tekst.to_string(), maak: None, doe: None }
 }
 
 /// Kleine letters, leestekens weg, spaties eromheen (zodat " knop " een heel woord vindt).
@@ -1267,4 +1299,168 @@ fn zelfde_soort_wijziging(oud: &str, nieuw: &str) -> bool {
     let tegen = [("groter", "kleiner"), ("breder", "smaller"), ("hoger", "lager"), ("dikker", "dunner"), ("donkerder", "lichter"), ("langer", "korter")];
     let laatste = oud.split_whitespace().last().unwrap_or("");
     laatste == nieuw || tegen.iter().any(|(a, b)| (laatste == *a && nieuw == *b) || (laatste == *b && nieuw == *a)) || (crate::taal::KLEUREN.iter().any(|k| k.0 == laatste) && crate::taal::KLEUREN.iter().any(|k| k.0 == nieuw))
+}
+
+// ------------------------------------------------------------------ het programma maken
+
+impl Gesprek {
+    /// Maakt van wat er is afgesproken de zinnen van de taal. Geeft (programma, wat er nog niet in kan),
+    /// of een uitleg waarom het niet lukt. Het programma is altijd door de motor gecontroleerd.
+    pub fn maak_programma(&self) -> Result<(String, Vec<String>), String> {
+        let mut niet: Vec<String> = Vec::new();
+        let mut regels: Vec<String> = Vec::new();
+        let mut acties: Vec<String> = Vec::new();
+        let kan = |k: &str| self.kunnen.iter().any(|x| x == k || x.ends_with(&format!(" {}", k)));
+        let geluid = self.kunnen.iter().any(|k| k.contains("geluid") || k.contains("muziek") || k.contains("liedjes")) || kan("afspelen");
+
+        // De titel.
+        let titel = match self.programma.as_deref().and_then(|p| p.split(" met de naam ").nth(1)) {
+            Some(n) => n.to_string(),
+            None if geluid => "Mijn muziek".to_string(),
+            None if self.programma.as_deref().map_or(false, |p| p.contains("rekenmachine")) || kan("rekenen") || kan("optellen") => "Rekenen".to_string(),
+            None if self.onderdelen.iter().any(|o| o.soort == "tekstvak") && (kan("opslaan") || self.onderdelen.iter().any(|o| o.naam.as_deref() == Some("Opslaan"))) => "Mijn teksten".to_string(),
+            None => "Mijn programma".to_string(),
+        };
+        regels.push(format!("Maak een venster met als titel {}", titel));
+
+        // Het tekstvak waar de knoppen mee werken.
+        let mut namen: Vec<String> = Vec::new();
+        let mut vak: Option<String> = None;
+        let heeft_knop = |n: &str| self.onderdelen.iter().any(|o| o.soort == "knop" && o.naam.as_deref().map(|x| x.eq_ignore_ascii_case(n)) == Some(true));
+        let tekst_nodig = !geluid && (["opslaan", "openen", "voorlezen"].iter().any(|k| kan(k) || heeft_knop(k)) || heeft_knop("wissen"));
+        let mut onderdelen = self.onderdelen.clone();
+        if tekst_nodig && !onderdelen.iter().any(|o| o.soort == "tekstvak") {
+            onderdelen.insert(0, Onderdeel { soort: "tekstvak".into(), naam: None, doel: None, groot: true });
+        }
+        // Knoppen voor wat het programma moet kunnen.
+        let erbij = |naam: &str, onderdelen: &mut Vec<Onderdeel>| {
+            if !onderdelen.iter().any(|o| o.soort == "knop" && o.naam.as_deref().map(|x| x.eq_ignore_ascii_case(naam)) == Some(true)) {
+                onderdelen.push(Onderdeel { soort: "knop".into(), naam: Some(naam.into()), doel: None, groot: false });
+            }
+        };
+        for k in &self.kunnen {
+            let laatste = k.split_whitespace().last().unwrap_or("");
+            match laatste {
+                "openen" if geluid => erbij("Kies", &mut onderdelen),
+                "afspelen" => erbij("Speel", &mut onderdelen),
+                "stoppen" => erbij("Stop", &mut onderdelen),
+                "opslaan" => erbij("Opslaan", &mut onderdelen),
+                "openen" => erbij("Openen", &mut onderdelen),
+                "voorlezen" => erbij("Voorlezen", &mut onderdelen),
+                "rekenen" | "optellen" => {
+                    if !onderdelen.iter().any(|o| o.naam.as_deref() == Some("Optellen")) {
+                        for n in ["Getal 1", "Getal 2"] {
+                            onderdelen.push(Onderdeel { soort: "tekstvak".into(), naam: Some(n.into()), doel: None, groot: false });
+                        }
+                        onderdelen.push(Onderdeel { soort: "label".into(), naam: Some("Uitkomst".into()), doel: None, groot: false });
+                        erbij("Optellen", &mut onderdelen);
+                    }
+                }
+                _ => niet.push(k.clone()),
+            }
+        }
+        if geluid && !onderdelen.iter().any(|o| o.naam.as_deref() == Some("Stop")) && onderdelen.iter().any(|o| o.naam.as_deref() == Some("Speel")) {
+            erbij("Stop", &mut onderdelen);
+        }
+
+        // Eerst alle namen (elke naam maar één keer), zodat de knoppen weten welk tekstvak ze gebruiken.
+        let mut uniek_van: Vec<String> = Vec::new();
+        for o in &onderdelen {
+            let naam = match &o.naam {
+                Some(n) => n.clone(),
+                None => match (&o.doel, o.soort.as_str()) {
+                    (Some(d), _) if d.starts_with("voor ") => hoofdletter(d.split_whitespace().last().unwrap_or("Tekst")),
+                    (_, "tekstvak") => "Tekst".to_string(),
+                    (_, s) => hoofdletter(s),
+                },
+            };
+            let mut uniek = naam.clone();
+            let mut i = 2;
+            while namen.iter().any(|n| n.eq_ignore_ascii_case(&uniek)) {
+                uniek = format!("{} {}", naam, i);
+                i += 1;
+            }
+            namen.push(uniek.clone());
+            if o.soort == "tekstvak" && vak.is_none() && !uniek.starts_with("Getal") {
+                vak = Some(uniek.clone());
+            }
+            uniek_van.push(uniek);
+        }
+        for (o, uniek) in onderdelen.iter().zip(uniek_van.iter().cloned()) {
+            match o.soort.as_str() {
+                "venster" => continue,
+                "tekstvak" => {
+                    let groot = o.groot || o.doel.as_deref().map_or(false, |d| bevat_een(d, &["verhaal", "brief", "notitie", "tekst"])) || o.naam.is_none() && o.doel.is_none();
+                    let groot = groot && !(uniek.starts_with("Getal"));
+                    regels.push(format!("Maak een {}tekstvak met als naam {}", if groot { "groot " } else { "" }, uniek));
+                }
+                "menuregel" | "tabblad" | "label" | "selectievakje" | "keuzelijst" | "uitklaplijst" | "menu" | "tabel" | "knop" => {
+                    regels.push(format!("Maak een {} met als naam {}", o.soort, uniek));
+                }
+                _ => niet.push(o.beschrijving()),
+            }
+            if o.soort != "knop" {
+                continue;
+            }
+            // Wat de knop doet.
+            let als = format!("Als ik op de knop {} druk", uniek);
+            let doet: Vec<String> = match (uniek.to_lowercase().as_str(), &vak) {
+                ("opslaan" | "bewaren", Some(v)) => vec![
+                    "Onthoud plek is de plek die ik kies om op te slaan".into(),
+                    "Als plek is niet \"\"".into(),
+                    format!("Schrijf de tekst in het tekstvak {} in het bestand met de naam plek", v),
+                    "Zeg \"Opgeslagen\"".into(),
+                    "Einde als".into(),
+                ],
+                ("openen", Some(v)) => vec![
+                    "Onthoud gekozen is een bestand dat ik kies".into(),
+                    "Als gekozen is niet \"\"".into(),
+                    format!("Zet de inhoud van het bestand met de naam gekozen in het tekstvak {}", v),
+                    "Zeg \"Geopend\"".into(),
+                    "Einde als".into(),
+                ],
+                ("voorlezen" | "lees voor", Some(v)) => vec![format!("Lees de tekst in het tekstvak {} voor", v)],
+                ("wissen" | "leegmaken", Some(v)) => vec![format!("Maak het tekstvak {} leeg", v), "Zeg \"Gewist\"".into()],
+                ("kies", _) => vec!["Onthoud liedje is een bestand dat ik kies".into(), "Als liedje is niet \"\"".into(), "Speel het geluid met de naam liedje".into(), "Einde als".into()],
+                ("speel" | "afspelen", _) if namen.iter().any(|n| n == "Kies") => vec!["Als liedje is niet \"\"".into(), "Speel het geluid met de naam liedje".into(), "Einde als".into()],
+                ("speel" | "afspelen", _) => vec!["Onthoud liedje is een bestand dat ik kies".into(), "Als liedje is niet \"\"".into(), "Speel het geluid met de naam liedje".into(), "Einde als".into()],
+                ("stop" | "stoppen", _) => vec!["Stop het geluid".into()],
+                ("tijd", _) => vec!["Zeg \"Het is\" en dan de tijd".into()],
+                ("optellen", _) => vec![
+                    "Onthoud uitkomst is het getal in het tekstvak Getal 1 plus het getal in het tekstvak Getal 2".into(),
+                    "Zet \"De uitkomst is\" en dan uitkomst in het label Uitkomst".into(),
+                    "Zeg \"De uitkomst is\" en dan uitkomst".into(),
+                ],
+                _ => {
+                    niet.push(format!("wat de knop {} moet doen (dat heb je nog niet gezegd)", uniek));
+                    vec![]
+                }
+            };
+            if !doet.is_empty() {
+                acties.push(als);
+                acties.extend(doet);
+                acties.push("Einde van de knop".into());
+            }
+        }
+        // "Kies" speelt al af; dan heeft "liedje" bij Speel wel een waarde nodig.
+        if namen.iter().any(|n| n == "Kies") && namen.iter().any(|n| n == "Speel") {
+            regels.insert(1, "Onthoud liedje is \"\"".into());
+        }
+        // Veranderingen die de taal nog niet kan (zoals een knop groter maken).
+        niet.extend(self.wijzigingen.iter().cloned());
+        niet.extend(self.wensen.iter().cloned());
+        let mut bron: Vec<String> = Vec::new();
+        bron.push(format!("Opmerking: gemaakt in het gesprek met de assistent: {}", self.samenvatting()));
+        for n in &niet {
+            bron.push(format!("Opmerking: nog niet gemaakt: {}", n));
+        }
+        bron.extend(regels);
+        bron.extend(acties);
+        let tekst = bron.join("\n") + "\n";
+        let uitslag = crate::lees(&tekst);
+        if let Some(m) = uitslag.meldingen.first() {
+            return Err(format!("de taal keurt regel {} niet goed: {} Zeg het op een andere manier, of maak het met Ctrl+E.", m.regel, m.tekst));
+        }
+        Ok((tekst, niet))
+    }
 }
