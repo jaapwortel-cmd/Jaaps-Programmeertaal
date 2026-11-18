@@ -53,6 +53,7 @@ pub const ZINNEN: &[(&str, &str)] = &[
     ("Ga maar verder met de punten van de lijst", "open mijn wensenlijst"),
     ("Ik moet verschillende motoren kunnen maken om dingen te maken, zet er drie voorbeelden in", "uitleg: Dat kan: een motor is een bestand met je eigen zinnen in de map Motoren (menu Help, Mijn motoren). Gebruik hem met: Gebruik de motor Radio. Voorbeelden: Radio, Brief en Quiz."),
     ("Ik wil een website maken zoals jaapwortelproducties.nl", "uitleg: Dat kan: zie het voorbeeld Jaap Wortel Producties (website).txt, met een menu, een knop, een citaat, stappen, een onderkant, eigen kleuren en een pagina niet gevonden."),
+    ("Zorg ervoor dat ik het in gewone taal kan vragen, net zoals ik dat bij jou doe", "uitleg: Dat kan: zeg (Ctrl+E) of schrijf in je programma wat je wilt, ook lang en met meer dingen tegelijk. Bijvoorbeeld: maak een venster met de titel Adressen, met een tekstvak Naam en een knop Opslaan, en als ik op Opslaan druk, schrijf de naam in het bestand adressen.txt en zeg opgeslagen."),
     ("Gekocht certificaat mag eraf, want dat ga ik niet doen", "uitleg: Afgesproken: alleen je eigen certificaat. Schrijf: Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel."),
     // --- De wensen uit het opdrachtbestand (punt 3) ---
     ("Variabelen: iets onthouden en later veranderen", "uitleg: Dat kan: Onthoud teller is 0, en: Verander teller naar 5. Of: Tel 1 op bij teller."),

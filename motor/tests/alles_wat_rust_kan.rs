@@ -465,3 +465,27 @@ fn rust_pakket_van_crates_io() {
     assert!(!lees("Gebruik het Rust-pakket fastrand\n").is_goed(), "zonder Rust-stukje: eerst vragen");
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn lang_verzoek_in_gewone_taal() {
+    use motor::opdrachten::{begrijp_alles, Antwoord};
+    use motor::wensen::Voorstel;
+    let m = map("lang-verzoek");
+    let zin = "Maak een venster met de titel Adressen, met een tekstvak Naam en een knop Opslaan, en als ik op Opslaan druk, schrijf de naam in het bestand adressen.txt en zeg opgeslagen";
+    let Antwoord::Taal(Voorstel::Regels { regels, .. }) = begrijp_alles(zin, &[]) else { panic!("geen programma") };
+    let bron = regels.join("\n") + "\n";
+    assert!(lees(&bron).is_goed(), "{}\n{:#?}", bron, lees(&bron).meldingen);
+    let exe = bouw(&bron, &m, motor::bouwen::Stand::Snel);
+    let uit = Command::new(&exe).args(["--tekst", "--typ", "Naam=Piet", "--druk", "Opslaan"]).env("JAAPTAAL_MAP", &m).output().unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.ends_with("[zeg] opgeslagen\n"), "{}", uit);
+    assert!(std::fs::read_to_string(m.join("adressen.txt")).unwrap().contains("Piet"));
+    // Ook als regel in je programma: na ja staat het hele programma erin.
+    let u = lees(&format!("{}\n", zin));
+    let nieuw = motor::pas_toe(&format!("{}\n", zin), &u.meldingen[0].voorstel.as_ref().unwrap().wijziging);
+    assert!(lees(&nieuw).is_goed(), "{}", nieuw);
+    // Zeg hoe laat het is.
+    let Antwoord::Taal(Voorstel::Regels { regels, .. }) = begrijp_alles("maak een knop Tijd en als ik op Tijd druk zeg hoe laat het is", &[]) else { panic!() };
+    assert!(regels.iter().any(|r| r.contains("de tijd")), "{:?}", regels);
+    let _ = std::fs::remove_dir_all(&m);
+}

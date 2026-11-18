@@ -2370,6 +2370,20 @@ fn breid_uit(bron: &str, eigen: &[(String, String)], bibliotheek: &str, meldinge
     uit
 }
 
+/// Lijkt deze regel op een lang verzoek met meer dingen tegelijk (en niet op één zin van de taal)?
+fn lijkt_lang_verzoek(norm: &str) -> bool {
+    let l = norm.to_lowercase();
+    if l.starts_with("als ik") || l.starts_with("opmerking") || l.starts_with("nieuwe zin") {
+        return false;
+    }
+    let buiten_tekst: String = norm.split('"').step_by(2).collect::<Vec<_>>().join(" ").to_lowercase();
+    let onderdelen = ["tekstvak", "knop", "label", "keuzelijst", "selectievakje", "tabel", "menu"]
+        .iter()
+        .map(|w| buiten_tekst.matches(w).count())
+        .sum::<usize>();
+    buiten_tekst.contains(" als ik ") || onderdelen >= 2 && (buiten_tekst.contains(", met ") || buiten_tekst.contains(" en een ") || buiten_tekst.contains(" met een "))
+}
+
 pub(crate) fn lees_programma_eigen(bron: &str, eigen: &[(String, String)], bibliotheek: &str) -> (Programma, Vec<Melding>) {
     let mut meldingen = Vec::new();
     let mut stapel = vec![Kader::nieuw(KaderSoort::Hoofd, 0)];
@@ -2386,6 +2400,15 @@ pub(crate) fn lees_programma_eigen(bron: &str, eigen: &[(String, String)], bibli
         let nr = *nr;
         let ruw = ruw.as_str();
         let norm = tekst::normaliseer(ruw);
+        // Een lang verzoek in gewone taal ("maak een venster ..., met een tekstvak ... en als ik op ... druk ...").
+        if lijkt_lang_verzoek(&norm) {
+            if let Some(m) = crate::opdrachten::verzoek_in_programma(nr, &norm) {
+                if m.voorstel.is_some() {
+                    meldingen.push(m);
+                    continue;
+                }
+            }
+        }
         let gelezen = match ontleed_regel(&norm) {
             Err(rf) if rf.onbekend => anders_lezen(&norm, eigen).ok_or(rf),
             ander => ander,

@@ -146,6 +146,20 @@ fn sneltoets(origineel: &str) -> Option<String> {
 
 /// Probeert een verzoek om te zetten in zinnen van de taal.
 pub fn begrijp(zin: &str) -> Option<Voorstel> {
+    // Een lang verzoek met een venster, meer onderdelen of "als ik op ... druk": een heel programma.
+    let laag = zin.to_lowercase();
+    if let Some((regels, uitleg)) = crate::samengesteld::vertaal(zin) {
+        let onderdelen = regels.iter().filter(|r| r.starts_with("Maak een ") && !r.starts_with("Maak een venster")).count();
+        let venster_genoemd = ["venster", "scherm"].iter().any(|w| laag.contains(w)) && regels.iter().any(|r| r.starts_with("Maak een venster") && !r.ends_with("Mijn programma"));
+        if laag.contains("als ik ") || onderdelen >= 2 || venster_genoemd {
+            return Some(Voorstel::Regels { regels, uitleg });
+        }
+    }
+    begrijp_enkel(zin)
+}
+
+/// Een kort verzoek: één ding tegelijk.
+pub fn begrijp_enkel(zin: &str) -> Option<Voorstel> {
     let t = klein(zin);
 
     // Wat de taal nog niet kan: eerlijk zeggen.

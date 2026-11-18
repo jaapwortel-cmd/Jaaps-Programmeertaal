@@ -65,4 +65,6 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   brievenlezer en bestandsbrug.
 - Alle Rust-pakketten van crates.io in je Rust-stukjes (Gebruik het Rust-pakket ...); Cargo zit in de installatie.
 - QR-codes en streepjescodes lezen uit een PNG-afbeelding (eigen PNG-lezer, zonder hulpprogramma's).
+- Lange verzoeken in gewone taal (Ctrl+E of in je programma): een venster met onderdelen en wat er
+  gebeurt als je op een knop drukt, in één zin. Wat niet begrepen is, komt als opmerking.
 - Geen AI: alleen vaste, ingebouwde regels.

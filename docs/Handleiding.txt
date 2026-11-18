@@ -970,6 +970,19 @@ en "Exxon" (exe). Een tikfout verbetert het pas als jij Ja zegt.
 Ctrl+F opent hetzelfde venster om te zoeken: typ een paar woorden, en de lijst laat zien wat je
 kunt zeggen, met de sneltoets erbij. Met Tab ga je naar de lijst, met Enter voer je het uit.
 
+Je kunt ook een lang verzoek doen, met meer dingen tegelijk, zoals je tegen een mens zou praten:
+
+  Maak een venster met de titel Adressen, met een tekstvak Naam, een tekstvak Telefoon en een knop
+  Opslaan, en als ik op Opslaan druk, schrijf de naam in het bestand adressen.txt en zeg opgeslagen
+
+Dan maakt het programma het hele programma: het venster, de onderdelen, en wat er gebeurt als je
+op de knop drukt. Je hoort eerst wat het gaat maken; pas na Ja staat het erin. Wat het niet
+begreep, staat als opmerking in je programma, zodat je ziet wat er nog mist.
+Dingen die het kent na "als ik op ... druk": zeg ..., toon ..., lees ... voor, schrijf ... in
+het bestand ..., maak ... leeg, speel ..., speel de radiozender ..., stop de radio, stop het geluid,
+open ..., start ..., wacht ... seconden, zeg hoe laat het is, zeg de datum, gooi een dobbelsteen,
+en elke zin van de taal zelf.
+
 Je kunt een verzoek ook gewoon als regel in je programma schrijven, bijvoorbeeld:
   zet er een knop Opslaan bij
   maak een internetradio voor me

@@ -26,6 +26,7 @@ pub mod ondertekenen;
 pub mod opdrachten;
 mod ontleden;
 pub mod rustcode;
+pub mod samengesteld;
 pub mod scherm;
 pub mod taal;
 pub mod tekst;
