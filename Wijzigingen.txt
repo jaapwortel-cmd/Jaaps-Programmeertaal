@@ -69,3 +69,5 @@ Versie 0.1.0 (proefversie, 17 november 2026)
   gebeurt als je op een knop drukt, in één zin. Wat niet begrepen is, komt als opmerking.
 - Een omschrijving in gewone taal uit Kladblok openen: het programma maakt er een programma van (Ctrl+O of Ctrl+Shift+E).
 - Geen AI: alleen vaste, ingebouwde regels.
+- Zeggen wat een programma moet kunnen ("een programmaatje waarmee ik tekst kan invoeren en opslaan"):
+  het programma maakt dan zelf het venster, het tekstvak en de knoppen.

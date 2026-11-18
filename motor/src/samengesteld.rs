@@ -333,6 +333,15 @@ pub fn omschrijving(tekst: &str) -> Option<(Vec<String>, String)> {
         .collect();
     let (handelingen, opbouw): (Vec<String>, Vec<String>) = zinnen.into_iter().partition(|z| z.to_lowercase().contains("als ik "));
     let samen = format!("{} {}", opbouw.join(", "), handelingen.join(" "));
+    // Zonder "als ik op ... druk": misschien zeg je wat het programma moet kunnen.
+    if handelingen.is_empty() {
+        if let Some(p) = programma_dat_kan(&samen) {
+            let eigen_namen = vertaal(&samen).map_or(0, |(r, _)| r.iter().filter(|x| x.starts_with("Maak een ") && !x.starts_with("Maak een venster")).count());
+            if eigen_namen < 2 {
+                return Some(p);
+            }
+        }
+    }
     vertaal(&samen)
 }
 
@@ -559,5 +568,209 @@ mod omschrijving_tests {
         assert!(crate::lees(&t).is_goed(), "{}\n{:#?}", t, crate::lees(&t).meldingen);
         assert!(t.starts_with("Maak een venster met als titel Adressen\n"), "{}", t);
         assert!(t.contains("Schrijf de tekst in het tekstvak Naam in het bestand adressen.txt\nZeg \"opgeslagen\""), "{}", t);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// "Een programma waarmee ik ... kan": wat het programma moet KUNNEN, met vaste recepten.
+// ---------------------------------------------------------------------------------------------
+
+/// Een recept: als een van de woorden in je zin staat, komt dit erbij.
+struct Recept {
+    woorden: &'static [&'static str],
+    uitleg: &'static str,
+}
+
+const RECEPTEN: &[(&str, Recept)] = &[
+    ("tekst", Recept { woorden: &["invoeren", "typen", "intypen", "invullen", "tekst", "invoerveld", "tekstvak", "notitie", "notities", "schrijven", "opschrijven", "brief"], uitleg: "een vak om tekst in te typen" }),
+    ("opslaan", Recept { woorden: &["opslaan", "bewaren", "bewaar", "wegschrijven", "sla", "slaan", "opgeslagen", "bewaard", "tekstbestand"], uitleg: "een knop Opslaan (je kiest zelf waar)" }),
+    ("openen", Recept { woorden: &["openen", "inladen", "laden", "inlezen", "terughalen", "terug"], uitleg: "een knop Openen" }),
+    ("voorlezen", Recept { woorden: &["voorlezen", "voorlees", "uitspreken", "uitgesproken", "horen"], uitleg: "een knop Voorlezen" }),
+    ("wissen", Recept { woorden: &["wissen", "leegmaken", "weghalen", "opnieuw"], uitleg: "een knop Wissen" }),
+    ("rekenen", Recept { woorden: &["optellen", "rekenen", "uitrekenen", "rekenmachine", "sommen", "som"], uitleg: "twee vakken voor getallen, een knop Optellen en de uitkomst" }),
+    ("tijd", Recept { woorden: &["tijd", "klok", "laat"], uitleg: "een knop Tijd die zegt hoe laat het is" }),
+    ("radio", Recept { woorden: &["radio", "radiozender", "radiozenders"], uitleg: "een lijst met radiozenders en de knoppen Luisteren en Stop" }),
+    ("lijst", Recept { woorden: &["lijst", "lijstje", "boodschappen", "boodschappenlijst", "takenlijst", "taken"], uitleg: "een vak, een knop Toevoegen en een lijst" }),
+    ("dobbelsteen", Recept { woorden: &["dobbelsteen", "dobbelen", "gooien"], uitleg: "een knop Gooi die een getal van 1 tot 6 zegt" }),
+];
+
+/// Woorden die laten zien dat je zegt wat een programma moet kunnen.
+fn beschrijft_een_programma(l: &str) -> bool {
+    let programma = ["programma", "programmaatje", "app", "applicatie", "tool", "iets", "venster"].iter().any(|w| l.split(|c: char| !c.is_alphanumeric()).any(|x| x == *w));
+    let kunnen = [" waarmee ", " waarin ", " om ", " dat ", " die ", " zodat ", " voor ", " met ", " wat "].iter().any(|w| l.contains(w));
+    programma && kunnen
+}
+
+/// "Maak een programmaatje waarmee ik tekst kan invoeren en in een tekstbestand kan opslaan."
+pub fn programma_dat_kan(zin: &str) -> Option<(Vec<String>, String)> {
+    let l = format!(" {} ", zin.to_lowercase().replace([',', '.', '!', '?', ';'], " "));
+    if !beschrijft_een_programma(&l) {
+        return None;
+    }
+    let woorden: Vec<&str> = l.split_whitespace().collect();
+    let heeft = |w: &str| woorden.iter().any(|x| *x == w);
+    let mut gekozen: Vec<&str> = RECEPTEN.iter().filter(|(_, r)| r.woorden.iter().any(|w| heeft(w))).map(|(n, _)| *n).collect();
+    // "laat" alleen bij "hoe laat"; "terug" alleen bij een bestand.
+    if gekozen.contains(&"tijd") && !l.contains(" tijd ") && !l.contains(" klok ") && !l.contains(" hoe laat ") {
+        gekozen.retain(|g| *g != "tijd");
+    }
+    if gekozen.is_empty() {
+        return None;
+    }
+    // Opslaan, openen, voorlezen en wissen hebben een vak met tekst nodig.
+    if ["opslaan", "openen", "voorlezen", "wissen"].iter().any(|g| gekozen.contains(g)) && !gekozen.contains(&"tekst") && !gekozen.contains(&"lijst") {
+        gekozen.insert(0, "tekst");
+    }
+    // Een bestandsnaam die je zelf noemt (notities.txt).
+    let bestand = zin.split_whitespace().map(|w| w.trim_matches(|c: char| matches!(c, ',' | '.' | '!' | '?' | '"'))).find(|w| w.contains('.') && w.len() > 4 && w.rsplit('.').next().map_or(false, |e| (2..=4).contains(&e.len()) && e.chars().all(|c| c.is_ascii_alphabetic())));
+    // Een klein vak bij een invoerveld, anders een groot tekstvak.
+    let klein = heeft("invoerveld") || heeft("veld") || heeft("tekstvak") || heeft("invullen");
+    let vak = if klein { "tekstvak" } else { "groot tekstvak" };
+    let titel = if gekozen.contains(&"tekst") && gekozen.contains(&"opslaan") {
+        "Mijn teksten"
+    } else if gekozen.contains(&"rekenen") {
+        "Rekenen"
+    } else if gekozen.contains(&"radio") {
+        "Mijn radio"
+    } else if gekozen.contains(&"lijst") {
+        "Mijn lijst"
+    } else {
+        "Mijn programma"
+    };
+    let mut r: Vec<String> = vec![format!("Maak een venster met als titel {}", titel)];
+    let mut acties: Vec<String> = Vec::new();
+    let mut knoppen: Vec<&str> = Vec::new();
+    for g in &gekozen {
+        match *g {
+            "tekst" => r.push(format!("Maak een {} met als naam Tekst", vak)),
+            "lijst" => {
+                r.push("Maak een tekstvak met als naam Nieuw".into());
+                r.push("Maak een keuzelijst met als naam Lijst".into());
+                knoppen.push("Toevoegen");
+                acties.extend([
+                    "Als ik op de knop Toevoegen druk",
+                    "Vul de keuzelijst Lijst met de tekst in het tekstvak Nieuw",
+                    "Maak het tekstvak Nieuw leeg",
+                    "Zeg \"Toegevoegd\"",
+                    "Einde van de knop",
+                ].map(String::from));
+            }
+            "rekenen" => {
+                r.push("Maak een tekstvak met als naam Getal 1".into());
+                r.push("Maak een tekstvak met als naam Getal 2".into());
+                r.push("Maak een label met als naam Uitkomst".into());
+                knoppen.push("Optellen");
+                acties.extend([
+                    "Als ik op de knop Optellen druk",
+                    "Onthoud uitkomst is het getal in het tekstvak Getal 1 plus het getal in het tekstvak Getal 2",
+                    "Zet \"De uitkomst is\" en dan uitkomst in het label Uitkomst",
+                    "Zeg \"De uitkomst is\" en dan uitkomst",
+                    "Einde van de knop",
+                ].map(String::from));
+            }
+            "radio" => {
+                r.push("Maak een keuzelijst met als naam Zenders".into());
+                r.push("Vul de keuzelijst Zenders met de radiozenders".into());
+                knoppen.push("Luisteren");
+                knoppen.push("Stop");
+                acties.extend([
+                    "Als ik op de knop Luisteren druk",
+                    "Speel de radiozender die gekozen is in de keuzelijst Zenders",
+                    "Einde van de knop",
+                    "Als ik op de knop Stop druk",
+                    "Stop de radio",
+                    "Einde van de knop",
+                ].map(String::from));
+            }
+            "opslaan" => {
+                knoppen.push("Opslaan");
+                acties.push("Als ik op de knop Opslaan druk".into());
+                match bestand {
+                    Some(b) => {
+                        acties.push(format!("Schrijf de tekst in het tekstvak Tekst in het bestand {}", b));
+                        acties.push(format!("Zeg \"Opgeslagen in {}\"", b));
+                    }
+                    None => {
+                        acties.push("Onthoud plek is de plek die ik kies om op te slaan".into());
+                        acties.push("Als plek is niet \"\"".into());
+                        acties.push(format!("Schrijf de tekst in het tekstvak Tekst in het bestand met de naam plek"));
+                        acties.push("Zeg \"Opgeslagen\"".into());
+                        acties.push("Einde als".into());
+                    }
+                }
+                acties.push("Einde van de knop".into());
+            }
+            "openen" => {
+                knoppen.push("Openen");
+                acties.extend([
+                    "Als ik op de knop Openen druk".to_string(),
+                    "Onthoud gekozen is een bestand dat ik kies".into(),
+                    "Als gekozen is niet \"\"".into(),
+                    format!("Zet de inhoud van het bestand met de naam gekozen in het tekstvak Tekst"),
+                    "Zeg \"Geopend\"".into(),
+                    "Einde als".into(),
+                    "Einde van de knop".into(),
+                ]);
+            }
+            "voorlezen" => {
+                knoppen.push("Voorlezen");
+                acties.extend([
+                    "Als ik op de knop Voorlezen druk".to_string(),
+                    "Lees de tekst in het tekstvak Tekst voor".to_string(),
+                    "Einde van de knop".into(),
+                ]);
+            }
+            "wissen" => {
+                knoppen.push("Wissen");
+                acties.extend([
+                    "Als ik op de knop Wissen druk".to_string(),
+                    "Maak het tekstvak Tekst leeg".to_string(),
+                    "Zeg \"Gewist\"".into(),
+                    "Einde van de knop".into(),
+                ]);
+            }
+            "tijd" => {
+                knoppen.push("Tijd");
+                acties.extend(["Als ik op de knop Tijd druk", "Zeg \"Het is\" en dan de tijd", "Einde van de knop"].map(String::from));
+            }
+            "dobbelsteen" => {
+                knoppen.push("Gooi");
+                acties.extend(["Als ik op de knop Gooi druk", "Zeg \"Je gooit\" en dan een willekeurig getal van 1 tot 6", "Einde van de knop"].map(String::from));
+            }
+            _ => {}
+        }
+    }
+    for k in &knoppen {
+        r.push(format!("Maak een knop met als naam {}", k));
+    }
+    r.extend(acties);
+    let wat: Vec<&str> = gekozen.iter().filter_map(|g| RECEPTEN.iter().find(|(n, _)| n == g).map(|(_, rc)| rc.uitleg)).collect();
+    let uitleg = format!("Ik maak een programma met {}. Mist er iets? Zeg het erbij, dan maak ik het opnieuw.", wat.join(", "));
+    Some((r, uitleg))
+}
+
+#[cfg(test)]
+mod recepten_tests {
+    use super::*;
+
+    #[test]
+    fn jaaps_eigen_vraag() {
+        let (r, uitleg) = programma_dat_kan("maak een programmaatje waarmee ik tekst kan invoeren in een invoerveld en waarmee ik het programma dat dan in een tekstbestand kan opslaan").expect("programma");
+        let t = r.join("\n") + "\n";
+        assert!(crate::lees(&t).is_goed(), "{}\n{:#?}", t, crate::lees(&t).meldingen);
+        assert!(t.contains("Maak een tekstvak met als naam Tekst") && t.contains("Maak een knop met als naam Opslaan"), "{}", t);
+        assert!(uitleg.contains("Opslaan"));
+        for z in [
+            "ik wil een programma om notities te schrijven, op te slaan en weer te openen",
+            "maak een app waarmee ik kan optellen",
+            "een programma waarmee ik naar de radio kan luisteren",
+            "maak een programma voor een boodschappenlijst",
+            "maak een programmaatje dat tekst kan voorlezen en wissen",
+        ] {
+            let (r, _) = programma_dat_kan(z).unwrap_or_else(|| panic!("niets voor {}", z));
+            let t = r.join("\n") + "\n";
+            assert!(crate::lees(&t).is_goed(), "{}\n{}\n{:#?}", z, t, crate::lees(&t).meldingen);
+        }
+        assert!(programma_dat_kan("sla mijn programma op").is_none());
     }
 }

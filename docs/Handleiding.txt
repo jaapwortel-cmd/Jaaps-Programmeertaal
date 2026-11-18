@@ -983,6 +983,12 @@ het bestand ..., maak ... leeg, speel ..., speel de radiozender ..., stop de rad
 open ..., start ..., wacht ... seconden, zeg hoe laat het is, zeg de datum, gooi een dobbelsteen,
 en elke zin van de taal zelf.
 
+Je kunt ook gewoon zeggen wat het programma moet KUNNEN, bijvoorbeeld:
+  maak een programmaatje waarmee ik tekst kan invoeren en in een tekstbestand kan opslaan
+Dan maakt het programma een venster met een tekstvak en een knop Opslaan. Het kent nu:
+tekst typen, opslaan, openen, voorlezen, wissen, optellen, hoe laat het is, radio luisteren,
+een lijstje (zoals boodschappen) en een dobbelsteen. Mist er iets? Zeg het erbij.
+
 Je kunt een verzoek ook gewoon als regel in je programma schrijven, bijvoorbeeld:
   zet er een knop Opslaan bij
   maak een internetradio voor me

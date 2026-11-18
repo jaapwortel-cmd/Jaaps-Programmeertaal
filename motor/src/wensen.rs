@@ -148,6 +148,16 @@ fn sneltoets(origineel: &str) -> Option<String> {
 pub fn begrijp(zin: &str) -> Option<Voorstel> {
     // Een lang verzoek met een venster, meer onderdelen of "als ik op ... druk": een heel programma.
     let laag = zin.to_lowercase();
+    // "Een programma waarmee ik tekst kan invoeren en opslaan": wat het programma moet KUNNEN.
+    // Alleen als er geen onderdelen met een eigen naam in staan (dan is vertaal beter).
+    if !laag.contains("als ik op ") {
+        if let Some((regels, uitleg)) = crate::samengesteld::programma_dat_kan(zin) {
+            let eigen_namen = crate::samengesteld::vertaal(zin).map_or(0, |(r, _)| r.iter().filter(|x| x.starts_with("Maak een ") && !x.starts_with("Maak een venster")).count());
+            if eigen_namen < 2 {
+                return Some(Voorstel::Regels { regels, uitleg });
+            }
+        }
+    }
     if let Some((regels, uitleg)) = crate::samengesteld::vertaal(zin) {
         let onderdelen = regels.iter().filter(|r| r.starts_with("Maak een ") && !r.starts_with("Maak een venster")).count();
         let venster_genoemd = ["venster", "scherm"].iter().any(|w| laag.contains(w)) && regels.iter().any(|r| r.starts_with("Maak een venster") && !r.ends_with("Mijn programma"));
