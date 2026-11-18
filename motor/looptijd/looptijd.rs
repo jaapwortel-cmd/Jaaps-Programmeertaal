@@ -79,7 +79,8 @@ const MAX_HERHALINGEN: f64 = 1_000_000.0;
 fn reken(a: W, teken: u8, b: W, r: usize) -> R<W> {
     if teken == 4 {
         let (x, y) = (a.tekst(), b.tekst());
-        return Ok(W::T(if x.is_empty() || y.is_empty() { format!("{}{}", x, y) } else { format!("{} {}", x, y) }));
+        let al_spatie = x.ends_with(char::is_whitespace) || y.starts_with(char::is_whitespace);
+        return Ok(W::T(if x.is_empty() || y.is_empty() || al_spatie { format!("{}{}", x, y) } else { format!("{} {}", x, y) }));
     }
     let woord = ["plus", "min", "keer", "gedeeld door"][teken as usize];
     let (x, y) = match (&a, &b) {
@@ -449,6 +450,31 @@ fn functie(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
             return Ok(W::T(win::kies_bestand(opslaan).unwrap_or_default()));
             #[cfg(not(windows))]
             Ok(W::T(String::new()))
+        }
+        35 => {
+            if let Ok(t) = std::env::var("JAAPTAAL_ZEG") {
+                println!("[luister] {}", t);
+                return Ok(W::T(t));
+            }
+            let script = "Add-Type -AssemblyName System.Speech; $r=New-Object System.Speech.Recognition.SpeechRecognitionEngine; $r.SetInputToDefaultAudioDevice(); $r.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar)); $x=$r.Recognize([TimeSpan]::FromSeconds(10)); if($x){$x.Text}";
+            powershell(script, "").map(|t| W::T(t.trim().to_string())).or_else(|e| fout(r, format!("Spraakherkenning lukt niet. Windows heeft spraakherkenning voor maar een paar talen (zoals Engels en Duits, niet Nederlands). Wat Windows zei: {}", e)))
+        }
+        36 => {
+            if let Ok(t) = std::env::var("JAAPTAAL_BERICHT") {
+                println!("[bericht binnen] {}", t);
+                return Ok(W::T(t));
+            }
+            let script = "$l=[System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Any,51515); $l.Start(); $t=$l.AcceptTcpClientAsync(); if($t.Wait(60000)){ $c=$t.Result; $rd=New-Object IO.StreamReader($c.GetStream(),[Text.Encoding]::UTF8); $rd.ReadToEnd(); $c.Close() }; $l.Stop()";
+            powershell(script, "").map(|t| W::T(t.trim_end().to_string())).or_else(|e| fout(r, format!("Er kwam geen bericht binnen: {}", e)))
+        }
+        37 => {
+            let poort = tekst(0);
+            if let Ok(t) = std::env::var("JAAPTAAL_POORT") {
+                println!("[van {}] {}", poort, t);
+                return Ok(W::T(t));
+            }
+            let script = format!("$p=New-Object System.IO.Ports.SerialPort '{}',9600; $p.ReadTimeout=5000; $p.Open(); try {{ $p.ReadLine() }} finally {{ $p.Close() }}", poort.replace('\'', ""));
+            powershell(&script, "").map(|t| W::T(t.trim().to_string())).or_else(|e| fout(r, format!("Van de poort {} komt niets: {}", poort, e)))
         }
         30 => Ok(W::L(ZENDERLIJST.iter().map(|(n, _, _)| W::T(n.to_string())).collect())),
         31 => zenders_van_land(&tekst(0)).map(W::L).or_else(|e| fout(r, e)),
@@ -947,6 +973,40 @@ fn zoek_zender(naam: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Een PowerShell-opdracht uitvoeren (onderdelen van Windows zelf). `tekst` gaat mee als $env:JAAPTAAL_TEKST.
+fn powershell(script: &str, tekst: &str) -> Result<String, String> {
+    if !cfg!(windows) {
+        return Err("dit kan alleen op Windows.".into());
+    }
+    let mut cmd = std::process::Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &format!("$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; {}", script)]);
+    cmd.env("JAAPTAAL_TEKST", tekst);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    match cmd.output() {
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).to_string()),
+        Ok(o) => Err(String::from_utf8_lossy(&o.stderr).lines().find(|l| !l.trim().is_empty()).unwrap_or("onbekende fout").trim().to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Een bericht naar een andere computer (poort 51515), of naar een apparaat aan een COM-poort.
+fn stuur(w: W, naar: &str, r: usize) -> R<()> {
+    let t = w.tekst();
+    if std::env::var("JAAPTAAL_NIET_STUREN").is_ok() || !cfg!(windows) {
+        println!("[stuur naar {}] {}", naar.replace("poort:", "poort "), t);
+        return Ok(());
+    }
+    let script = match naar.strip_prefix("poort:") {
+        Some(p) => format!("$p=New-Object System.IO.Ports.SerialPort '{}',9600; $p.Open(); $p.WriteLine($env:JAAPTAAL_TEKST); $p.Close()", p.replace('\'', "")),
+        None => format!("$c=New-Object System.Net.Sockets.TcpClient('{}',51515); $s=$c.GetStream(); $b=[Text.Encoding]::UTF8.GetBytes($env:JAAPTAAL_TEKST); $s.Write($b,0,$b.Length); $c.Close()", naar.replace('\'', "")),
+    };
+    powershell(&script, &t).map(|_| ()).or_else(|e| fout(r, format!("Het bericht naar {} is niet aangekomen: {}", naar.replace("poort:", "de poort "), e)))
 }
 
 /// Een reservekopie in de map Reservekopieën naast het bestand, met datum en tijd. De laatste 10 blijven.

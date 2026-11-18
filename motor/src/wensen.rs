@@ -44,12 +44,11 @@ const MAAK: &[&str] = &["maak", "maken", "inbouwen", "bouwen", "toevoegen", "heb
 /// Wat de taal nog niet kan (staat op de wensenlijst), met een eerlijke uitleg.
 const NOG_NIET: &[(&[&str], &str)] = &[
     (&["donkere stand", "donker thema", "hoog contrast", "dark mode"], "Een donkere stand of hoog contrast (wel kan: Geef het venster de kleur donkerblauw)"),
-    (&["spraakherkenning", "dicteren", "whisper", "uitschrijven"], "Spraakherkenning in je eigen programma (dicteren in Jaap's Programmeertaal zelf kan wel, met je eigen dicteerprogramma)"),
+    (&["whisper", "uitschrijven"], "Whisper in je eigen programma (gewone spraakherkenning van Windows kan wel: wat ik zeg)"),
     (&["taalmodel", "kunstmatige intelligentie", " ai ", "chatgpt", "claude", "llm"], "AI of een taalmodel: dat zit bewust niet in Jaap's Programmeertaal"),
     (&["3d", "driedimensionaal"], "3D-geluid of 3D-beeld"),
     (&["audio editor", "audio-editor", "geluid bewerken", "knippen in geluid"], "Geluid bewerken (knippen, plakken, effecten)"),
     (&["mailen", "e-mail versturen", "mail versturen", "smtp", "outlook"], "E-mail versturen vanuit je programma"),
-    (&["netwerk", "andere computer", "op afstand"], "Verbinding tussen computers"),
     (&["rar"], "RAR-bestanden (zip kan wel)"),
     (&["edge", "webview"], "Edge of WebView2: dat wil je niet, en het zit er niet in. Webpagina's openen gaat met je eigen browser"),
 ];
@@ -196,6 +195,15 @@ pub fn begrijp(zin: &str) -> Option<Voorstel> {
             Some(b) => Voorstel::Regels { regels: vec![format!("Maak een reservekopie van het bestand {}", b)], uitleg: "Er komt een reservekopie in de map Reservekopieën; de laatste 10 blijven.".into() },
             None => Voorstel::Vraag("Van welk bestand moet ik een reservekopie maken? Zeg bijvoorbeeld: maak een reservekopie van notities.txt.".into()),
         });
+    }
+    if heeft(&t, "motor") || heeft(&t, "motoren") || heeft(&t, "motorschrijver") {
+        return Some(Voorstel::Uitleg("Een motor is een bestand met je eigen zinnen, in de map Motoren (menu Help, Mijn motoren). Gebruik hem met: Gebruik de motor Radio. Er zijn drie voorbeelden: Radio, Brief en Quiz.".into()));
+    }
+    if heeft(&t, "spraakherkenning") || t.contains(" wat ik zeg ") || heeft(&t, "dicteren") {
+        return Some(Voorstel::Uitleg("Spraakherkenning: Onthoud gezegd is wat ik zeg. Dat gebruikt de spraakherkenning van Windows; die is er voor een paar talen, zoals Engels, maar niet voor Nederlands.".into()));
+    }
+    if heeft(&t, "netwerk") || t.contains(" andere computer ") || heeft(&t, "com-poort") || heeft(&t, "com3") || heeft(&t, "apparaat") || heeft(&t, "hardware") {
+        return Some(Voorstel::Uitleg("Berichten tussen je computers: Stuur \"hallo\" naar de computer Keuken, en op die computer: Toon het bericht dat binnenkomt. Een apparaat aan een COM-poort: Stuur \"aan\" naar de poort COM3, en: wat er van de poort COM3 komt.".into()));
     }
     if heeft(&t, "streepjescode") || heeft(&t, "barcode") || heeft(&t, "streepjescodes") {
         return Some(Voorstel::Uitleg("Een streepjescode (Code 128) maak je zo: Maak een streepjescode van \"12345\" in het bestand code.png. Streepjescodes lezen kan nog niet.".into()));

@@ -195,6 +195,12 @@ pub enum Ingebouwd {
     KiesBestand,
     /// Een plek om op te slaan, gekozen in het gewone Opslaan als-venster.
     KiesOpslaan,
+    /// Wat je zegt in de microfoon (spraakherkenning van Windows).
+    WatIkZeg,
+    /// Een bericht van een andere computer (wacht hoogstens een minuut).
+    Bericht,
+    /// Een regel tekst van een apparaat aan een COM-poort.
+    VanPoort,
 }
 
 impl Ingebouwd {
@@ -339,6 +345,8 @@ pub enum Soort {
     Opdrachtvak,
     /// Hoe het venster zich gedraagt: schermvullend, vraag bij afsluiten, maar één keer open, tip bij een knop.
     Venstergedrag(Gedrag),
+    /// Een bericht naar een andere computer, of naar een apparaat aan een COM-poort.
+    Stuur { waarde: Uitdrukking, naar: String },
     /// Tekst op de brailleleesregel zetten (JAWS of NVDA).
     Braille(Uitdrukking),
     /// Een keuzelijst vullen met alles uit een lijst.
@@ -549,7 +557,7 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
-            Soort::VulKeuzelijst { waarde, .. } | Soort::Braille(waarde) => vec![waarde],
+            Soort::VulKeuzelijst { waarde, .. } | Soort::Braille(waarde) | Soort::Stuur { waarde, .. } => vec![waarde],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
@@ -592,7 +600,7 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
-            Soort::VulKeuzelijst { waarde, .. } | Soort::Braille(waarde) => vec![waarde],
+            Soort::VulKeuzelijst { waarde, .. } | Soort::Braille(waarde) | Soort::Stuur { waarde, .. } => vec![waarde],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],

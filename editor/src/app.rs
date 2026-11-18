@@ -37,6 +37,7 @@ const ID_ZOEK_OPDRACHT: u16 = 214;
 const ID_EIGEN_OPDRACHTEN: u16 = 215;
 const ID_WENSEN: u16 = 216;
 const ID_VERSIE_OMHOOG: u16 = 217;
+const ID_MOTOREN: u16 = 218;
 /// Onlangs geopend: 121 tot en met 129.
 const ID_ONLANGS: u16 = 121;
 const ID_WELKE_REGEL: u16 = 301;
@@ -1075,6 +1076,25 @@ fn opdracht(id: u16) {
         ),
         ID_WENSEN => open_in_kladblok(&wensen_pad(), "Mijn wensen voor Jaap's Programmeertaal (wat de taal nog niet kan):\n"),
         ID_VERSIE_OMHOOG => versie_omhoog(),
+        ID_MOTOREN => {
+            let map = motor::motoren::map();
+            let _ = std::fs::create_dir_all(&map);
+            // De drie voorbeelden erin zetten, zodat je ze kunt bekijken en nadoen.
+            for (naam, tekst) in motor::motoren::INGEBOUWD {
+                let p = map.join(format!("{} (voorbeeld).txt", naam));
+                if !p.exists() {
+                    let _ = motor::bestand::schrijf_txt(&p, tekst);
+                }
+            }
+            if Command::new("explorer.exe").arg(&map).spawn().is_err() {
+                melding(&format!("Je motoren staan in {}.", map.display()), MB_ICONINFORMATION);
+            }
+            zet_meldingen(&format!(
+                "De map Motoren is open: {}. Een motor is een tekstbestand met eigen zinnen (Nieuwe zin: ...). Gebruik hem in een programma met: Gebruik de motor Naam. Ingebouwd: {}.",
+                map.display(),
+                motor::motoren::alle().join(", ")
+            ));
+        }
         ID_EIGEN_ZINNEN => {
             let pad = eigen_zinnen_pad();
             if !pad.exists() {
@@ -1289,6 +1309,7 @@ fn maak_menu() -> HANDLE {
         voeg(help, ID_EIGEN_ZINNEN, "Mijn eigen &zinnen (openen in Kladblok)");
         voeg(help, ID_EIGEN_OPDRACHTEN, "Mijn eigen o&pdrachten (openen in Kladblok)");
         voeg(help, ID_WENSEN, "Mijn &wensenlijst (openen in Kladblok)");
+        voeg(help, ID_MOTOREN, "Mijn &motoren (map openen)");
         voeg(help, ID_OVER, "&Over Jaap's Programmeertaal");
         AppendMenuW(balk, MF_POPUP, help as usize, w("&Help").as_ptr());
         balk

@@ -1,0 +1,21 @@
+Opmerking: Motor Radio. Zet in je programma: Gebruik de motor Radio
+Opmerking: Daarna kun je deze zinnen gebruiken:
+Opmerking:   Maak een radio met als titel Mijn radio
+Opmerking:   Zet de radio op [zender]      (bijvoorbeeld: Zet de radio op "Qmusic")
+Nieuwe zin: Maak een radio met als titel [titel]
+Maak een venster met als titel [titel]
+Maak een keuzelijst met als naam Zenders
+Vul de keuzelijst Zenders met de radiozenders
+Maak een knop met als naam Luisteren
+Maak een knop met als naam Stop
+Zet de knop Stop naast de knop Luisteren
+Als ik op de knop Luisteren druk
+Speel de radiozender die gekozen is in de keuzelijst Zenders
+Zeg de keuze in de keuzelijst Zenders
+Einde van de knop
+Als ik op de knop Stop druk
+Stop de radio
+Zeg "De radio is uit"
+Einde van de knop
+Einde van de zin
+Nieuwe zin: Zet de radio op [zender] betekent Speel de radiozender met de naam [zender]

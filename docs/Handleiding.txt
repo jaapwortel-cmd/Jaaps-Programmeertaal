@@ -678,6 +678,19 @@ Toon op de brailleleesregel "Opgeslagen"
 Met JAWS gaat de tekst rechtstreeks naar de brailleleesregel. Met NVDA en Verteller wordt het een
 korte melding, die NVDA ook op de leesregel laat zien. Eerlijk: nog niet getest met een echte leesregel.
 
+4.7aa Spraakherkenning, berichten tussen computers en apparaten
+
+Onthoud gezegd is wat ik zeg                 (spraakherkenning van Windows, hoogstens 10 seconden)
+Eerlijk: Windows heeft spraakherkenning voor een paar talen (zoals Engels en Duits), niet voor Nederlands.
+
+Stuur "Het eten is klaar" naar de computer Keuken
+Toon het bericht dat binnenkomt               (op de andere computer; wacht hoogstens een minuut)
+Dit werkt tussen je eigen computers in hetzelfde netwerk. Windows kan de eerste keer vragen of het
+programma via het netwerk mag praten (de firewall): kies Toestaan.
+
+Stuur "aan" naar de poort COM3                (een apparaat aan een COM-poort, zoals een Arduino; 9600 baud)
+Onthoud meting is wat er van de poort COM3 komt
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
@@ -999,3 +1012,51 @@ goed zichtbare focus. Een radiospeler heeft de knoppen Afspelen en Stoppen, en z
 Getest: de radiospeler speelt NPO Radio 2 echt af in een browser.
 
 Een zin die niet bij een website hoort, geeft een vraag. Het programma gokt niet.
+
+Een website zoals jaapwortelproducties.nl (zie het voorbeeld Jaap Wortel Producties (website).txt):
+De beschrijving van de website is "Persoonlijke verhalen en audioproducties op maat."
+Het adres van de website is https://jaapwortelproducties.nl
+De maker van de website is Jaap Wortel, Journalist, schrijver en audioproducent
+Het plaatje voor delen is afbeeldingen/voorkant.png
+Geef de website de tekstkleur #2C2416
+Geef de website de accentkleur #A8521F
+Zet in het menu een knop naar de pagina Contact met de tekst "Vertel jouw verhaal"
+Zet een knop naar de pagina Over mij met de tekst "Lees meer"
+Zet een citaat "Iedereen heeft een verhaal." van Jaap Wortel
+Zet een stap "Luisteren" met de tekst "Eerst praten we." en de kenmerken "Gesprek" en "Op jouw tempo"
+Zet onderaan de tekst "Jaap Wortel Producties"
+Zet onderaan een link naar de pagina Privacy met de tekst "Privacy"
+Zet onderaan een e-mailadres info@voorbeeld.nl
+Maak een foutpagina met de tekst "Deze pagina bestaat niet."
+
+De beschrijving, het adres en de maker zijn voor Google en voor delen op Facebook. De foutpagina
+(404.html) laat je webruimte zien als iemand een pagina opvraagt die niet bestaat.
+
+
+16. Motoren: je eigen bouwblokken
+---------------------------------
+
+Een motor is een tekstbestand met je eigen zinnen (Nieuwe zin: ...). Je zet hem één keer in de map
+Motoren, en daarna gebruik je hem in elk programma met één regel:
+
+Gebruik de motor Radio
+
+De map open je met menu Help, Mijn motoren. Er zitten drie voorbeelden in:
+- Radio: Maak een radio met als titel Mijn radio, en: Zet de radio op "Qmusic"
+- Brief: Maak een briefvenster met als titel Mijn brieven (bewaren als Word of PDF)
+- Quiz: Maak een quiz met als titel Mijn quiz, Voeg de vraag "..." toe met als antwoord "...", Begin de quiz
+Kijk in die bestanden hoe ze gemaakt zijn, en maak je eigen motor op dezelfde manier.
+
+
+17. Voorbeelden van je eigen programma's
+----------------------------------------
+
+In de map voorbeelden staan programma's die nagemaakt zijn op het idee van je eigen programma's,
+zonder iets privé (vul zelf je eigen adressen en links in):
+- Mijn boekhouding (zoals je boekhoudprogramma): boekingen in een tabel, totaal, reservekopie.
+- Mijn werkuren (zoals Werkuren-Registratie): uren per dag, totaal, naar Excel.
+- Mijn computerhulp (zoals Computerhulp Maatje): een opdrachtvak dat zinnen begrijpt.
+- Mijn radiostudio (zoals R-Wave Studio): liedjes, jingles onder F2 tot F4, opnemen.
+- Mijn brievenlezer (zoals Paper Pilot): een PDF of Word-brief openen en voorlezen.
+- Mijn bestandsbrug (zoals Bestandsbrug): programma's downloaden uit een lijst.
+- Mijn radio, Mijn tekstverwerker, Mijn radiosite en Jaap Wortel Producties (website).

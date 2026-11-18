@@ -1,0 +1,27 @@
+Opmerking: Voorbeeld naar het idee van Computerhulp Maatje. Je typt of dicteert wat je wilt; het programma doet het.
+Opmerking: Geen AI: alleen de zinnen die hieronder staan worden begrepen.
+Maak een venster met als titel Mijn computerhulp
+Geef mijn programma een opdrachtvak
+Als ik zeg "hoe laat is het"
+Zeg "Het is " en dan de tijd
+Einde van de opdracht
+Als ik zeg "welke datum is het"
+Zeg "Het is " en dan de datum
+Einde van de opdracht
+Als ik zeg "zet radio 2 aan"
+Speel de radiozender NPO Radio 2
+Zeg "Radio 2 staat aan"
+Einde van de opdracht
+Als ik zeg "zet de radio uit"
+Stop de radio
+Zeg "De radio is uit"
+Einde van de opdracht
+Als ik zeg "open kladblok"
+Start het programma notepad.exe
+Einde van de opdracht
+Als ik zeg "open het nieuws"
+Open de webpagina https://nos.nl
+Einde van de opdracht
+Als ik zeg "gooi een dobbelsteen"
+Zeg "Je gooit " en dan een willekeurig getal van 1 tot 6
+Einde van de opdracht

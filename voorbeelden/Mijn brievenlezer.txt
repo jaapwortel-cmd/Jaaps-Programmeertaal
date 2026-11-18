@@ -1,0 +1,25 @@
+Opmerking: Voorbeeld naar het idee van Paper Pilot. Een brief (PDF of Word) openen en laten voorlezen.
+Opmerking: Een gescande brief (een plaatje van tekst) kan dit voorbeeld nog niet lezen.
+Maak een venster met als titel Mijn brievenlezer
+Maak een groot tekstvak met als naam Brief
+Maak een werkbalk met de knoppen Open een PDF, Open een Word-bestand, Lees voor en Stop
+Als ik op de knop Open een PDF druk
+Onthoud gekozen is een bestand dat ik kies
+Als gekozen is niet ""
+Zet de tekst van het PDF-bestand met de naam gekozen in het tekstvak Brief
+Zeg "De brief staat in het vak Brief"
+Einde als
+Einde van de knop
+Als ik op de knop Open een Word-bestand druk
+Onthoud gekozen is een bestand dat ik kies
+Als gekozen is niet ""
+Zet de tekst van het Word-bestand met de naam gekozen in het tekstvak Brief
+Zeg "De brief staat in het vak Brief"
+Einde als
+Einde van de knop
+Als ik op de knop Lees voor druk
+Lees de tekst in het tekstvak Brief voor
+Einde van de knop
+Als ik op de knop Stop druk
+Stop met voorlezen
+Einde van de knop

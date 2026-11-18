@@ -21,6 +21,7 @@ pub mod getallen;
 pub mod installatie;
 pub mod jaaps_zinnen;
 pub mod melding;
+pub mod motoren;
 pub mod ondertekenen;
 pub mod opdrachten;
 mod ontleden;

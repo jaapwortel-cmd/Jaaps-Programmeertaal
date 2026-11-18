@@ -1,0 +1,40 @@
+Opmerking: Motor Quiz. Zet in je programma: Gebruik de motor Quiz
+Opmerking: Daarna kun je deze zinnen gebruiken:
+Opmerking:   Maak een quiz met als titel Mijn quiz
+Opmerking:   Voeg de vraag "Wat is de hoofdstad van Nederland?" toe met als antwoord "Amsterdam"
+Opmerking:   Begin de quiz
+Nieuwe zin: Maak een quiz met als titel [titel]
+Maak een venster met als titel [titel]
+Maak een lijst met als naam vragen
+Maak een lijst met als naam antwoorden
+Onthoud nummer is 1
+Onthoud punten is 0
+Maak een label met als naam Vraag
+Maak een tekstvak met als naam Antwoord
+Maak een knop met als naam Controleer
+Einde van de zin
+Nieuwe zin: Voeg de vraag [vraag] toe met als antwoord [antwoord]
+Voeg [vraag] toe aan de lijst vragen
+Voeg [antwoord] toe aan de lijst antwoorden
+Einde van de zin
+Nieuwe zin: Begin de quiz
+Zet nummer 1 uit de lijst vragen in het label Vraag
+Zeg nummer 1 uit de lijst vragen
+Als ik op de knop Controleer druk
+Als de tekst in het tekstvak Antwoord is nummer nummer uit de lijst antwoorden
+Tel 1 op bij punten
+Zeg "Goed!"
+Anders
+Zeg "Jammer, het goede antwoord is" en dan nummer nummer uit de lijst antwoorden
+Einde als
+Tel 1 op bij nummer
+Als nummer is groter dan het aantal in de lijst vragen
+Zeg "Klaar! Je hebt" en dan punten en dan "punten."
+Verander nummer naar 1
+Verander punten naar 0
+Einde als
+Zet nummer nummer uit de lijst vragen in het label Vraag
+Zeg nummer nummer uit de lijst vragen
+Maak het tekstvak Antwoord leeg
+Einde van de knop
+Einde van de zin

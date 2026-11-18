@@ -295,6 +295,16 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
     if let Some(f) = functie(s)? {
         return Ok(Some(f));
     }
+    // Spraakherkenning, berichten en COM-poorten.
+    if (begint(s, &["wat", "ik", "zeg"]) && (s.len() == 3 || begint(&s[3..], &["in", "de", "microfoon"]))) || (begint(s, &["wat", "er", "gezegd", "wordt"]) && s.len() == 4) {
+        return ib(Ingebouwd::WatIkZeg, vec![]);
+    }
+    if (begint(s, &["het", "bericht", "dat", "binnenkomt"]) || begint(s, &["een", "bericht", "dat", "binnenkomt"])) && s.len() == 4 {
+        return ib(Ingebouwd::Bericht, vec![]);
+    }
+    if begint(s, &["wat", "er", "van", "de", "poort"]) && s.len() >= 7 && klein(s, s.len() - 1) == "komt" {
+        return ib(Ingebouwd::VanPoort, vec![Uitdrukking::Vast(Waarde::Tekst(rest_tekst(&s[5..s.len() - 1]).to_uppercase()))]);
+    }
     // Het Openen- en Opslaan als-venster van Windows.
     if (begint(s, &["een", "bestand", "dat", "ik", "kies"]) || begint(s, &["het", "bestand", "dat", "ik", "kies"])) && (s.len() == 5 || begint(&s[5..], &["om", "te", "openen"])) {
         return ib(Ingebouwd::KiesBestand, vec![]);
@@ -989,6 +999,24 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             tekst.push('.');
         }
         return Ok(Vorm::Los(Soort::Installatie(InstallatieZin::PrivacyRegel(tekst))));
+    }
+    // Stuur "hallo" naar de computer Keuken / naar de poort COM3
+    if laag.starts_with("stuur ") && (laag.contains(" naar de computer ") || laag.contains(" naar de poort ")) {
+        let (p, lengte) = match laag.find(" naar de computer ") {
+            Some(p) => (p, " naar de computer ".len()),
+            None => {
+                let p = laag.find(" naar de poort ").unwrap();
+                (p, " naar de poort ".len())
+            }
+        };
+        let poort = lengte == " naar de poort ".len();
+        let naar = norm[p + lengte..].trim().trim_end_matches('.').to_string();
+        let wat = tekst::splits(&norm[6..p]).map_err(fout)?;
+        if naar.is_empty() || wat.is_empty() {
+            return Err(fout("Schrijf het zo: Stuur \"hallo\" naar de computer Keuken. Of: Stuur \"aan\" naar de poort COM3."));
+        }
+        let naar = if poort { format!("poort:{}", naar.to_uppercase()) } else { naar };
+        return Ok(Vorm::Los(Soort::Stuur { waarde: tekst_of_uitdrukking(&wat).map_err(fout)?, naar }));
     }
     // De brailleleesregel.
     for b in ["toon op de brailleleesregel", "zet op de brailleleesregel", "toon op de leesregel", "zet op de leesregel", "toon in braille"] {
@@ -2322,8 +2350,13 @@ fn breid_uit(bron: &str, eigen: &[(String, String)], bibliotheek: &str, meldinge
 pub(crate) fn lees_programma_eigen(bron: &str, eigen: &[(String, String)], bibliotheek: &str) -> (Programma, Vec<Melding>) {
     let mut meldingen = Vec::new();
     let mut stapel = vec![Kader::nieuw(KaderSoort::Hoofd, 0)];
-    let (rust, rust_bezet) = rust_stukjes(bron, &mut meldingen);
-    let regels = breid_uit(bron, eigen, bibliotheek, &mut meldingen, &rust_bezet);
+    let (rust, mut rust_bezet) = rust_stukjes(bron, &mut meldingen);
+    // Motoren: "Gebruik de motor Radio" voegt de zinnen van die motor toe.
+    let (motortekst, motorregels, motormeldingen) = crate::motoren::verzamel(bron);
+    meldingen.extend(motormeldingen);
+    rust_bezet.extend(motorregels);
+    let bibliotheek = format!("{}\n{}", bibliotheek, motortekst);
+    let regels = breid_uit(bron, eigen, &bibliotheek, &mut meldingen, &rust_bezet);
     let aantal_regels = bron.lines().count();
 
     for (nr, ruw) in regels.iter() {

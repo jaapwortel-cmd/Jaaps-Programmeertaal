@@ -1,0 +1,44 @@
+Opmerking: Voorbeeld naar het idee van mijn boekhoudprogramma. Inkomsten en uitgaven in een tabel, met een totaal.
+Opmerking: De gegevens blijven op je eigen computer (boekhouding.csv in Documenten), met reservekopieën.
+Maak een venster met als titel Mijn boekhouding
+Vraag bij afsluiten "Heb je opgeslagen? Wil je stoppen?"
+Maak een tekstvak met als naam Datum
+Maak een tekstvak met als naam Omschrijving
+Maak een tekstvak met als naam Bedrag
+Maak een knop met als naam Toevoegen
+Maak een tabel met als naam Boekingen
+Voeg de kolom Datum toe aan de tabel Boekingen
+Voeg de kolom Omschrijving toe aan de tabel Boekingen
+Voeg de kolom Bedrag toe aan de tabel Boekingen
+Maak een werkbalk met de knoppen Totaal, Opslaan en Openen
+Geef de knop Toevoegen de sneltoets Ctrl+T
+Als het bestand boekhouding.csv bestaat
+Lees de tabel Boekingen uit het bestand boekhouding.csv
+Einde als
+Als ik op de knop Toevoegen druk
+Onthoud datum is de tekst in het tekstvak Datum
+Onthoud omschrijving is de tekst in het tekstvak Omschrijving
+Onthoud bedrag is het getal in het tekstvak Bedrag
+Voeg de rij datum en omschrijving en bedrag toe aan de tabel Boekingen
+Maak het tekstvak Omschrijving leeg
+Maak het tekstvak Bedrag leeg
+Zeg "Toegevoegd"
+Einde van de knop
+Als ik op de knop Totaal druk
+Onthoud totaal is 0
+Herhaal voor elk nummer van 1 tot het aantal rijen in de tabel Boekingen
+Onthoud rij is rij nummer nummer van de tabel Boekingen
+Tel nummer 3 uit de lijst rij op bij totaal
+Einde herhaal
+Zeg "Het totaal is " en dan totaal en dan " euro"
+Einde van de knop
+Als ik op de knop Opslaan druk
+Sla de tabel Boekingen op in het bestand boekhouding.csv
+Maak een reservekopie van het bestand boekhouding.csv
+Zeg "Opgeslagen, met een reservekopie"
+Einde van de knop
+Als ik op de knop Openen druk
+Maak de tabel Boekingen leeg
+Lees de tabel Boekingen uit het bestand boekhouding.csv
+Zeg "Geopend"
+Einde van de knop

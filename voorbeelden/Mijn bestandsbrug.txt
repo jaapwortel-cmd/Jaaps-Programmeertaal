@@ -1,0 +1,16 @@
+Opmerking: Voorbeeld naar het idee van Bestandsbrug: programma's downloaden uit een lijst.
+Opmerking: Zet bij de adressen je eigen downloadlinks (bijvoorbeeld van pCloud of Dropbox).
+Maak een venster met als titel Mijn bestandsbrug
+Maak een keuzelijst met als naam Programma's
+Voeg de keuze Programma 1 toe aan de keuzelijst Programma's
+Voeg de keuze Programma 2 toe aan de keuzelijst Programma's
+Maak een knop met als naam Downloaden
+Als ik op de knop Downloaden druk
+Onthoud keuze is de keuze in de keuzelijst Programma's
+Als keuze is "Programma 1"
+Download het bestand van het adres https://www.voorbeeld.nl/programma1.zip naar Programma 1.zip
+Anders
+Download het bestand van het adres https://www.voorbeeld.nl/programma2.zip naar Programma 2.zip
+Einde als
+Zeg "Klaar. Het bestand staat in Documenten."
+Einde van de knop

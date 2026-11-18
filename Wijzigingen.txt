@@ -57,4 +57,10 @@ Versie 0.1.0 (proefversie, 17 november 2026)
 - Streepjescodes maken (Code 128). Zelf de Tab-volgorde kiezen, knoppen naast elkaar zetten.
 - Tekst op de brailleleesregel (JAWS rechtstreeks, NVDA als melding).
 - Websites: een contactformulier (PHP), eigen CSS, een lettertype en grotere letters.
+- Motoren: je eigen bouwblokken (Gebruik de motor Radio), met drie voorbeelden: Radio, Brief en Quiz.
+- Websites zoals jaapwortelproducties.nl: knoppen, citaten, stappen met kenmerken, onderkant, eigen kleuren,
+  een pagina niet gevonden (404), en gegevens voor Google en Facebook.
+- Spraakherkenning van Windows (wat ik zeg), berichten tussen je eigen computers, apparaten aan een COM-poort.
+- Voorbeelden naar het idee van je eigen programma's: boekhouding, werkuren, computerhulp, radiostudio,
+  brievenlezer en bestandsbrug.
 - Geen AI: alleen vaste, ingebouwde regels.

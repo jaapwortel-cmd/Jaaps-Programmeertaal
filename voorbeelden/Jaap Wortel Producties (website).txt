@@ -1,0 +1,50 @@
+Opmerking: Een website zoals jaapwortelproducties.nl, gemaakt met zinnen. Druk F5 om hem in Firefox te zien.
+Opmerking: Het e-mailadres is een voorbeeld; zet daar je eigen adres neer.
+Maak een website met als titel Jaap Wortel Producties
+De beschrijving van de website is "Persoonlijke verhalen en audioproducties op maat. Van een bijzonder cadeau tot een radiodocumentaire of herinneringsverhaal."
+Het adres van de website is https://jaapwortelproducties.nl
+De maker van de website is Jaap Wortel, Journalist, schrijver en audioproducent
+Geef de website de tekstkleur #2C2416
+Geef de website de accentkleur #A8521F
+Zet in het menu een knop naar de pagina Vertel jouw verhaal met de tekst "Vertel jouw verhaal"
+Maak een foutpagina met de tekst "Deze pagina bestaat niet. Kijk in het menu, of ga naar de beginpagina."
+Zet onderaan de tekst "Jaap Wortel Producties - Iedereen heeft een verhaal"
+Zet onderaan een link naar de pagina Privacy met de tekst "Privacy"
+Zet onderaan een link naar de pagina Copyright met de tekst "Copyright"
+Zet onderaan een e-mailadres info@voorbeeld.nl
+
+Maak een pagina met als naam Home
+Zet een kop "Iedereen heeft een verhaal."
+Zet de tekst "Ik vind het heerlijk om verhalen te verzinnen. Persoonlijke verhalen en audioproducties, helemaal voor jou op maat. Van een bijzonder cadeau tot een radiodocumentaire."
+Zet een knop naar de pagina Vertel jouw verhaal met de tekst "Vertel jouw verhaal"
+Zet een link naar de pagina Verhalen met de tekst "Bekijk verhalen"
+Zet een kop "Verhalen verzinnen is wat ik het liefste doe."
+Zet een citaat "Een verhaal vertellen is niet hetzelfde als woorden opschrijven. Het gaat over het vinden van de essentie, en die tot leven brengen." van Jaap Wortel
+Zet een link naar de pagina Over Jaap met de tekst "Lees meer over Jaap"
+
+Maak een pagina met als naam Verhalen
+Zet een kop "Verhalen"
+Zet de tekst "Hier komen voorbeelden van verhalen en audioproducties."
+
+Maak een pagina met als naam Werkwijze
+Zet een kop "Zo werken we samen."
+Zet een stap "Luisteren" met de tekst "Voordat ik ga schrijven of opnemen, wil ik jou eerst leren kennen. In een eerste gesprek praten we over wat je wilt vertellen." en de kenmerken "Intake gesprek", "Geen verplichtingen" en "Op jouw tempo"
+Zet een stap "Creëren" met de tekst "Jouw woorden en ideeën krijgen vorm, geschreven of als audio. De techniek neem ik op me." en de kenmerken "Schrijven", "Opnemen", "Monteren" en "Produceren"
+Zet een stap "Verfijnen" met de tekst "We luisteren samen en verfijnen het verhaal tot alles klopt." en de kenmerken "Review", "Feedback" en "Aanpassingen"
+Zet een stap "Beleven" met de tekst "Je ontvangt jouw persoonlijke verhaal dat raakt."
+
+Maak een pagina met als naam Over Jaap
+Zet een kop "Over Jaap"
+Zet de tekst "Hoi! Ik ben Jaap Wortel, en ik vind het simpelweg heerlijk om verhalen te verzinnen."
+
+Maak een pagina met als naam Vertel jouw verhaal
+Zet een kop "Vertel jouw verhaal"
+Zet een contactformulier met het e-mailadres info@voorbeeld.nl
+
+Maak een pagina met als naam Privacy
+Zet een kop "Privacy"
+Zet de tekst "Hier komt de privacyverklaring."
+
+Maak een pagina met als naam Copyright
+Zet een kop "Copyright"
+Zet de tekst "Alle verhalen en producties zijn van Jaap Wortel Producties."

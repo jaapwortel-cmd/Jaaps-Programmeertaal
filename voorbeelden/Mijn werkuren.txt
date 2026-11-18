@@ -1,0 +1,38 @@
+Opmerking: Voorbeeld naar het idee van mijn werkurenregistratie. Elke dag je uren invullen; het totaal wordt uitgerekend.
+Maak een venster met als titel Mijn werkuren
+Maak een tekstvak met als naam Datum
+Maak een tekstvak met als naam Uren
+Maak een tekstvak met als naam Wat heb ik gedaan
+Maak een knop met als naam Bewaar de dag
+Maak een tabel met als naam Werkuren
+Voeg de kolom Datum toe aan de tabel Werkuren
+Voeg de kolom Uren toe aan de tabel Werkuren
+Voeg de kolom Wat toe aan de tabel Werkuren
+Maak een werkbalk met de knoppen Vandaag, Totaal en Naar Excel
+Als het bestand werkuren.csv bestaat
+Lees de tabel Werkuren uit het bestand werkuren.csv
+Einde als
+Als ik op de knop Vandaag druk
+Zet de datum in het tekstvak Datum
+Zet de focus op het tekstvak Uren
+Einde van de knop
+Als ik op de knop Bewaar de dag druk
+Onthoud datum is de tekst in het tekstvak Datum
+Onthoud uren is het getal in het tekstvak Uren
+Onthoud wat is de tekst in het tekstvak Wat heb ik gedaan
+Voeg de rij datum en uren en wat toe aan de tabel Werkuren
+Sla de tabel Werkuren op in het bestand werkuren.csv
+Zeg "De dag is bewaard"
+Einde van de knop
+Als ik op de knop Totaal druk
+Onthoud totaal is 0
+Herhaal voor elk nummer van 1 tot het aantal rijen in de tabel Werkuren
+Onthoud rij is rij nummer nummer van de tabel Werkuren
+Tel nummer 2 uit de lijst rij op bij totaal
+Einde herhaal
+Zeg "Je hebt in totaal " en dan totaal en dan " uur gewerkt"
+Einde van de knop
+Als ik op de knop Naar Excel druk
+Sla de tabel Werkuren op in het bestand werkuren.csv
+Open het bestand werkuren.csv
+Einde van de knop

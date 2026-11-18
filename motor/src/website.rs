@@ -29,6 +29,12 @@ pub enum Blok {
     Email(String),
     /// Een contactformulier dat een e-mail stuurt naar dit adres (via contact.php).
     Contact(String),
+    /// Een link die eruitziet als een knop.
+    Knop { naar: String, tekst: String },
+    /// Een citaat, met wie het zei.
+    Citaat { tekst: String, wie: String },
+    /// Een stap in een werkwijze, met kenmerken.
+    Stap { titel: String, tekst: String, kenmerken: Vec<String> },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -45,7 +51,45 @@ pub struct Website {
     pub css: Vec<String>,
     pub lettertype: Option<String>,
     pub groter: bool,
+    /// Gegevens voor zoekmachines en delen: beschrijving, adres, maker (naam, beroep), plaatje.
+    pub beschrijving: Option<String>,
+    pub adres: Option<String>,
+    pub maker: Option<(String, String)>,
+    pub plaatje: Option<String>,
+    /// Eigen kleuren als #RRGGBB.
+    pub accent: Option<String>,
+    pub tekstkleur: Option<String>,
+    /// Wat onderaan elke pagina staat.
+    pub onderaan: Vec<Blok>,
+    /// Een knop in het menu bovenaan (naar, tekst).
+    pub menuknop: Option<(String, String)>,
+    /// De tekst van de pagina "niet gevonden" (404.html).
+    pub foutpagina: Option<String>,
     pub paginas: Vec<Pagina>,
+}
+
+/// Een kleur als #RRGGBB: een kleurnaam die het programma kent, of zelf geschreven (#A8521F).
+fn kleurcode(t: &str) -> Option<String> {
+    let t = t.trim().trim_matches('"').to_lowercase();
+    if t.starts_with('#') && t.len() == 7 && t[1..].chars().all(|c| c.is_ascii_hexdigit()) {
+        return Some(t.to_uppercase());
+    }
+    crate::taal::KLEUREN.iter().find(|k| k.0 == t).map(|(_, (r, g, b))| format!("#{:02X}{:02X}{:02X}", r, g, b))
+}
+
+fn rgb_van(code: &str) -> (u8, u8, u8) {
+    let d = |i: usize| u8::from_str_radix(&code[i..i + 2], 16).unwrap_or(0);
+    (d(1), d(3), d(5))
+}
+
+/// "naar de pagina X" of een internetadres.
+fn doel(t: &str) -> String {
+    let t = t.trim();
+    if t.to_lowercase().starts_with("de pagina ") {
+        format!("pagina:{}", t[10..].trim())
+    } else {
+        t.to_string()
+    }
 }
 
 /// Begint dit programma met "Maak een website"? Dan is het een website.
@@ -177,6 +221,75 @@ pub fn lees(bron: &str) -> (Website, Vec<Melding>) {
             w.lettertype = Some(waarde(t));
         } else if laag.starts_with("maak de letters groter") || laag.starts_with("maak de letters van de website groter") {
             w.groter = true;
+        } else if let Some(t) = na(norm, &laag, "de beschrijving van de website is") {
+            w.beschrijving = Some(waarde(t));
+        } else if let Some(t) = na(norm, &laag, "het adres van de website is") {
+            w.adres = Some(waarde(t).trim_end_matches('/').to_string());
+        } else if let Some(t) = na(norm, &laag, "de maker van de website is") {
+            let v = waarde(t);
+            let (naam, beroep) = v.split_once(',').map(|(a, b)| (a.trim().to_string(), b.trim().to_string())).unwrap_or((v.clone(), String::new()));
+            w.maker = Some((naam, beroep));
+        } else if let Some(t) = na(norm, &laag, "het plaatje voor delen is") {
+            w.plaatje = Some(waarde(t));
+        } else if let Some(t) = na(norm, &laag, "geef de website de accentkleur").or_else(|| na(norm, &laag, "geef de knoppen de kleur")) {
+            match kleurcode(&waarde(t)) {
+                Some(k) => w.accent = Some(k),
+                None => meldingen.push(Melding::fout(r, "Die kleur ken ik niet. Schrijf een kleurnaam of een code zoals #A8521F.")),
+            }
+        } else if let Some(t) = na(norm, &laag, "geef de website de tekstkleur").or_else(|| na(norm, &laag, "geef de tekst de kleur")) {
+            match kleurcode(&waarde(t)) {
+                Some(k) => w.tekstkleur = Some(k),
+                None => meldingen.push(Melding::fout(r, "Die kleur ken ik niet. Schrijf een kleurnaam of een code zoals #2C2416.")),
+            }
+        } else if let Some(t) = na(norm, &laag, "maak een foutpagina met de tekst").or_else(|| na(norm, &laag, "maak een pagina niet gevonden met de tekst")) {
+            w.foutpagina = Some(waarde(t));
+        } else if laag.starts_with("maak een foutpagina") {
+            w.foutpagina = Some("Deze pagina bestaat niet (meer). Misschien is hij verhuisd.".into());
+        } else if let Some(t) = na(norm, &laag, "zet in het menu een knop naar").or_else(|| na(norm, &laag, "zet bovenaan een knop naar")) {
+            let l = t.to_lowercase();
+            let Some(p) = l.find(" met de tekst ") else {
+                meldingen.push(Melding::fout(r, "Wat moet er op de knop staan? Schrijf bijvoorbeeld: Zet in het menu een knop naar de pagina Contact met de tekst \"Vertel jouw verhaal\""));
+                continue;
+            };
+            w.menuknop = Some((doel(&t[..p]), waarde(&t[p + 14..])));
+        } else if let Some(t) = na(norm, &laag, "zet een knop naar") {
+            let l = t.to_lowercase();
+            let Some(p) = l.find(" met de tekst ") else {
+                meldingen.push(Melding::fout(r, "Wat moet er op de knop staan? Schrijf bijvoorbeeld: Zet een knop naar de pagina Over mij met de tekst \"Lees meer\""));
+                continue;
+            };
+            pagina(&mut w).blokken.push(Blok::Knop { naar: doel(&t[..p]), tekst: waarde(&t[p + 14..]) });
+        } else if let Some(t) = na(norm, &laag, "zet een citaat") {
+            let l = t.to_lowercase();
+            let (tekst, wie) = match l.rfind(" van ") {
+                Some(p) if t[..p].contains('"') => (waarde(&t[..p]), t[p + 5..].trim().trim_end_matches('.').to_string()),
+                _ => (waarde(t), String::new()),
+            };
+            pagina(&mut w).blokken.push(Blok::Citaat { tekst, wie });
+        } else if let Some(t) = na(norm, &laag, "zet een stap") {
+            // Zet een stap "Luisteren" met de tekst "..." en de kenmerken "Intake", "Op jouw tempo"
+            let l = t.to_lowercase();
+            let Some(p) = l.find(" met de tekst ") else {
+                meldingen.push(Melding::fout(r, "Schrijf het zo: Zet een stap \"Luisteren\" met de tekst \"Eerst praten we.\" en de kenmerken \"Gesprek\" en \"Op jouw tempo\""));
+                continue;
+            };
+            let rest = &t[p + 14..];
+            let (tekst, kenmerken) = match rest.to_lowercase().find(" en de kenmerken ") {
+                Some(k) => (waarde(&rest[..k]), waarden(&rest[k + 17..])),
+                None => (waarde(rest), Vec::new()),
+            };
+            pagina(&mut w).blokken.push(Blok::Stap { titel: waarde(&t[..p]), tekst, kenmerken });
+        } else if let Some(t) = na(norm, &laag, "zet onderaan een link naar") {
+            let l = t.to_lowercase();
+            let Some(p) = l.find(" met de tekst ") else {
+                meldingen.push(Melding::fout(r, "Wat moet er op de link staan? Schrijf bijvoorbeeld: Zet onderaan een link naar de pagina Privacy met de tekst \"Privacy\""));
+                continue;
+            };
+            w.onderaan.push(Blok::Link { naar: doel(&t[..p]), tekst: waarde(&t[p + 14..]) });
+        } else if let Some(t) = na(norm, &laag, "zet onderaan een e-mailadres") {
+            w.onderaan.push(Blok::Email(waarde(t)));
+        } else if let Some(t) = na(norm, &laag, "zet onderaan de tekst").or_else(|| na(norm, &laag, "zet onderaan")) {
+            w.onderaan.push(Blok::Tekst(waarde(t)));
         } else if let Some(t) = na(norm, &laag, "geef de website de kleur") {
             let k = waarde(t).to_lowercase();
             match crate::taal::KLEUREN.iter().find(|x| x.0 == k) {
@@ -198,9 +311,10 @@ pub fn lees(bron: &str) -> (Website, Vec<Melding>) {
     }
     // Links naar pagina's moeten kloppen.
     let namen: Vec<String> = w.paginas.iter().map(|p| p.naam.to_lowercase()).collect();
-    for p in &w.paginas {
-        for b in &p.blokken {
-            if let Blok::Link { naar, .. } = b {
+    let menu_link = w.menuknop.as_ref().map(|(n, t)| Blok::Link { naar: n.clone(), tekst: t.clone() });
+    for b in w.paginas.iter().flat_map(|p| p.blokken.iter()).chain(w.onderaan.iter()).chain(menu_link.iter()) {
+        {
+            if let Blok::Link { naar, .. } | Blok::Knop { naar, .. } = b {
                 if let Some(n) = naar.strip_prefix("pagina:") {
                     if !namen.contains(&n.to_lowercase()) {
                         meldingen.push(Melding::vraag(1, format!("Er is een link naar de pagina {}, maar die pagina bestaat niet. Moet ik die pagina maken, of bedoel je een andere?", n)));
@@ -222,6 +336,79 @@ pub fn bestandsnaam(w: &Website, i: usize) -> String {
     format!("{}.html", s.trim_matches('-'))
 }
 
+/// Waar een link heen gaat: een pagina van de website, of een adres.
+fn link_doel(naar: &str, titels: &[(String, String)]) -> String {
+    match naar.strip_prefix("pagina:") {
+        Some(n) => titels.iter().find(|x| x.0.to_lowercase() == n.to_lowercase()).map(|x| x.1.clone()).unwrap_or_default(),
+        None => naar.to_string(),
+    }
+}
+
+/// Gegevens voor zoekmachines en voor delen op Facebook en dergelijke (zoals op jaapwortelproducties.nl).
+fn meta(w: &Website, bestand: &str, titel: &str) -> String {
+    let mut h = String::new();
+    let adres = w.adres.as_ref().map(|a| if bestand == "index.html" { format!("{}/", a) } else { format!("{}/{}", a, bestand) });
+    if let Some(b) = &w.beschrijving {
+        h.push_str(&format!("<meta name=\"description\" content=\"{}\">\n", html(b)));
+    }
+    if let Some(a) = &adres {
+        h.push_str(&format!("<link rel=\"canonical\" href=\"{}\">\n", html(a)));
+    }
+    h.push_str(&format!("<meta property=\"og:title\" content=\"{}\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:locale\" content=\"nl_NL\">\n", html(titel)));
+    if let Some(b) = &w.beschrijving {
+        h.push_str(&format!("<meta property=\"og:description\" content=\"{}\">\n", html(b)));
+    }
+    if let Some(a) = &adres {
+        h.push_str(&format!("<meta property=\"og:url\" content=\"{}\">\n", html(a)));
+    }
+    if let Some(p) = &w.plaatje {
+        let volledig = match &w.adres {
+            Some(a) if !p.starts_with("http") => format!("{}/{}", a, p.trim_start_matches('/')),
+            _ => p.clone(),
+        };
+        h.push_str(&format!("<meta property=\"og:image\" content=\"{}\">\n<meta name=\"twitter:card\" content=\"summary_large_image\">\n", html(&volledig)));
+    }
+    if let Some((naam, beroep)) = &w.maker {
+        let j = |t: &str| t.replace('\\', "\\\\").replace('"', "\\\"");
+        h.push_str(&format!(
+            "<script type=\"application/ld+json\">\n{{\"@context\": \"https://schema.org\", \"@type\": \"Person\", \"name\": \"{}\", \"jobTitle\": \"{}\", \"worksFor\": {{\"@type\": \"Organization\", \"name\": \"{}\"}}{}{}}}\n</script>\n",
+            j(naam),
+            j(beroep),
+            j(&w.titel),
+            w.adres.as_ref().map(|a| format!(", \"url\": \"{}\"", j(a))).unwrap_or_default(),
+            w.beschrijving.as_ref().map(|b| format!(", \"description\": \"{}\"", j(b))).unwrap_or_default()
+        ));
+    }
+    h
+}
+
+/// De onderkant van elke pagina: wat je onderaan zet, en anders de titel.
+fn onderkant(w: &Website, titels: &[(String, String)]) -> String {
+    let mut h = String::from("<footer>\n");
+    let links: Vec<&Blok> = w.onderaan.iter().filter(|b| matches!(b, Blok::Link { .. } | Blok::Email(_))).collect();
+    for b in &w.onderaan {
+        if let Blok::Tekst(t) = b {
+            h.push_str(&format!("<p>{}</p>\n", html(t)));
+        }
+    }
+    if !links.is_empty() {
+        h.push_str("<ul>\n");
+        for b in links {
+            match b {
+                Blok::Link { naar, tekst } => h.push_str(&format!("<li><a href=\"{}\">{}</a></li>\n", html(&link_doel(naar, titels)), html(tekst))),
+                Blok::Email(a) => h.push_str(&format!("<li><a href=\"mailto:{0}\">{0}</a></li>\n", html(a))),
+                _ => {}
+            }
+        }
+        h.push_str("</ul>\n");
+    }
+    if w.onderaan.is_empty() {
+        h.push_str(&format!("<p>{}</p>\n", html(&w.titel)));
+    }
+    h.push_str("</footer>\n");
+    h
+}
+
 fn html(t: &str) -> String {
     t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
@@ -240,6 +427,9 @@ pub fn beschrijf(w: &Website) -> String {
                 Blok::Lijst(l) => format!("  Een lijst: {}", l.join(", ")),
                 Blok::Radio { naam, .. } => format!("  Een radiospeler voor {} met een knop Afspelen en een knop Stoppen", naam),
                 Blok::Email(a) => format!("  Een e-mailadres: {}", a),
+                Blok::Knop { naar, tekst } => format!("  Een knop \"{}\" naar {}", tekst, naar.replace("pagina:", "de pagina ")),
+                Blok::Citaat { tekst, wie } => format!("  Een citaat: \"{}\"{}", tekst, if wie.is_empty() { String::new() } else { format!(" van {}", wie) }),
+                Blok::Stap { titel, tekst, kenmerken } => format!("  Een stap {}: {}{}", titel, tekst, if kenmerken.is_empty() { String::new() } else { format!(" (kenmerken: {})", kenmerken.join(", ")) }),
                 Blok::Contact(a) => format!("  Een contactformulier (naam, e-mail, bericht) dat mailt naar {}. Dit werkt alleen op een webruimte met PHP.", a),
             });
         }
@@ -259,9 +449,27 @@ pub fn maak(w: &Website, map: &Path, bronmap: Option<&Path>) -> Result<Vec<Strin
         }
         None => ("#ffffff".into(), "#1a1a1a".into()),
     };
+    let voor = w.tekstkleur.clone().unwrap_or(voor);
+    let accent = w.accent.clone().unwrap_or_else(|| "#1F4E8C".into());
+    let op_accent = {
+        let k = rgb_van(&accent);
+        if crate::taal::contrast(k, (255, 255, 255)) >= 4.5 { "#fff" } else { "#000" }
+    };
+    if w.accent.is_some() && crate::taal::contrast(rgb_van(&accent), (255, 255, 255)) < 4.5 && crate::taal::contrast(rgb_van(&accent), (0, 0, 0)) < 4.5 {
+        waarschuwingen.push(format!("De accentkleur {} geeft weinig verschil met de tekst op de knoppen. Kies een donkerdere of lichtere kleur.", accent));
+    }
     let css = format!(
         "/* Gemaakt met Jaap's Programmeertaal. Toegankelijk: grote letters, goed contrast, zichtbare focus. */\n\
 body {{ font-family: Segoe UI, Arial, sans-serif; font-size: 1.15rem; line-height: 1.6; margin: 0; background: {achter}; color: {voor}; }}\n\
+.knop {{ display: inline-flex; align-items: center; min-height: 44px; padding: .7rem 1.25rem; border-radius: 100px; background: {accent}; color: {op_accent}; text-decoration: none; font-weight: 600; }}\n\
+.knop:hover {{ filter: brightness(1.15); }}\n\
+blockquote {{ margin: 2rem 0; padding-left: 1.25rem; border-left: 4px solid {accent}; font-size: 1.25rem; font-style: italic; }}\n\
+blockquote footer {{ font-size: 1rem; font-style: normal; margin-top: .5rem; }}\n\
+.stap {{ margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px solid currentColor; border-radius: 12px; }}\n\
+.stap .nummer {{ font-weight: 700; color: {accent}; margin: 0; }}\n\
+.kenmerken {{ list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }}\n\
+.kenmerken li {{ border: 1px solid currentColor; border-radius: 100px; padding: .1rem .75rem; font-size: .95rem; }}\n\
+footer ul {{ list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }}\n\
 a {{ color: inherit; text-decoration: underline; }}\n\
 .overslaan {{ position: absolute; left: -999px; }}\n\
 .overslaan:focus {{ left: 1rem; top: 1rem; background: #ffeb3b; color: #000; padding: .5rem; z-index: 9; }}\n\
@@ -307,7 +515,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $naam !== '' && $van && $bericht !=
     for (i, p) in w.paginas.iter().enumerate() {
         let mut h = String::new();
         h.push_str("<!DOCTYPE html>\n<html lang=\"nl\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
-        h.push_str(&format!("<title>{} - {}</title>\n<link rel=\"stylesheet\" href=\"stijl.css\">\n</head>\n<body>\n", html(&p.naam), html(&w.titel)));
+        h.push_str(&format!("<title>{} - {}</title>\n", html(&p.naam), html(&w.titel)));
+        h.push_str(&meta(w, &bestandsnaam(w, i), &format!("{} - {}", p.naam, w.titel)));
+        h.push_str("<link rel=\"stylesheet\" href=\"stijl.css\">\n</head>\n<body>\n");
         h.push_str("<a class=\"overslaan\" href=\"#inhoud\">Naar de inhoud</a>\n<header>\n");
         h.push_str(&format!("<p><strong>{}</strong></p>\n", html(&w.titel)));
         if titels.len() > 1 {
@@ -318,6 +528,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $naam !== '' && $van && $bericht !=
             }
             h.push_str("</ul></nav>\n");
         }
+        if let Some((naar, tekst)) = &w.menuknop {
+            h.push_str(&format!("<p><a class=\"knop\" href=\"{}\">{}</a></p>\n", html(&link_doel(naar, &titels)), html(tekst)));
+        }
         h.push_str("</header>\n<main id=\"inhoud\">\n");
         let heeft_kop = p.blokken.iter().any(|b| matches!(b, Blok::Kop(_)));
         if !heeft_kop {
@@ -325,6 +538,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $naam !== '' && $van && $bericht !=
         }
         let mut eerste_kop = true;
         let mut radio = 0;
+        let mut stap = 0;
         for b in &p.blokken {
             match b {
                 Blok::Kop(t) => {
@@ -333,11 +547,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $naam !== '' && $van && $bericht !=
                 }
                 Blok::Tekst(t) => h.push_str(&format!("<p>{}</p>\n", html(t))),
                 Blok::Link { naar, tekst } => {
-                    let doel = match naar.strip_prefix("pagina:") {
-                        Some(n) => titels.iter().find(|x| x.0.to_lowercase() == n.to_lowercase()).map(|x| x.1.clone()).unwrap_or_default(),
-                        None => naar.clone(),
-                    };
-                    h.push_str(&format!("<p><a href=\"{}\">{}</a></p>\n", html(&doel), html(tekst)));
+                    h.push_str(&format!("<p><a href=\"{}\">{}</a></p>\n", html(&link_doel(naar, &titels)), html(tekst)));
+                }
+                Blok::Knop { naar, tekst } => {
+                    h.push_str(&format!("<p><a class=\"knop\" href=\"{}\">{}</a></p>\n", html(&link_doel(naar, &titels)), html(tekst)));
+                }
+                Blok::Citaat { tekst, wie } => {
+                    h.push_str(&format!("<blockquote><p>“{}”</p>", html(tekst)));
+                    if !wie.is_empty() {
+                        h.push_str(&format!("<footer>— {}</footer>", html(wie)));
+                    }
+                    h.push_str("</blockquote>\n");
+                }
+                Blok::Stap { titel, tekst, kenmerken } => {
+                    stap += 1;
+                    h.push_str(&format!("<section class=\"stap\" aria-labelledby=\"stap{0}\">\n<p class=\"nummer\">{0:02}</p>\n<h3 id=\"stap{0}\">{1}</h3>\n<p>{2}</p>\n", stap, html(titel), html(tekst)));
+                    if !kenmerken.is_empty() {
+                        h.push_str("<ul class=\"kenmerken\">\n");
+                        for k in kenmerken {
+                            h.push_str(&format!("<li>{}</li>\n", html(k)));
+                        }
+                        h.push_str("</ul>\n");
+                    }
+                    h.push_str("</section>\n");
                 }
                 Blok::Afbeelding { bestand, beschrijving } => {
                     let naam = Path::new(bestand).file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_else(|| bestand.clone());
@@ -380,8 +612,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $naam !== '' && $van && $bericht !=
                 ),
             }
         }
-        h.push_str(&format!("</main>\n<footer><p>{}</p></footer>\n</body>\n</html>\n", html(&w.titel)));
+        h.push_str("</main>\n");
+        h.push_str(&onderkant(w, &titels));
+        h.push_str("</body>\n</html>\n");
         std::fs::write(map.join(bestandsnaam(w, i)), h).map_err(|e| e.to_string())?;
+    }
+    // De pagina "niet gevonden" (404.html), zoals op jaapwortelproducties.nl.
+    if let Some(t) = &w.foutpagina {
+        let mut h = String::from("<!DOCTYPE html>\n<html lang=\"nl\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        h.push_str(&format!("<title>Pagina niet gevonden - {}</title>\n<meta name=\"robots\" content=\"noindex\">\n<link rel=\"stylesheet\" href=\"/stijl.css\">\n</head>\n<body>\n", html(&w.titel)));
+        h.push_str(&format!("<main id=\"inhoud\">\n<h1>Pagina niet gevonden</h1>\n<p>{}</p>\n<p><a class=\"knop\" href=\"/\">Naar de beginpagina</a></p>\n</main>\n", html(t)));
+        h.push_str(&onderkant(w, &titels));
+        h.push_str("</body>\n</html>\n");
+        std::fs::write(map.join("404.html"), h).map_err(|e| e.to_string())?;
+        // Zo laat een webserver (Apache) deze pagina zien als een pagina niet bestaat.
+        std::fs::write(map.join(".htaccess"), "ErrorDocument 404 /404.html\n").map_err(|e| e.to_string())?;
     }
     Ok(waarschuwingen)
 }

@@ -1,0 +1,18 @@
+Opmerking: Motor Brief. Zet in je programma: Gebruik de motor Brief
+Opmerking: Daarna kun je deze zin gebruiken:
+Opmerking:   Maak een briefvenster met als titel Mijn brieven
+Nieuwe zin: Maak een briefvenster met als titel [titel]
+Maak een venster met als titel [titel]
+Maak een groot tekstvak met als naam Brief
+Maak een knop met als naam Bewaar als Word
+Maak een knop met als naam Bewaar als PDF
+Zet de knop Bewaar als PDF naast de knop Bewaar als Word
+Als ik op de knop Bewaar als Word druk
+Schrijf de tekst in het tekstvak Brief in het Word-bestand brief.docx
+Zeg "De brief staat in Documenten als brief.docx"
+Einde van de knop
+Als ik op de knop Bewaar als PDF druk
+Schrijf de tekst in het tekstvak Brief in het PDF-bestand brief.pdf
+Zeg "De brief staat in Documenten als brief.pdf"
+Einde van de knop
+Einde van de zin

@@ -64,7 +64,7 @@ Programmeertaal in gewone Nederlandse zinnen, gemaakt voor Jaap Wortel. Rust, zo
   "error" = editor); `motor/src/wensen.rs` = verzoeken omzetten in taalzinnen (altijd eerst ja/nee), of eerlijk "kan nog niet"
   + wensenlijst (%APPDATA%\Jaaps Programmeertaal\Mijn wensen.txt). Eigen opdrachten: Mijn eigen opdrachten.txt.
 - Nieuwe verzoeken van Jaap (uit zijn berichten en zijn andere repos) toevoegen aan die tabellen + tests in
-  motor/tests/alles_wat_rust_kan.rs. Geen privé-dingen (zoals Mail Jaap) in wat gebruikers zien.
+  motor/tests/alles_wat_rust_kan.rs. Geen privé-dingen in wat gebruikers zien.
 - Opdrachtvak in eigen programma's alleen met de zin "Geef mijn programma een opdrachtvak" (Jaap: niet in elk programma).
 - Je zinnen gaan mee in de .exe (static JOUW_ZINNEN met merktekens); Ctrl+O op een .exe haalt ze terug.
 
@@ -75,3 +75,13 @@ Programmeertaal in gewone Nederlandse zinnen, gemaakt voor Jaap Wortel. Rust, zo
 - Jaap wil: het programma VRAGEN om iets te maken ("maak een internetradio voor me") en dan het hele programma krijgen. Begonnen:
   wensen.rs geeft bij radio/website het voorbeeldprogramma als voorstel. Volgende stap: meer sjablonen (zoals zijn Audio Editor:
   radio met landen/zenderlijst, opnemen, enz.). Jaap kijkt zelf hoe zijn Audio Editor werkt.
+
+## 18 nov 2026
+
+- Motoren (motor/src/motoren.rs, motor/motoren/*.txt): "Gebruik de motor X" voegt eigen zinnen toe (ingebouwd Radio, Brief, Quiz;
+  eigen in Documenten\Jaaps Programmeertaal\Motoren of JAAPTAAL_MOTOREN). Jaap gaf zelf geen voorbeelden: "zet er drie in".
+- Broncode van Jaaps programma's: Jaap koos "alleen de openbare programma's" (de repo Jaaps-Programmeertaal is OPENBAAR);
+  daarna wilde hij voorbeelden in zijn taal zonder iets privé. Dus: voorbeelden/Mijn boekhouding, werkuren, computerhulp,
+  radiostudio, brievenlezer, bestandsbrug. Geen privé-code van andere programma's in deze repo zetten.
+- Spraak (System.Speech via PowerShell; geen Nederlands), berichten tussen computers (PowerShell TCP, poort 51515), COM-poort
+  (System.IO.Ports). Website: knop, citaat, stap, onderaan, kleuren, 404 + .htaccess, meta/og/JSON-LD.

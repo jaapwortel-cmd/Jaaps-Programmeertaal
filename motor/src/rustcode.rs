@@ -192,6 +192,11 @@ impl<'a> Maker<'a> {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.onderdeel({}, {});", soort.nummer(), rust_tekst(naam)));
                 }
+                Soort::Stuur { waarde, naar } => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(waarde, r);
+                    self.regel(diepte, &format!("{{ let w = {}; stuur(w, {}, {})?; }}", w, rust_tekst(naar), r));
+                }
                 Soort::Braille(u) => {
                     self.opmerking(diepte, r);
                     let w = self.uitdrukking(u, r);

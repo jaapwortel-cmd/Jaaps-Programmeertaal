@@ -384,3 +384,63 @@ fn website_met_css_en_contactformulier() {
     assert!(std::fs::read_to_string(m.join("contact.php")).unwrap().contains("mail('info@voorbeeld.nl'"));
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn motoren_drie_voorbeelden() {
+    let m = map("motoren");
+    let quiz = "Gebruik de motor Quiz\nMaak een quiz met als titel Mijn quiz\nVoeg de vraag \"Hoofdstad van Nederland?\" toe met als antwoord \"Amsterdam\"\nBegin de quiz\n";
+    assert!(lees(quiz).is_goed(), "{:#?}", lees(quiz).meldingen);
+    let exe = bouw(quiz, &m, motor::bouwen::Stand::Snel);
+    let uit = Command::new(&exe).args(["--tekst", "--typ", "Antwoord=amsterdam", "--druk", "Controleer"]).env("JAAPTAAL_MAP", &m).output().unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.contains("[zeg] Goed!") && uit.contains("Je hebt 1 punten"), "{}", uit);
+    for p in ["Gebruik de motor Radio\nMaak een radio met als titel R\n", "Gebruik de motor Brief\nMaak een briefvenster met als titel B\n"] {
+        assert!(lees(p).is_goed(), "{}: {:#?}", p, lees(p).meldingen);
+    }
+    // Een eigen motor in de map Motoren.
+    let eigen = m.join("motoren");
+    std::fs::create_dir_all(&eigen).unwrap();
+    std::fs::write(eigen.join("Groet.txt"), "Nieuwe zin: Groet [wie] betekent Toon \"Dag\" en dan [wie]\n").unwrap();
+    std::env::set_var("JAAPTAAL_MOTOREN", &eigen);
+    assert!(lees("Gebruik de motor Groet\nGroet \"Jaap\"\n").is_goed());
+    assert!(!lees("Gebruik de motor Bestaatniet\n").is_goed());
+    std::env::remove_var("JAAPTAAL_MOTOREN");
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn spraak_berichten_en_poort_in_proefstand() {
+    let m = map("spraak");
+    let bron = "Onthoud gezegd is wat ik zeg\nToon gezegd\nStuur \"aan\" naar de poort COM3\nToon het bericht dat binnenkomt\nToon wat er van de poort COM3 komt\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let exe = bouw(bron, &m, motor::bouwen::Stand::Snel);
+    let uit = Command::new(&exe)
+        .arg("--tekst")
+        .env("JAAPTAAL_MAP", &m)
+        .env("JAAPTAAL_ZEG", "hallo")
+        .env("JAAPTAAL_BERICHT", "eten")
+        .env("JAAPTAAL_POORT", "21 graden")
+        .env("JAAPTAAL_NIET_STUREN", "1")
+        .output()
+        .unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.contains("hallo\n[stuur naar poort COM3] aan\n") && uit.contains("eten\n") && uit.ends_with("21 graden\n"), "{}", uit);
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+/// Echt een bericht versturen tussen twee programma's (alleen op Windows, in de bouwstraat).
+#[cfg(windows)]
+#[test]
+fn bericht_tussen_twee_programmas() {
+    let m = map("bericht");
+    let ontvanger = bouw("Toon het bericht dat binnenkomt\n", &m.join("ontvanger"), motor::bouwen::Stand::Snel);
+    let kind = Command::new(&ontvanger).arg("--tekst").env("JAAPTAAL_MAP", &m).stdout(std::process::Stdio::piped()).spawn().unwrap();
+    std::thread::sleep(std::time::Duration::from_secs(8));
+    let zender = bouw("Stuur \"Hallo van de andere computer\" naar de computer localhost\n", &m.join("zender"), motor::bouwen::Stand::Snel);
+    let z = Command::new(&zender).arg("--tekst").env("JAAPTAAL_MAP", &m).output().unwrap();
+    assert!(z.status.success(), "{}", String::from_utf8_lossy(&z.stdout));
+    let uit = kind.wait_with_output().unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.contains("Hallo van de andere computer"), "{}", uit);
+    let _ = std::fs::remove_dir_all(&m);
+}

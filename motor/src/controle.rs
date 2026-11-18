@@ -133,7 +133,7 @@ impl<'a> Controle<'a> {
                     }
                     Ingebouwd::AlsGetal | Ingebouwd::Lengte => Type::Getal,
                     Ingebouwd::AlsTekst | Ingebouwd::Hoofdletters | Ingebouwd::KleineLetters | Ingebouwd::EersteTekens | Ingebouwd::LaatsteTekens
-                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst | Ingebouwd::ZenderAdres | Ingebouwd::KiesBestand | Ingebouwd::KiesOpslaan => Type::Tekst,
+                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst | Ingebouwd::ZenderAdres | Ingebouwd::KiesBestand | Ingebouwd::KiesOpslaan | Ingebouwd::WatIkZeg | Ingebouwd::Bericht | Ingebouwd::VanPoort => Type::Tekst,
                     Ingebouwd::Radiozenders | Ingebouwd::RadiozendersLand => Type::Lijst,
                     Ingebouwd::Woorden | Ingebouwd::Gesplitst => Type::Lijst,
                     Ingebouwd::Willekeurig => {
@@ -523,6 +523,11 @@ impl<'a> Controle<'a> {
                 }
                 Soort::Venstergedrag(_) => {}
                 Soort::Radio(_) => {}
+                Soort::Stuur { waarde, .. } => {
+                    let mut namen = Vec::new();
+                    waarde.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                }
                 Soort::Braille(u) => {
                     let mut namen = Vec::new();
                     u.namen(&mut namen);

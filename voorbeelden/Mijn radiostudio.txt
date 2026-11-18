@@ -1,0 +1,40 @@
+Opmerking: Voorbeeld naar het idee van R-Wave Studio. Liedjes kiezen en spelen, jingles onder F2 tot en met F4, en de uitzending opnemen.
+Opmerking: Zet je eigen geluiden (WAV of MP3) naast het programma of in Documenten.
+Maak een venster met als titel Mijn radiostudio
+Maak een keuzelijst met als naam Liedjes
+Voeg de keuze liedje1.mp3 toe aan de keuzelijst Liedjes
+Voeg de keuze liedje2.mp3 toe aan de keuzelijst Liedjes
+Maak een knop met als naam Speel liedje
+Maak een knop met als naam Stop liedje
+Zet de knop Stop liedje naast de knop Speel liedje
+Maak een werkbalk met de knoppen Jingle 1, Jingle 2 en Jingle 3
+Geef de knop Jingle 1 de sneltoets F2
+Geef de knop Jingle 2 de sneltoets F3
+Geef de knop Jingle 3 de sneltoets F4
+Maak een knop met als naam Opname aan
+Maak een knop met als naam Opname uit
+Zet de knop Opname uit naast de knop Opname aan
+Als ik op de knop Speel liedje druk
+Onthoud liedje is de keuze in de keuzelijst Liedjes
+Speel het geluid met de naam liedje
+Einde van de knop
+Als ik op de knop Stop liedje druk
+Stop het geluid
+Einde van de knop
+Als ik op de knop Jingle 1 druk
+Speel het geluid jingle1.wav
+Einde van de knop
+Als ik op de knop Jingle 2 druk
+Speel het geluid jingle2.wav
+Einde van de knop
+Als ik op de knop Jingle 3 druk
+Speel het geluid jingle3.wav
+Einde van de knop
+Als ik op de knop Opname aan druk
+Begin met opnemen
+Zeg "Opname loopt"
+Einde van de knop
+Als ik op de knop Opname uit druk
+Stop met opnemen en sla het op in het bestand uitzending.wav
+Zeg "De uitzending is bewaard"
+Einde van de knop
