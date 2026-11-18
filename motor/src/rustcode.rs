@@ -197,6 +197,10 @@ impl<'a> Maker<'a> {
                     let w = self.uitdrukking(waarde, r);
                     self.regel(diepte, &format!("{{ let w = {}; stuur(w, {}, {})?; }}", w, rust_tekst(naar), r));
                 }
+                Soort::RustPakket { naam, versie } => {
+                    // Het teken voor het bouwen: dit programma heeft Cargo nodig.
+                    self.regel(diepte, &format!("// jaaptaal-pakket: {} = {:?}", naam, versie));
+                }
                 Soort::Braille(u) => {
                     self.opmerking(diepte, r);
                     let w = self.uitdrukking(u, r);

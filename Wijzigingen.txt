@@ -63,4 +63,6 @@ Versie 0.1.0 (proefversie, 17 november 2026)
 - Spraakherkenning van Windows (wat ik zeg), berichten tussen je eigen computers, apparaten aan een COM-poort.
 - Voorbeelden naar het idee van je eigen programma's: boekhouding, werkuren, computerhulp, radiostudio,
   brievenlezer en bestandsbrug.
+- Alle Rust-pakketten van crates.io in je Rust-stukjes (Gebruik het Rust-pakket ...); Cargo zit in de installatie.
+- QR-codes en streepjescodes lezen uit een PNG-afbeelding (eigen PNG-lezer, zonder hulpprogramma's).
 - Geen AI: alleen vaste, ingebouwde regels.

@@ -201,6 +201,10 @@ pub enum Ingebouwd {
     Bericht,
     /// Een regel tekst van een apparaat aan een COM-poort.
     VanPoort,
+    /// De tekst van een QR-code in een afbeelding.
+    LeesQr,
+    /// De tekst van een streepjescode in een afbeelding.
+    LeesStreepjescode,
 }
 
 impl Ingebouwd {
@@ -345,6 +349,8 @@ pub enum Soort {
     Opdrachtvak,
     /// Hoe het venster zich gedraagt: schermvullend, vraag bij afsluiten, maar één keer open, tip bij een knop.
     Venstergedrag(Gedrag),
+    /// Een Rust-pakket van crates.io gebruiken in je Rust-stukjes (naam, versie).
+    RustPakket { naam: String, versie: String },
     /// Een bericht naar een andere computer, of naar een apparaat aan een COM-poort.
     Stuur { waarde: Uitdrukking, naar: String },
     /// Tekst op de brailleleesregel zetten (JAWS of NVDA).

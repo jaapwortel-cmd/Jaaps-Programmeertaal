@@ -79,7 +79,7 @@ const WOORDENLIJST: &[&str] = &[
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "qr-lezer",
+    "qr-scanner-camera",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -294,6 +294,15 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
     }
     if let Some(f) = functie(s)? {
         return Ok(Some(f));
+    }
+    // De tekst van de QR-code in het bestand qr.png / van de streepjescode in het bestand code.png
+    if begint(s, &["de", "tekst", "van", "de"]) && matches!(klein(s, 4).as_str(), "qr-code" | "qrcode" | "streepjescode" | "barcode") {
+        let qr = matches!(klein(s, 4).as_str(), "qr-code" | "qrcode");
+        let Some(b) = zoek(s, &["bestand"], 5).or_else(|| zoek(s, &["afbeelding"], 5)) else {
+            return Err("In welk bestand? Schrijf bijvoorbeeld: de tekst van de QR-code in het bestand qr.png.".into());
+        };
+        let wat = if qr { Ingebouwd::LeesQr } else { Ingebouwd::LeesStreepjescode };
+        return ib(wat, vec![pad(&s[b + 1..])?]);
     }
     // Spraakherkenning, berichten en COM-poorten.
     if (begint(s, &["wat", "ik", "zeg"]) && (s.len() == 3 || begint(&s[3..], &["in", "de", "microfoon"]))) || (begint(s, &["wat", "er", "gezegd", "wordt"]) && s.len() == 4) {
@@ -1017,6 +1026,20 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         }
         let naar = if poort { format!("poort:{}", naar.to_uppercase()) } else { naar };
         return Ok(Vorm::Los(Soort::Stuur { waarde: tekst_of_uitdrukking(&wat).map_err(fout)?, naar }));
+    }
+    // Gebruik het Rust-pakket rand (versie 0.8)
+    for b in ["gebruik het rust-pakket ", "gebruik het rustpakket ", "gebruik de rust-bibliotheek ", "gebruik het pakket "] {
+        if laag.starts_with(b) {
+            let rest = norm[b.len()..].trim().trim_end_matches('.');
+            let (naam, versie) = match rest.to_lowercase().find(" versie ") {
+                Some(p) => (rest[..p].trim().to_string(), rest[p + 8..].trim().to_string()),
+                None => (rest.to_string(), "*".to_string()),
+            };
+            if naam.is_empty() || !naam.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                return Err(fout("Schrijf de naam van het pakket zoals op crates.io, bijvoorbeeld: Gebruik het Rust-pakket rand. Of: Gebruik het Rust-pakket rand versie 0.8"));
+            }
+            return Ok(Vorm::Los(Soort::RustPakket { naam: naam.to_lowercase(), versie }));
+        }
     }
     // De brailleleesregel.
     for b in ["toon op de brailleleesregel", "zet op de brailleleesregel", "toon op de leesregel", "zet op de leesregel", "toon in braille"] {

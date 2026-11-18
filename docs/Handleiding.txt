@@ -580,6 +580,14 @@ Einde van het Rust-stukje
 
 Toon de uitkomst van Omdraaien met "Jaap"           (paaJ)
 
+Alle Rust-pakketten van crates.io kun je ook gebruiken (meer dan 150.000: geluid, spellen,
+Excel, internet en nog veel meer). Zet bovenaan je programma:
+Gebruik het Rust-pakket fastrand
+Gebruik het Rust-pakket rand versie 0.8
+en gebruik het pakket in je Rust-stukje. De eerste keer bouwen haalt het pakket van internet;
+daarna staat het op je computer. Dit gaat met Cargo, dat in de installatie zit.
+Zie het voorbeeld Rust-pakket gebruiken.txt.
+
 Tussen die regels staat gewone Rust-code. De laatste regel is de uitkomst. W::T is tekst,
 W::G een getal, W::B waar of niet waar, W::L een lijst. Deze regels controleert het programma
 niet: gaat het bouwen mis, dan zegt het dat de fout waarschijnlijk in het Rust-stukje zit.
@@ -668,7 +676,12 @@ Maak een reservekopie van het bestand notities.txt   (in de map Reservekopieën;
 
 Maak een streepjescode van "12345" in het bestand code.png
 Een streepjescode van het soort Code 128 (letters, cijfers en tekens, zonder é of €).
-Getest met een echte streepjescode-lezer. Lezen kan nog niet.
+Getest met een echte streepjescode-lezer.
+
+Lezen kan ook, uit een PNG-afbeelding (zoals een schermafbeelding):
+Toon de tekst van de QR-code in het bestand qr.png
+Onthoud code is de tekst van de streepjescode in het bestand code.png
+Eerlijk: dat lukt met rechte, scherpe codes, niet met een scheve foto of een JPG.
 
 4.7z Tab-volgorde, knoppen naast elkaar en braille
 

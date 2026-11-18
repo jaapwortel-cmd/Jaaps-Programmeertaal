@@ -71,8 +71,8 @@ jobs:
           New-Item -ItemType Directory -Path $rust -Force | Out-Null
           Copy-Item -Recurse (Join-Path $bron 'bin') $rust
           Copy-Item -Recurse (Join-Path $bron 'lib') $rust
-          # Alleen wat nodig is om te bouwen. Weg: cargo, rustdoc, debuggers, lld, wasm.
-          foreach ($f in @('bin\cargo.exe', 'bin\rustdoc.exe', 'bin\rust-gdb', 'bin\rust-gdbgui', 'bin\rust-lldb',
+          # Alleen wat nodig is om te bouwen (cargo blijft, voor Rust-pakketten). Weg: rustdoc, debuggers, lld, wasm.
+          foreach ($f in @('bin\rustdoc.exe', 'bin\rust-gdb', 'bin\rust-gdbgui', 'bin\rust-lldb',
                            'lib\rustlib\x86_64-pc-windows-gnu\bin\rust-lld.exe', 'lib\rustlib\x86_64-pc-windows-gnu\bin\rust-objcopy.exe',
                            'lib\rustlib\x86_64-pc-windows-gnu\bin\wasm-component-ld.exe', 'lib\rustlib\x86_64-pc-windows-gnu\bin\gcc-ld')) {
             $p = Join-Path $rust $f
@@ -97,6 +97,12 @@ jobs:
             if ($LASTEXITCODE) { throw ("Voorbeeld klopt niet: " + $v.Name) }
           }
           $tijd = Measure-Command { & $j bouw 'voorbeelden\Begroeting.txt' 'Begroeting.exe' | Write-Host }
+          # Een programma met een Rust-pakket van crates.io, gebouwd met de ingebouwde Cargo.
+          & $j bouw 'voorbeelden\Rust-pakket gebruiken.txt' 'Pakket.exe' --snel | Write-Host
+          if (-not (Test-Path 'Pakket.exe')) { throw 'Het programma met een Rust-pakket is niet gemaakt.' }
+          $uitp = & '.\Pakket.exe' --tekst
+          $uitp | Write-Host
+          if (($uitp -join "`n") -notmatch 'Dobbelsteen') { throw 'Het programma met een Rust-pakket werkt niet.' }
           if (-not (Test-Path 'Begroeting.exe')) { throw 'Begroeting.exe is niet gemaakt.' }
           $p = Start-Process -FilePath '.\Begroeting.exe' -ArgumentList '--tekst', '--druk', 'Welkom' -RedirectStandardOutput 'begroeting-uit.txt' -PassThru -Wait
           Get-Content 'begroeting-uit.txt' | Write-Host

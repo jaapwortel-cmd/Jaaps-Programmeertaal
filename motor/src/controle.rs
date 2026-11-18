@@ -133,7 +133,7 @@ impl<'a> Controle<'a> {
                     }
                     Ingebouwd::AlsGetal | Ingebouwd::Lengte => Type::Getal,
                     Ingebouwd::AlsTekst | Ingebouwd::Hoofdletters | Ingebouwd::KleineLetters | Ingebouwd::EersteTekens | Ingebouwd::LaatsteTekens
-                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst | Ingebouwd::ZenderAdres | Ingebouwd::KiesBestand | Ingebouwd::KiesOpslaan | Ingebouwd::WatIkZeg | Ingebouwd::Bericht | Ingebouwd::VanPoort => Type::Tekst,
+                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst | Ingebouwd::ZenderAdres | Ingebouwd::KiesBestand | Ingebouwd::KiesOpslaan | Ingebouwd::WatIkZeg | Ingebouwd::Bericht | Ingebouwd::VanPoort | Ingebouwd::LeesQr | Ingebouwd::LeesStreepjescode => Type::Tekst,
                     Ingebouwd::Radiozenders | Ingebouwd::RadiozendersLand => Type::Lijst,
                     Ingebouwd::Woorden | Ingebouwd::Gesplitst => Type::Lijst,
                     Ingebouwd::Willekeurig => {
@@ -523,6 +523,12 @@ impl<'a> Controle<'a> {
                 }
                 Soort::Venstergedrag(_) => {}
                 Soort::Radio(_) => {}
+                Soort::RustPakket { .. } => {
+                    let heeft_stukje = self.programma.alle().iter().any(|o| matches!(o.soort, Soort::Stukje { rust: Some(_), .. }));
+                    if !heeft_stukje {
+                        self.meld(Melding::vraag(r, "Je gebruikt een Rust-pakket, maar er is geen Rust-stukje dat het gebruikt. Een Rust-pakket werkt alleen in een Rust-stukje (Maak een Rust-stukje met als naam ...)."));
+                    }
+                }
                 Soort::Stuur { waarde, .. } => {
                     let mut namen = Vec::new();
                     waarde.namen(&mut namen);

@@ -444,3 +444,24 @@ fn bericht_tussen_twee_programmas() {
     assert!(uit.contains("Hallo van de andere computer"), "{}", uit);
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn qr_en_streepjescode_teruglezen() {
+    let m = map("lezen-codes");
+    let bron = "Maak een QR-code van \"Hallo Jaap, met é\" in het bestand q.png\nMaak een streepjescode van \"ABC-123\" in het bestand s.png\nToon de tekst van de QR-code in het bestand q.png\nToon de tekst van de streepjescode in het bestand s.png\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    assert_eq!(voer_uit(bron, &m), "Hallo Jaap, met é\nABC-123\n");
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn rust_pakket_van_crates_io() {
+    let m = map("pakket");
+    let bron = "Gebruik het Rust-pakket fastrand versie 2\nMaak een Rust-stukje met als naam Gooi\nW::G(fastrand::u32(1..=6) as f64)\nEinde van het Rust-stukje\nToon de uitkomst van Gooi\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let uit = voer_uit(bron, &m);
+    let n: u32 = uit.trim().parse().unwrap_or_else(|_| panic!("{}", uit));
+    assert!((1..=6).contains(&n));
+    assert!(!lees("Gebruik het Rust-pakket fastrand\n").is_goed(), "zonder Rust-stukje: eerst vragen");
+    let _ = std::fs::remove_dir_all(&m);
+}

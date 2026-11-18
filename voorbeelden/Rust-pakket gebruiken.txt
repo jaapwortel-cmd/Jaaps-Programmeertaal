@@ -1,0 +1,6 @@
+Opmerking: Een Rust-pakket van crates.io gebruiken in een Rust-stukje. De eerste keer bouwen haalt het pakket van internet.
+Gebruik het Rust-pakket fastrand versie 2
+Maak een Rust-stukje met als naam Dobbelsteen
+W::G(fastrand::u32(1..=6) as f64)
+Einde van het Rust-stukje
+Toon "Dobbelsteen: " en dan de uitkomst van Dobbelsteen

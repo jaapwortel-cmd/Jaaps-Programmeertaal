@@ -476,6 +476,8 @@ fn functie(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
             let script = format!("$p=New-Object System.IO.Ports.SerialPort '{}',9600; $p.ReadTimeout=5000; $p.Open(); try {{ $p.ReadLine() }} finally {{ $p.Close() }}", poort.replace('\'', ""));
             powershell(&script, "").map(|t| W::T(t.trim().to_string())).or_else(|e| fout(r, format!("Van de poort {} komt niets: {}", poort, e)))
         }
+        38 => code_lezen(invoer[0].clone(), true, r),
+        39 => code_lezen(invoer[0].clone(), false, r),
         30 => Ok(W::L(ZENDERLIJST.iter().map(|(n, _, _)| W::T(n.to_string())).collect())),
         31 => zenders_van_land(&tekst(0)).map(W::L).or_else(|e| fout(r, e)),
         32 => {
@@ -848,6 +850,456 @@ fn maak_streepjescode(waarde: W, pad: W, r: usize) -> R<()> {
         let _ = std::fs::create_dir_all(m);
     }
     std::fs::write(&p, png_grijs(breedte, hoogte, &beeld)).or_else(|e| fout(r, format!("Ik kan {} niet schrijven: {}", p.display(), e)))
+}
+
+/// Een PNG-afbeelding lezen als grijswaarden (0 = zwart, 255 = wit). Zelf gemaakt, met de eigen inflate.
+fn png_lezen(data: &[u8]) -> Option<(usize, usize, Vec<u8>)> {
+    if !data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    let (mut b, mut h, mut diepte, mut soort) = (0usize, 0usize, 0u8, 0u8);
+    let mut palet: Vec<[u8; 3]> = Vec::new();
+    let mut idat = Vec::new();
+    let mut p = 8;
+    while p + 8 <= data.len() {
+        let len = u32::from_be_bytes(data[p..p + 4].try_into().ok()?) as usize;
+        let naam = &data[p + 4..p + 8];
+        let inhoud = data.get(p + 8..p + 8 + len)?;
+        match naam {
+            b"IHDR" => {
+                b = u32::from_be_bytes(inhoud[0..4].try_into().ok()?) as usize;
+                h = u32::from_be_bytes(inhoud[4..8].try_into().ok()?) as usize;
+                diepte = inhoud[8];
+                soort = inhoud[9];
+                if inhoud[12] != 0 {
+                    return None; // interlace kan ik niet lezen
+                }
+            }
+            b"PLTE" => palet = inhoud.chunks(3).map(|c| [c[0], c[1], c[2]]).collect(),
+            b"IDAT" => idat.extend_from_slice(inhoud),
+            b"IEND" => break,
+            _ => {}
+        }
+        p += 12 + len;
+    }
+    if b == 0 || h == 0 || b * h > 40_000_000 || diepte == 16 {
+        return None;
+    }
+    let ruw = inflate(idat.get(2..)?)?;
+    let kanalen = match soort { 0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4, _ => return None };
+    let bits = diepte as usize * kanalen;
+    let rij = (b * bits + 7) / 8;
+    let bpp = (bits + 7) / 8;
+    let mut vorige = vec![0u8; rij];
+    let mut grijs = Vec::with_capacity(b * h);
+    let mut pos = 0;
+    for _ in 0..h {
+        let filter = *ruw.get(pos)?;
+        let mut cur = ruw.get(pos + 1..pos + 1 + rij)?.to_vec();
+        pos += 1 + rij;
+        for i in 0..rij {
+            let a = if i >= bpp { cur[i - bpp] as i32 } else { 0 };
+            let c = if i >= bpp { vorige[i - bpp] as i32 } else { 0 };
+            let bo = vorige[i] as i32;
+            let x = cur[i] as i32;
+            cur[i] = match filter {
+                0 => x,
+                1 => x + a,
+                2 => x + bo,
+                3 => x + (a + bo) / 2,
+                4 => {
+                    let pp = a + bo - c;
+                    let (pa, pb, pc) = ((pp - a).abs(), (pp - bo).abs(), (pp - c).abs());
+                    x + if pa <= pb && pa <= pc { a } else if pb <= pc { bo } else { c }
+                }
+                _ => return None,
+            } as u8;
+        }
+        for x in 0..b {
+            let waarde = |kanaal: usize| -> u8 {
+                if diepte == 8 {
+                    cur[x * kanalen + kanaal]
+                } else {
+                    let bit = x * diepte as usize;
+                    let v = (cur[bit / 8] >> (8 - diepte as usize - bit % 8)) & ((1u8 << diepte) - 1);
+                    if soort == 3 { v } else { (v as u32 * 255 / ((1u32 << diepte) - 1)) as u8 }
+                }
+            };
+            let g = match soort {
+                0 | 4 => waarde(0),
+                3 => palet.get(waarde(0) as usize).map(|c| ((c[0] as u32 * 3 + c[1] as u32 * 6 + c[2] as u32) / 10) as u8).unwrap_or(255),
+                _ => ((waarde(0) as u32 * 3 + waarde(1) as u32 * 6 + waarde(2) as u32) / 10) as u8,
+            };
+            // Doorzichtig telt als wit.
+            let g = match soort {
+                4 => (255 - ((255 - g as u32) * waarde(1) as u32 / 255)) as u8,
+                6 => (255 - ((255 - g as u32) * waarde(3) as u32 / 255)) as u8,
+                _ => g,
+            };
+            grijs.push(g);
+        }
+        vorige = cur;
+    }
+    Some((b, h, grijs))
+}
+
+/// Een afbeelding lezen als grijswaarden: PNG zelf, andere soorten (JPG) via Windows.
+fn beeld_lezen(pad: &std::path::Path) -> Result<(usize, usize, Vec<u8>), String> {
+    let data = std::fs::read(pad).map_err(|e| format!("Ik kan {} niet lezen: {}", pad.display(), e))?;
+    if let Some(b) = png_lezen(&data) {
+        return Ok(b);
+    }
+    Err(format!("{} kan ik niet lezen. Gebruik een PNG-afbeelding (bijvoorbeeld een schermafbeelding).", pad.display()))
+}
+
+/// Zwart of wit: de drempel ligt midden tussen het donkerste en het lichtste.
+fn zwart_wit(beeld: &[u8]) -> Vec<bool> {
+    let (min, max) = beeld.iter().fold((255u8, 0u8), |(a, b), &x| (a.min(x), b.max(x)));
+    let drempel = (min as u16 + max as u16) / 2;
+    beeld.iter().map(|&x| (x as u16) < drempel).collect()
+}
+
+/// Een QR-code lezen uit een afbeelding. Werkt met rechte, scherpe codes (zoals een gemaakte QR-code
+/// of een schermafbeelding), niet met een scheve foto. Byte-, cijfer- en letterstand, versie 1 tot 10.
+fn qr_lezen(b: usize, h: usize, beeld: &[u8]) -> Option<String> {
+    let zw = zwart_wit(beeld);
+    let zwart = |x: usize, y: usize| -> bool { x < b && y < h && zw[y * b + x] };
+    // Het vak met alle zwarte punten.
+    let (mut x0, mut y0, mut x1, mut y1) = (b, h, 0, 0);
+    for y in 0..h {
+        for x in 0..b {
+            if zw[y * b + x] {
+                x0 = x0.min(x);
+                y0 = y0.min(y);
+                x1 = x1.max(x);
+                y1 = y1.max(y);
+            }
+        }
+    }
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    // De bovenste rij van het vierkant linksboven is 7 vakjes zwart.
+    let mut run = 0;
+    while zwart(x0 + run, y0) {
+        run += 1;
+    }
+    let vak = run as f64 / 7.0;
+    if vak < 1.0 {
+        return None;
+    }
+    let breed = ((x1 - x0 + 1) as f64 / vak).round() as usize;
+    let versie = (breed.saturating_sub(17) + 2) / 4;
+    if !(1..=10).contains(&versie) {
+        return None;
+    }
+    let maat = versie * 4 + 17;
+    let stip = |rij: usize, kol: usize| -> bool { zwart((x0 as f64 + (kol as f64 + 0.5) * vak) as usize, (y0 as f64 + (rij as f64 + 0.5) * vak) as usize) };
+    // Opmaak: 15 bits linksboven. Kies de geldige opmaak die het meest lijkt.
+    let mut f = 0u32;
+    for i in 0..6 {
+        f |= (stip(i, 8) as u32) << i;
+    }
+    f |= (stip(7, 8) as u32) << 6;
+    f |= (stip(8, 8) as u32) << 7;
+    f |= (stip(8, 7) as u32) << 8;
+    for i in 9..15 {
+        f |= (stip(8, 14 - i) as u32) << i;
+    }
+    let mut beste = (99u32, 0u32);
+    for d in 0..32u32 {
+        let mut r = d;
+        for _ in 0..10 {
+            r = (r << 1) ^ ((r >> 9) * 0x537);
+        }
+        let code = ((d << 10) | r) ^ 0x5412;
+        let verschil = (code ^ f).count_ones();
+        if verschil < beste.0 {
+            beste = (verschil, d);
+        }
+    }
+    if beste.0 > 3 {
+        return None;
+    }
+    let (ecl_bits, masker) = (beste.1 >> 3, beste.1 & 7);
+    let ecl = match ecl_bits { 1 => 0, 0 => 1, 3 => 2, _ => 3 }; // L, M, Q, H
+    const EC: [[usize; 11]; 4] = [
+        [0, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18],
+        [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26],
+        [0, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24],
+        [0, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28],
+    ];
+    const BLOKKEN: [[usize; 11]; 4] = [
+        [0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4],
+        [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5],
+        [0, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8],
+        [0, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8],
+    ];
+    // Welke vakjes horen bij de vaste patronen (zelfde als bij het maken).
+    let mut vast = vec![vec![false; maat]; maat];
+    for i in 0..maat {
+        vast[6][i] = true;
+        vast[i][6] = true;
+    }
+    for &(cx, cy) in &[(0usize, 0usize), (maat - 8, 0), (0, maat - 8)] {
+        for y in cy..(cy + 8).min(maat) {
+            for x in cx..(cx + 8).min(maat) {
+                vast[y][x] = true;
+            }
+        }
+    }
+    for i in 0..9 {
+        vast[8][i] = true;
+        vast[i][8] = true;
+    }
+    for i in 0..8 {
+        vast[8][maat - 1 - i] = true;
+        vast[maat - 1 - i][8] = true;
+    }
+    if versie >= 2 {
+        let n = versie / 7 + 2;
+        let stap = (versie * 4 + n * 2 + 1) / (n * 2 - 2) * 2;
+        let mut pos = vec![6usize];
+        let mut p = maat - 7;
+        let mut tussen = Vec::new();
+        for _ in 0..n - 1 {
+            tussen.push(p);
+            p -= stap;
+        }
+        tussen.reverse();
+        pos.extend(tussen);
+        for (i, &a) in pos.iter().enumerate() {
+            for (j, &c) in pos.iter().enumerate() {
+                if (i == 0 && j == 0) || (i == 0 && j == n - 1) || (i == n - 1 && j == 0) {
+                    continue;
+                }
+                for y in a - 2..=a + 2 {
+                    for x in c - 2..=c + 2 {
+                        vast[y][x] = true;
+                    }
+                }
+            }
+        }
+    }
+    if versie >= 7 {
+        for i in 0..6 {
+            for j in maat - 11..maat - 8 {
+                vast[i][j] = true;
+                vast[j][i] = true;
+            }
+        }
+    }
+    let masker_aan = |x: usize, y: usize| -> bool {
+        match masker {
+            0 => (x + y) % 2 == 0,
+            1 => y % 2 == 0,
+            2 => x % 3 == 0,
+            3 => (x + y) % 3 == 0,
+            4 => (x / 3 + y / 2) % 2 == 0,
+            5 => x * y % 2 + x * y % 3 == 0,
+            6 => (x * y % 2 + x * y % 3) % 2 == 0,
+            _ => ((x + y) % 2 + x * y % 3) % 2 == 0,
+        }
+    };
+    let mut bits = Vec::new();
+    let mut rechts = maat as i32 - 1;
+    while rechts >= 1 {
+        if rechts == 6 {
+            rechts = 5;
+        }
+        for vert in 0..maat {
+            for j in 0..2 {
+                let x = (rechts - j) as usize;
+                let omhoog = (rechts + 1) & 2 == 0;
+                let y = if omhoog { maat - 1 - vert } else { vert };
+                if !vast[y][x] {
+                    bits.push(stip(y, x) ^ masker_aan(x, y));
+                }
+            }
+        }
+        rechts -= 2;
+    }
+    let codewoorden: Vec<u8> = bits.chunks(8).filter(|c| c.len() == 8).map(|c| c.iter().fold(0u8, |a, &b| (a << 1) | b as u8)).collect();
+    // De blokken uit elkaar halen (alleen de gegevens; foutcorrectie wordt niet gebruikt).
+    let ruwe = {
+        let mut r = (16 * versie + 128) * versie + 64;
+        if versie >= 2 {
+            let n = versie / 7 + 2;
+            r -= (25 * n - 10) * n - 55;
+            if versie >= 7 {
+                r -= 36;
+            }
+        }
+        r / 8
+    };
+    let (graad, aantal) = (EC[ecl][versie], BLOKKEN[ecl][versie]);
+    let kort = aantal - ruwe % aantal;
+    let kort_len = ruwe / aantal - graad;
+    let mut blokken: Vec<Vec<u8>> = vec![Vec::new(); aantal];
+    let mut k = 0;
+    for i in 0..=kort_len {
+        for (j, blok) in blokken.iter_mut().enumerate() {
+            if i < kort_len || j >= kort {
+                blok.push(*codewoorden.get(k)?);
+                k += 1;
+            }
+        }
+    }
+    let gegevens: Vec<u8> = blokken.concat();
+    // De inhoud lezen.
+    let mut pos = 0usize;
+    let lees = |n: usize, pos: &mut usize| -> Option<u32> {
+        let mut v = 0u32;
+        for _ in 0..n {
+            let byte = *gegevens.get(*pos / 8)?;
+            v = (v << 1) | ((byte >> (7 - *pos % 8)) & 1) as u32;
+            *pos += 1;
+        }
+        Some(v)
+    };
+    let mut uit: Vec<u8> = Vec::new();
+    const ALNUM: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+    loop {
+        if pos + 4 > gegevens.len() * 8 {
+            break;
+        }
+        let stand = lees(4, &mut pos)?;
+        match stand {
+            0 => break,
+            4 => {
+                let n = lees(if versie < 10 { 8 } else { 16 }, &mut pos)? as usize;
+                for _ in 0..n {
+                    uit.push(lees(8, &mut pos)? as u8);
+                }
+            }
+            1 => {
+                let mut n = lees(if versie < 10 { 10 } else { 12 }, &mut pos)? as usize;
+                while n >= 3 {
+                    uit.extend(format!("{:03}", lees(10, &mut pos)?).bytes());
+                    n -= 3;
+                }
+                if n == 2 {
+                    uit.extend(format!("{:02}", lees(7, &mut pos)?).bytes());
+                } else if n == 1 {
+                    uit.extend(format!("{}", lees(4, &mut pos)?).bytes());
+                }
+            }
+            2 => {
+                let mut n = lees(if versie < 10 { 9 } else { 11 }, &mut pos)? as usize;
+                while n >= 2 {
+                    let v = lees(11, &mut pos)? as usize;
+                    uit.push(*ALNUM.get(v / 45)?);
+                    uit.push(*ALNUM.get(v % 45)?);
+                    n -= 2;
+                }
+                if n == 1 {
+                    uit.push(*ALNUM.get(lees(6, &mut pos)? as usize)?);
+                }
+            }
+            7 => {
+                // ECI: aanduiding van de tekenset; overslaan.
+                lees(8, &mut pos)?;
+            }
+            _ => return None,
+        }
+    }
+    String::from_utf8(uit.clone()).ok().or_else(|| Some(uit.iter().map(|&c| c as char).collect()))
+}
+
+/// Een streepjescode (Code 128) lezen uit een afbeelding: een rij door het midden.
+fn streepjescode_lezen(b: usize, h: usize, beeld: &[u8]) -> Option<String> {
+    let zw = zwart_wit(beeld);
+    let patronen: Vec<[u8; 6]> = CODE128
+        .iter()
+        .map(|&p| {
+            let mut r = [0u8; 6];
+            let (mut i, mut vorige, mut lengte) = (0, true, 0u8);
+            for k in (0..11).rev() {
+                let bit = (p >> k) & 1 == 1;
+                if bit == vorige {
+                    lengte += 1;
+                } else {
+                    r[i] = lengte;
+                    i += 1;
+                    lengte = 1;
+                    vorige = bit;
+                }
+            }
+            r[i] = lengte;
+            r
+        })
+        .collect();
+    for rij in [h / 2, h / 3, h * 2 / 3] {
+        let lijn = &zw[rij * b..(rij + 1) * b];
+        let mut runs: Vec<(bool, usize)> = Vec::new();
+        for &x in lijn {
+            match runs.last_mut() {
+                Some((k, n)) if *k == x => *n += 1,
+                _ => runs.push((x, 1)),
+            }
+        }
+        let start = runs.iter().position(|r| r.0)?;
+        let r: Vec<usize> = runs[start..].iter().map(|x| x.1).collect();
+        let mut waarden = Vec::new();
+        let mut i = 0;
+        while i + 6 <= r.len() {
+            let som: usize = r[i..i + 6].iter().sum();
+            let eenheid = som as f64 / 11.0;
+            let breedtes: Vec<u8> = r[i..i + 6].iter().map(|&w| ((w as f64 / eenheid).round() as u8).clamp(1, 4)).collect();
+            let Some(v) = patronen.iter().position(|p| p[..] == breedtes[..]) else { break };
+            waarden.push(v as u32);
+            i += 6;
+            if v == 106 || (r.len() > i + 7 && false) {
+                break;
+            }
+            // Het stopteken (13 vakjes) begint met 2-3-3-1-1-1.
+            if i + 7 <= r.len() {
+                let som7: usize = r[i..i + 7].iter().sum();
+                let e = som7 as f64 / 13.0;
+                let b7: Vec<u8> = r[i..i + 7].iter().map(|&w| ((w as f64 / e).round() as u8).clamp(1, 4)).collect();
+                if b7 == [2, 3, 3, 1, 1, 1, 2] {
+                    break;
+                }
+            }
+        }
+        if waarden.len() < 3 || !(103..=105).contains(&waarden[0]) {
+            continue;
+        }
+        let controle = waarden[waarden.len() - 1];
+        let som: u32 = waarden[..waarden.len() - 1].iter().enumerate().map(|(i, v)| if i == 0 { *v } else { i as u32 * v }).sum();
+        if som % 103 != controle {
+            continue;
+        }
+        let mut uit = String::new();
+        let mut set = waarden[0];
+        for &v in &waarden[1..waarden.len() - 1] {
+            match (set, v) {
+                (_, 99) => set = 105,
+                (_, 100) => set = 104,
+                (_, 101) => set = 103,
+                (105, v) => uit.push_str(&format!("{:02}", v)),
+                (104, v) => uit.push((v as u8 + 32) as char),
+                (_, v) if v < 64 => uit.push((v as u8 + 32) as char),
+                (_, v) => uit.push((v as u8 - 64) as char),
+            }
+        }
+        return Some(uit);
+    }
+    None
+}
+
+fn code_lezen(pad: W, qr: bool, r: usize) -> R<W> {
+    let p = volledig_pad(&pad);
+    let (b, h, beeld) = beeld_lezen(&p).or_else(|e| fout(r, e))?;
+    let uitkomst = if qr { qr_lezen(b, h, &beeld) } else { streepjescode_lezen(b, h, &beeld) };
+    match uitkomst {
+        Some(t) => Ok(W::T(t)),
+        None => fout(r, format!(
+            "In {} vind ik geen {} die ik kan lezen. Ik kan alleen rechte, scherpe codes lezen (zoals een schermafbeelding), geen scheve foto.",
+            p.display(),
+            if qr { "QR-code" } else { "streepjescode (Code 128)" }
+        )),
+    }
 }
 
 fn maak_qr(waarde: W, pad: W, r: usize) -> R<()> {

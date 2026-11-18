@@ -81,6 +81,15 @@ pub fn bouw(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path) 
         }
     }
     let _ = std::fs::remove_file(&afdruk_bestand);
+    // Rust-pakketten van crates.io? Dan bouwt Cargo het programma.
+    let pakketten: Vec<String> = code.lines().filter_map(|l| l.trim().strip_prefix("// jaaptaal-pakket: ").map(|x| x.to_string())).collect();
+    if !pakketten.is_empty() {
+        let v = bouw_met_cargo(code, uit, rustc, stand, werkmap, &pakketten, begin)?;
+        if std::fs::copy(uit, &bewaard).is_ok() {
+            let _ = std::fs::write(&afdruk_bestand, &vingerafdruk);
+        }
+        return Ok(v);
+    }
     let bron = werkmap.join("programma.rs");
     std::fs::write(&bron, code).map_err(|e| format!("Ik kan {} niet schrijven: {}", bron.display(), e))?;
     let _ = std::fs::remove_file(uit);
@@ -122,6 +131,60 @@ pub fn bouw(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path) 
     if std::fs::copy(uit, &bewaard).is_ok() {
         let _ = std::fs::write(&afdruk_bestand, &vingerafdruk);
     }
+    Ok(Verslag { duur: begin.elapsed(), grootte })
+}
+
+/// Bouwen met Cargo, voor programma's met Rust-pakketten van crates.io. Cargo staat naast de
+/// Rust-compiler (in de map rust\bin). De pakketten komen de eerste keer van internet en blijven
+/// daarna bewaard (in de map cargo naast je werkmap).
+fn bouw_met_cargo(code: &str, uit: &Path, rustc: &Path, stand: Stand, werkmap: &Path, pakketten: &[String], begin: Instant) -> Result<Verslag, String> {
+    let cargo_naam = if cfg!(windows) { "cargo.exe" } else { "cargo" };
+    let cargo = rustc.parent().map(|b| b.join(cargo_naam)).filter(|p| p.is_file()).unwrap_or_else(|| PathBuf::from("cargo"));
+    let project = werkmap.join("cargo-project");
+    std::fs::create_dir_all(project.join("src")).map_err(|e| e.to_string())?;
+    let mut toml = String::from("[package]\nname = \"programma\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n");
+    for p in pakketten {
+        toml.push_str(p);
+        toml.push('\n');
+    }
+    toml.push_str("\n[profile.release]\nopt-level = \"s\"\npanic = \"abort\"\nstrip = true\ncodegen-units = 1\n\n[profile.dev]\ndebug = 0\nstrip = true\n");
+    std::fs::write(project.join("Cargo.toml"), toml).map_err(|e| e.to_string())?;
+    std::fs::write(project.join("src").join("main.rs"), code).map_err(|e| e.to_string())?;
+    let mut cmd = Command::new(&cargo);
+    cmd.arg("build").arg("--quiet").arg("--target-dir").arg(werkmap.join("cargo-doel"));
+    if stand == Stand::Klein {
+        cmd.arg("--release");
+    }
+    cmd.current_dir(&project);
+    cmd.env("RUSTC", rustc);
+    if std::env::var_os("CARGO_HOME").is_none() {
+        cmd.env("CARGO_HOME", werkmap.parent().unwrap_or(werkmap).join("cargo"));
+    }
+    if cfg!(windows) && is_ingebouwd(rustc) {
+        cmd.env("RUSTFLAGS", "-C link-self-contained=yes");
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let uitkomst = cmd.output().map_err(|e| format!("Ik kan Cargo niet starten ({}): {}. Cargo hoort naast de Rust-compiler te staan.", cargo.display(), e))?;
+    if !uitkomst.status.success() {
+        let fouten = String::from_utf8_lossy(&uitkomst.stderr);
+        let hint = if fouten.contains("failed to get") || fouten.contains("Unable to update registry") || fouten.contains("network") || fouten.contains("could not resolve") {
+            "Het Rust-pakket kon niet van internet worden gehaald. Is er internet? Klopt de naam (zoals op crates.io)?"
+        } else {
+            "Het bouwen met het Rust-pakket is mislukt. Kijk eerst in je Rust-stukje: daar zit de fout waarschijnlijk."
+        };
+        return Err(format!("{} Wat Cargo zei:\n{}", hint, fouten));
+    }
+    let gebouwd = werkmap
+        .join("cargo-doel")
+        .join(if stand == Stand::Klein { "release" } else { "debug" })
+        .join(if cfg!(windows) { "programma.exe" } else { "programma" });
+    let _ = std::fs::remove_file(uit);
+    std::fs::copy(&gebouwd, uit).map_err(|e| format!("Ik kan het programma niet naar {} kopiëren: {}", uit.display(), e))?;
+    let grootte = std::fs::metadata(uit).map(|m| m.len()).unwrap_or(0);
     Ok(Verslag { duur: begin.elapsed(), grootte })
 }
 
