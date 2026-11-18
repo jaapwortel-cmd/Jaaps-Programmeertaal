@@ -1,20 +1,29 @@
-Opmerking: Een eigen internetradio. Kies een zender met een knop.
+Opmerking: Mijn eigen internetradio. Kies een zender in de lijst en druk op Luisteren.
 Maak een venster met als titel Mijn radio
-Maak een werkbalk met de knoppen Radio 1, Radio 2, 3FM en Stop
 Vraag bij afsluiten "Wil je de radio echt uitzetten?"
-Als ik op de knop Radio 1 druk
-Speel de radiozender NPO Radio 1
-Zeg "Radio 1"
-Einde van de knop
-Als ik op de knop Radio 2 druk
-Speel de radiozender NPO Radio 2
-Zeg "Radio 2"
-Einde van de knop
-Als ik op de knop 3FM druk
-Speel de radiozender NPO 3FM
-Zeg "3FM"
+Maak een menu met als naam Radio
+Maak een menuregel met als naam Stop de radio
+Geef de menuregel Stop de radio de sneltoets Ctrl+S
+Maak een keuzelijst met als naam Zenders
+Vul de keuzelijst Zenders met de radiozenders
+Maak een werkbalk met de knoppen Luisteren, Stop en Meer zenders
+Maak een label met als naam Nu
+Als ik op de knop Luisteren druk
+Speel de radiozender die gekozen is in de keuzelijst Zenders
+Onthoud zender is de keuze in de keuzelijst Zenders
+Zet "Nu:" en dan zender in het label Nu
+Zeg zender
 Einde van de knop
 Als ik op de knop Stop druk
 Stop de radio
 Zeg "De radio is uit"
+Einde van de knop
+Als ik de menuregel Stop de radio kies
+Stop de radio
+Zeg "De radio is uit"
+Einde van de knop
+Als ik op de knop Meer zenders druk
+Opmerking: Haalt de zenders van Nederland van internet en zet ze ook in de lijst.
+Vul de keuzelijst Zenders met de radiozenders van het land Nederland
+Zeg "De Nederlandse zenders van internet staan nu ook in de lijst"
 Einde van de knop

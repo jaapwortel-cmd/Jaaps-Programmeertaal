@@ -570,6 +570,14 @@ fn behandel(m: &Melding, aantal: usize) -> bool {
                 vervang_editor_tekst(&nieuw);
                 ga_naar_regel(m.regel);
                 leer_van_verbetering(&oud_regel, &v.wijziging);
+                // Een opdracht voor de editor ("maak er een exe van"): nu uitvoeren.
+                if let Some(o) = &m.opdracht {
+                    let (naam, extra) = o.split_once('|').unwrap_or((o.as_str(), ""));
+                    if let Some(f) = motor::opdrachten::functie_van_naam(naam) {
+                        voer_functie_uit(f, extra.to_string());
+                        return false;
+                    }
+                }
                 true
             } else {
                 zet_meldingen(&format!(

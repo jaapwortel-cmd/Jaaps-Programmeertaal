@@ -639,6 +639,23 @@ Stop de radio
 De radio speelt via Windows Media Player op de achtergrond en stopt als je programma stopt.
 Zie het voorbeeld Mijn radio.txt.
 
+Zelf een radio bouwen, met een lijst om uit te kiezen:
+Maak een keuzelijst met als naam Zenders
+Vul de keuzelijst Zenders met de radiozenders                      (alle zenders die ik ken)
+Vul de keuzelijst Zenders met de radiozenders van het land Nederland  (van internet; ook België, Duitsland, ...)
+Speel de radiozender die gekozen is in de keuzelijst Zenders
+Speel de radiozender met de naam zender                           (een naam die je hebt onthouden)
+Toon het adres van de radiozender "Qmusic"                        (het streamadres)
+
+4.7x Een bestand kiezen (Openen en Opslaan als)
+
+Onthoud gekozen is een bestand dat ik kies            (het gewone Openen-venster van Windows)
+Onthoud plek is de plek die ik kies om op te slaan    (het gewone Opslaan als-venster)
+Annuleer je, dan is het leeg (""). Daarna gebruik je het bestand zo:
+Zet de inhoud van het bestand met de naam gekozen in het tekstvak Tekst
+Schrijf de tekst in het tekstvak Tekst in het bestand met de naam plek
+Zie het voorbeeld Mijn tekstverwerker.txt.
+
 4.7w Het venster
 
 Het venster start schermvullend
@@ -912,6 +929,15 @@ en "Exxon" (exe). Een tikfout verbetert het pas als jij Ja zegt.
 
 Ctrl+F opent hetzelfde venster om te zoeken: typ een paar woorden, en de lijst laat zien wat je
 kunt zeggen, met de sneltoets erbij. Met Tab ga je naar de lijst, met Enter voer je het uit.
+
+Je kunt een verzoek ook gewoon als regel in je programma schrijven, bijvoorbeeld:
+  zet er een knop Opslaan bij
+  maak een internetradio voor me
+  maak een tekstverwerker voor me
+  maak er een exe van
+Druk dan F7. Het programma zegt wat het begrijpt en stelt de echte zin (of het hele programma)
+voor. Pas als je ja zegt, verandert je tekst. Een opdracht voor de editor (zoals: maak er een exe
+van) voert het uit na ja. Een vraag (zoals: kan ik ook QR-codes maken?) krijgt een antwoord.
 
 Eigen opdrachten leren: menu Help, Mijn eigen opdrachten. Eén per regel, links wat jij zegt,
 rechts wat het programma al kent. Bijvoorbeeld:

@@ -192,6 +192,11 @@ impl<'a> Maker<'a> {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.onderdeel({}, {});", soort.nummer(), rust_tekst(naam)));
                 }
+                Soort::VulKeuzelijst { lijst, waarde } => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(waarde, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.vul_keuzelijst({}, w, {})?; }}", u, rust_tekst(lijst), r));
+                }
                 Soort::VoegKeuzeToe { keuze, lijst } => {
                     self.opmerking(diepte, r);
                     let u = self.uitdrukking(keuze, r);
@@ -661,6 +666,8 @@ pub fn maak(p: &Programma, regels: &[&str]) -> String {
     m.uit.push_str(&format!("const VERSIE: &str = {};\n", rust_tekst(&versie)));
     m.uit.push_str(&format!("const UPDATE_ADRES: &str = {};\n", rust_tekst(&update_adres)));
     m.uit.push_str(&format!("const PROGRAMMANAAM: &str = {};\n", rust_tekst(&programmanaam)));
+    let zenders: Vec<String> = crate::taal::ZENDERS.iter().map(|(n, u, a)| format!("({}, {}, {})", rust_tekst(n), rust_tekst(u), rust_tekst(a))).collect();
+    m.uit.push_str(&format!("const ZENDERLIJST: &[(&str, &str, &str)] = &[{}];\n", zenders.join(", ")));
 
     let namen: Vec<String> = m.namenlijst.iter().map(|n| rust_tekst(n)).collect();
     let acties: Vec<String> = m.acties.iter().map(|n| rust_tekst(n)).collect();

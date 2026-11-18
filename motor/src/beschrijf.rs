@@ -49,6 +49,11 @@ fn uitdrukking(u: &Uitdrukking) -> String {
                 Ingebouwd::Samengevoegd => format!("de lijst {} aan elkaar geplakt met {} ertussen", a(0), a(1)),
                 Ingebouwd::Vervangen => format!("{} waarin {} vervangen is door {}", a(0), a(1), a(2)),
                 Ingebouwd::ZonderSpaties => format!("{} zonder spaties aan het begin en eind", a(0)),
+                Ingebouwd::KiesBestand => "het bestand dat je kiest in het Openen-venster (leeg als je annuleert)".into(),
+                Ingebouwd::KiesOpslaan => "de plek die je kiest in het Opslaan als-venster (leeg als je annuleert)".into(),
+                Ingebouwd::Radiozenders => "de namen van alle radiozenders die ik ken (als lijst)".into(),
+                Ingebouwd::RadiozendersLand => format!("de radiozenders van {}, opgezocht op internet (als lijst)", a(0)),
+                Ingebouwd::ZenderAdres => format!("het streamadres van de radiozender {}", a(0)),
                 Ingebouwd::DocumentTekst => format!("de tekst uit het Word- of PDF-bestand {}", a(0)),
             }
         }
@@ -120,6 +125,8 @@ fn lijst_(l: &[Opdracht], diepte: usize, uit: &mut Vec<String>) {
             Soort::Venstergedrag(Gedrag::MaarEenKeerOpen) => "het programma kan maar één keer tegelijk open zijn. Start je het nog eens, dan zegt het dat het al open is.".into(),
             Soort::Venstergedrag(Gedrag::Tip { knop, tekst }) => format!("de knop {} krijgt de tip: {} (zichtbaar als je met de muis op de knop staat).", knop, tekst),
             Soort::Radio(None) => "stop de radio.".into(),
+            Soort::VulKeuzelijst { lijst, waarde } => format!("zet alles uit {} in de keuzelijst {}.", uitdrukking(waarde), lijst),
+            Soort::Radio(Some((naam, u))) if naam.is_empty() => format!("speel de internetradio {}.", uitdrukking(u)),
             Soort::Radio(Some((naam, u))) => format!("speel de internetradio {} (het adres is {}).", naam, uitdrukking(u)),
             Soort::Reservekopie(p) => format!("maak een reservekopie van {} in de map Reservekopieën ernaast; de laatste 10 blijven bewaard.", uitdrukking(p)),
             Soort::QrCode { waarde, pad } => format!("maak een QR-code van {} en bewaar die als afbeelding in {}.", uitdrukking(waarde), uitdrukking(pad)),

@@ -71,7 +71,7 @@ const WOORDENLIJST: &[&str] = &[
     "geluid", "stop", "sneltoets", "kleur", "achtergrond", "handleiding", "hertz", "milliseconden", "wacht",
     "privacyverklaring", "onderteken", "certificaat", "pak", "zipbestand", "zeg", "schermlezer", "pictogram", "lees", "voor", "voorlezen", "volume", "menu", "menuregel",
     "kies", "kopieer", "verplaats", "gooi", "verwijder", "tabblad", "ga", "verstuur", "download", "adres", "webpagina",
-    "opdrachtvak", "zeg", "opdracht", "werkbalk", "knoppen",
+    "opdrachtvak", "zeg", "opdracht", "vul", "radiozenders", "radiozender", "werkbalk", "knoppen",
     "wortel", "macht", "afgerond", "decimalen", "rest", "delen", "absolute", "lengte", "tekens", "hoofdletters", "kleine", "letters",
     "woorden", "gesplitst", "samengevoegd", "vervangen", "waarin", "spaties", "seconden", "programma", "open",
     "updates", "zoek", "opnemen", "opname", "begin", "start", "afbeelding", "beschrijving", "tabel", "kolom", "rij", "rijen", "sorteer", "sla", "gekozen",
@@ -79,7 +79,7 @@ const WOORDENLIJST: &[&str] = &[
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "tekstverwerker", "streepjescode",
+    "streepjescode",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -234,6 +234,13 @@ fn pad(s: &[Stuk]) -> Result<Uitdrukking, String> {
     if matches!(s[0], Stuk::Tekst(_)) && s.len() > 1 {
         return uitdrukking(s);
     }
+    // "het bestand met de naam pad": de naam staat in iets wat je hebt onthouden.
+    if begint(s, &["met", "de", "naam"]) && s.len() > 3 {
+        return uitdrukking(&s[3..]);
+    }
+    if begint(s, &["dat", "ik", "kies"]) {
+        return Ok(Uitdrukking::Ingebouwd { wat: Ingebouwd::KiesBestand, invoer: vec![] });
+    }
     Ok(Uitdrukking::Vast(Waarde::Tekst(rest_tekst(s))))
 }
 
@@ -287,6 +294,41 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
     }
     if let Some(f) = functie(s)? {
         return Ok(Some(f));
+    }
+    // Het Openen- en Opslaan als-venster van Windows.
+    if (begint(s, &["een", "bestand", "dat", "ik", "kies"]) || begint(s, &["het", "bestand", "dat", "ik", "kies"])) && (s.len() == 5 || begint(&s[5..], &["om", "te", "openen"])) {
+        return ib(Ingebouwd::KiesBestand, vec![]);
+    }
+    if begint(s, &["de", "plek", "die", "ik", "kies"]) || begint(s, &["een", "bestand", "om", "op", "te", "slaan"]) || begint(s, &["het", "bestand", "om", "op", "te", "slaan"]) {
+        return ib(Ingebouwd::KiesOpslaan, vec![]);
+    }
+    // Radiozenders: de lijst, per land, en het adres van een zender.
+    if (begint(s, &["de", "radiozenders"]) && s.len() == 2) || (begint(s, &["de", "lijst", "met", "radiozenders"]) && s.len() == 4) {
+        return ib(Ingebouwd::Radiozenders, vec![]);
+    }
+    if begint(s, &["de", "radiozenders"]) && matches!(klein(s, 2).as_str(), "van" | "uit" | "in") {
+        let mut b = 3;
+        while matches!(klein(s, b).as_str(), "het" | "land") {
+            b += 1;
+        }
+        if b >= s.len() {
+            return Err("Van welk land? Schrijf bijvoorbeeld: de radiozenders van het land Nederland.".into());
+        }
+        let land = if s[b..].iter().any(|x| matches!(x, Stuk::Tekst(_))) {
+            tekst_of_uitdrukking(&s[b..])?
+        } else if let Some(o) = onderdeel_operand(&s[b..]) {
+            o
+        } else {
+            Uitdrukking::Vast(Waarde::Tekst(rest_tekst(&s[b..])))
+        };
+        return ib(Ingebouwd::RadiozendersLand, vec![land]);
+    }
+    if begint(s, &["het", "adres", "van", "de", "radiozender"]) || begint(s, &["het", "streamadres", "van", "de", "radiozender"]) {
+        let b = if klein(s, 1) == "adres" { 5 } else { 5 };
+        if b >= s.len() {
+            return Err("Van welke zender? Schrijf bijvoorbeeld: het adres van de radiozender \"Qmusic\".".into());
+        }
+        return ib(Ingebouwd::ZenderAdres, vec![operand(&s[b..], false)?]);
     }
     if begint(s, &["de", "plek", "van", "het", "logboek"]) && s.len() == 5 {
         return ib(Ingebouwd::LogboekPlek, vec![]);
@@ -963,6 +1005,29 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         if rest.to_lowercase().starts_with("http") {
             return Ok(Vorm::Los(Soort::Radio(Some((rest.to_string(), Uitdrukking::Vast(Waarde::Tekst(rest.to_string())))))));
         }
+        // Een zender uit een keuzelijst of een naam die je hebt onthouden:
+        // "die gekozen is in de keuzelijst Zenders", "met de naam zender", "met het adres adres".
+        let rl = rest.to_lowercase();
+        let stukken = tekst::splits(rest).map_err(fout)?;
+        let mut uit_onderdeel = None;
+        for voor in ["die gekozen is in ", "die is gekozen in ", "uit ", "in "] {
+            if rl.starts_with(voor) {
+                let st = tekst::splits(&format!("de keuze in {}", &rest[voor.len()..])).map_err(fout)?;
+                uit_onderdeel = onderdeel_operand(&st);
+            }
+        }
+        if let Some(o) = uit_onderdeel.or_else(|| onderdeel_operand(&stukken)) {
+            return Ok(Vorm::Los(Soort::Radio(Some((String::new(), o)))));
+        }
+        for voor in ["met de naam ", "met als naam ", "met het adres "] {
+            if rl.starts_with(voor) {
+                let st = tekst::splits(&rest[voor.len()..]).map_err(fout)?;
+                return Ok(Vorm::Los(Soort::Radio(Some((String::new(), uitdrukking(&st).map_err(fout)?)))));
+            }
+        }
+        if b.ends_with("met het adres") {
+            return Ok(Vorm::Los(Soort::Radio(Some((String::new(), uitdrukking(&stukken).map_err(fout)?)))));
+        }
         let naam = rest.trim_matches('"');
         return Ok(Vorm::Los(Soort::Radio(Some(match zender(naam) {
             Some((naam, adres)) => (naam.to_string(), Uitdrukking::Vast(Waarde::Tekst(adres.into()))),
@@ -1163,6 +1228,16 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             Ok(Vorm::Los(Soort::ZetIn { waarde: Uitdrukking::Vast(Waarde::Tekst(String::new())), naam: rest_tekst(&s[3..s.len() - 1]) }))
         }
         "geef" | "maak" if zoek(&s, &["opdrachtvak"], 1).is_some() => Ok(Vorm::Los(Soort::Opdrachtvak)),
+        "vul" => {
+            // Vul de keuzelijst Zenders met de radiozenders
+            let vb = "Schrijf het zo: Vul de keuzelijst Zenders met de radiozenders.";
+            let Some(l) = (1..s.len()).find(|&i| matches!(klein(&s, i).as_str(), "keuzelijst" | "uitklaplijst" | "lijst")) else { return Err(fout(vb)) };
+            let Some(m) = zoek(&s, &["met"], l + 2) else { return Err(fout(vb)) };
+            if m <= l + 1 || m + 1 >= s.len() {
+                return Err(fout(vb));
+            }
+            Ok(Vorm::Los(Soort::VulKeuzelijst { lijst: rest_tekst(&s[l + 1..m]), waarde: u(&s[m + 1..])? }))
+        }
         "maak" if matches!(klein(&s, 2).as_str(), "qr-code" | "qrcode") || (klein(&s, 2) == "qr" && klein(&s, 3) == "code") => {
             // Maak een QR-code van "https://..." in het bestand link.png
             let vb = "Schrijf het zo: Maak een QR-code van \"https://www.voorbeeld.nl\" in het bestand link.png";
@@ -2307,6 +2382,11 @@ pub(crate) fn lees_programma_eigen(bron: &str, eigen: &[(String, String)], bibli
             }
             Err(rf) if rf.onbekend => {
                 let getoond = ruw.trim();
+                // Een verzoek of opdracht in gewone taal ("zet er een knop Opslaan bij")?
+                if let Some(m) = zoek_tikfout(&norm).is_none().then(|| crate::opdrachten::verzoek_in_programma(nr, &norm)).flatten() {
+                    meldingen.push(m);
+                    continue;
+                }
                 let m = match zoek_tikfout(&norm) {
                     Some(verbeterd) => Melding::vraag(
                         nr,
@@ -2325,6 +2405,12 @@ pub(crate) fn lees_programma_eigen(bron: &str, eigen: &[(String, String)], bibli
                     ),
                 };
                 meldingen.push(m);
+            }
+            Err(rf) if rf.voorstel.is_none() && crate::opdrachten::verzoek_in_programma(nr, &norm).map_or(false, |m| {
+                m.opdracht.is_none() && matches!(m.voorstel, Some(crate::melding::Voorstel { wijziging: Wijziging::VervangRegel { .. }, .. }))
+            }) => {
+                // Een zin die op een taalzin lijkt, maar eigenlijk een verzoek is ("zet er een knop Opslaan bij").
+                meldingen.push(crate::opdrachten::verzoek_in_programma(nr, &norm).unwrap());
             }
             Err(rf) => {
                 let m = match rf.voorstel {

@@ -48,6 +48,8 @@ pub const ZINNEN: &[(&str, &str)] = &[
     ("Ik wil ook prompts kunnen invoeren om internetradio te bouwen of om een website te bouwen, het moet ook echt werken", "uitleg: Dat kan. Internetradio: Speel de radiozender NPO Radio 2, en Stop de radio (zie het voorbeeld Mijn radio.txt). Een website: begin met Maak een website met als titel ..., en druk F5 (zie Mijn radiosite (website).txt)."),
     ("Of mijn audio editor, daar zit ook internetradio in", "uitleg: De zenders komen uit Computerhulp Maatje en Jaaps Audio Editor. Een zender die niet in de lijst staat, zoekt je programma op bij radio-browser.info, net als de Audio Editor."),
     ("3D-audio is niet alleen links en rechts maar ook onder en boven mij", "uitleg: Dat kan: Speel het geluid deurbel.wav boven me, onder me, of links achter me. Werkt met WAV-bestanden."),
+    ("Als ik vraag om een radioprogramma te maken, wil ik ook alles zelf kunnen bouwen: vensters, menu, knoppen, en de streaming URL moet ik ergens vandaan kunnen halen", "uitleg: Dat kan. Vul de keuzelijst Zenders met de radiozenders (of: met de radiozenders van het land Nederland). Speel de radiozender die gekozen is in de keuzelijst Zenders. Het adres krijg je met: het adres van de radiozender \"Qmusic\". Zie het voorbeeld Mijn radio.txt."),
+    ("Kan ik nu al prompts geven in een geopend projectbestand en gaat het programma dat dan ook echt uitvoeren", "uitleg: Ja. Schrijf je verzoek gewoon als regel in je programma, bijvoorbeeld: zet er een knop Opslaan bij. Druk F7: ik stel de echte zin voor en zet hem erin als je ja zegt. Een opdracht zoals: maak er een exe van, voer ik uit na ja."),
     ("Gekocht certificaat mag eraf, want dat ga ik niet doen", "uitleg: Afgesproken: alleen je eigen certificaat. Schrijf: Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel."),
     // --- De wensen uit het opdrachtbestand (punt 3) ---
     ("Variabelen: iets onthouden en later veranderen", "uitleg: Dat kan: Onthoud teller is 0, en: Verander teller naar 5. Of: Tel 1 op bij teller."),
@@ -59,7 +61,7 @@ pub const ZINNEN: &[(&str, &str)] = &[
     ("Losse opdrachten los proberen zonder een heel programma te maken", "probeer deze regel"),
     ("Vensters, ook meerdere vensters over elkaar", "uitleg: Dat kan: elke zin Maak een venster met als titel ... maakt een nieuw venster."),
     ("Knoppen, keuzelijsten, comboboxen, selectievakjes, tekstvakken, labels, tabellen, menu's en werkbalken", "uitleg: Dat kan allemaal. Bijvoorbeeld: Maak een keuzelijst met als naam Kleur, of: Maak een werkbalk met de knoppen Nieuw, Openen en Opslaan."),
-    ("Een tekstverwerker kunnen maken", "uitleg: Een complete tekstverwerker in één zin kan nog niet. Wel: Maak een groot tekstvak met als naam Brief, een werkbalk, en Schrijf de tekst in het tekstvak Brief in het Word-bestand brief.docx."),
+    ("Een tekstverwerker kunnen maken", "maak een tekstverwerker voor me"),
     ("Kleuren instellen en zelf een lay-out kiezen", "uitleg: Kleuren kan: Geef het venster de kleur donkerblauw. Zelf de plek van onderdelen kiezen kan nog niet; ze staan onder elkaar."),
     ("Vooraf vertellen wat er te zien is en of kleuren bij elkaar passen", "vertel wat er op het scherm komt"),
     ("Volledige controle over het toetsenbord: sneltoetsen, tabvolgorde en focus", "uitleg: Sneltoetsen en focus kunnen: Geef de knop Opslaan de sneltoets Ctrl+S, en: Zet de focus op het tekstvak Naam. Een eigen Tab-volgorde kan nog niet: die volgt de volgorde van je zinnen."),

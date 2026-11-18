@@ -168,6 +168,12 @@ pub fn begrijp(zin: &str) -> Option<Voorstel> {
             uitleg: "Ik maak een internetradio voor je: een venster met een werkbalk met de knoppen Radio 1, Radio 2, 3FM en Stop. Andere zenders kun je erbij zetten.".into(),
         });
     }
+    if maak && ["tekstverwerker", "teksteditor", "kladblok", "schrijfprogramma", "tekstprogramma"].iter().any(|w| heeft(&t, w)) {
+        return Some(Voorstel::Regels {
+            regels: include_str!("../../voorbeelden/Mijn tekstverwerker.txt").lines().map(|r| r.trim_end().to_string()).filter(|r| !r.is_empty()).collect(),
+            uitleg: "Ik maak een tekstverwerker voor je: een groot tekstvak met een menu Bestand (Nieuw, Openen, Opslaan, Opslaan als), met de gewone Openen- en Opslaan-vensters van Windows.".into(),
+        });
+    }
     if maak && (heeft(&t, "website") || heeft(&t, "site") || heeft(&t, "homepage")) {
         return Some(Voorstel::Regels {
             regels: include_str!("../../voorbeelden/Mijn radiosite (website).txt").lines().map(|r| r.trim_end().to_string()).filter(|r| !r.is_empty()).collect(),

@@ -303,3 +303,56 @@ fn venstergedrag_en_reservekopie() {
     assert_eq!(n, 10);
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn zelf_een_radio_bouwen() {
+    let m = map("eigenradio");
+    let bron = "Maak een venster met als titel Radio\nMaak een keuzelijst met als naam Zenders\nVul de keuzelijst Zenders met de radiozenders\nMaak een knop met als naam Luisteren\nMaak een knop met als naam Adres\nAls ik op de knop Luisteren druk\nSpeel de radiozender die gekozen is in de keuzelijst Zenders\nEinde van de knop\nAls ik op de knop Adres druk\nToon het adres van de radiozender \"radio twee\"\nEinde van de knop\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let exe = bouw(bron, &m, motor::bouwen::Stand::Snel);
+    let uit = Command::new(&exe).args(["--tekst", "--kies", "Zenders=Qmusic", "--druk", "Luisteren", "--druk", "Adres"]).env("JAAPTAAL_MAP", &m).output().unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.contains("[radio] Qmusic (https://"), "{}", uit);
+    assert!(uit.ends_with("https://icecast.omroep.nl/radio2-bb-mp3\n"), "{}", uit);
+    assert!(lees("Maak een venster met als titel A\nMaak een keuzelijst met als naam L\nVul de keuzelijst L met de radiozenders van het land Nederland\n").is_goed());
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn verzoeken_in_het_programma_zelf() {
+    let bron = "Maak een venster met als titel A\nzet er een knop Opslaan bij\nmaak er een exe van\n";
+    let u = lees(bron);
+    assert_eq!(u.meldingen.len(), 2, "{:#?}", u.meldingen);
+    let nieuw = motor::pas_toe(bron, &u.meldingen[0].voorstel.as_ref().unwrap().wijziging);
+    assert_eq!(nieuw.lines().nth(1), Some("Maak een knop met als naam Opslaan"));
+    assert_eq!(u.meldingen[1].opdracht.as_deref(), Some("BouwExe"));
+    // Een heel programma in één verzoek: na ja staan alle regels erin.
+    let u = lees("maak een internetradio voor me\n");
+    let nieuw = motor::pas_toe("maak een internetradio voor me\n", &u.meldingen[0].voorstel.as_ref().unwrap().wijziging);
+    assert!(lees(&nieuw).is_goed(), "{:#?}", lees(&nieuw).meldingen);
+    // Een echte fout blijft een fout, en een tikfout een tikfout.
+    assert!(lees("Geef het venster de kleur paarsig\n").meldingen[0].tekst.contains("ken ik niet"));
+    assert!(lees("Toom 1\n").meldingen[0].tekst.contains("tikfout"));
+}
+
+#[test]
+fn tekstverwerker_met_openen_en_opslaan() {
+    let m = map("tekstverwerker");
+    std::fs::write(m.join("brief.txt"), "Hallo Jaap").unwrap();
+    let bron = include_str!("../../voorbeelden/Mijn tekstverwerker.txt");
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let exe = bouw(bron, &m, motor::bouwen::Stand::Snel);
+    let uit = Command::new(&exe)
+        .args(["--tekst", "--druk", "Openen", "--typ", "Tekst=Nieuw", "--druk", "Opslaan"])
+        .env("JAAPTAAL_MAP", &m)
+        .env("JAAPTAAL_KIES", m.join("brief.txt"))
+        .output()
+        .unwrap();
+    let uit = String::from_utf8_lossy(&uit.stdout).replace("\r\n", "\n");
+    assert!(uit.contains("Hallo Jaap\n[zeg] Geopend"), "{}", uit);
+    assert!(std::fs::read_to_string(m.join("brief.txt")).unwrap().contains("Nieuw"));
+    // Via een verzoek: het hele programma.
+    let u = lees("maak een tekstverwerker voor me\n");
+    assert!(u.meldingen[0].voorstel.is_some(), "{:#?}", u.meldingen);
+    let _ = std::fs::remove_dir_all(&m);
+}

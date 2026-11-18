@@ -277,6 +277,43 @@ pub fn begrijp(zin: &str, eigen: &[(String, String)]) -> Begrip {
     Begrip::Onbekend
 }
 
+/// De functie bij een naam zoals "BouwExe" (voor een opdracht in een melding).
+pub fn functie_van_naam(naam: &str) -> Option<Functie> {
+    ACTIES.iter().map(|a| a.functie).find(|f| format!("{:?}", f) == naam)
+}
+
+/// Een regel in je programma die geen zin van de taal is, maar een verzoek of een opdracht
+/// ("zet er een knop Opslaan bij", "maak er een exe van"). Geeft een melding met een voorstel.
+pub fn verzoek_in_programma(regel: usize, zin: &str) -> Option<crate::melding::Melding> {
+    use crate::melding::{Melding, Wijziging};
+    use crate::wensen::Voorstel;
+    let antwoord = match begrijp_alles(zin, &[]) {
+        Antwoord::Lijkt { dan, .. } => *dan,
+        a => a,
+    };
+    Some(match antwoord {
+        Antwoord::Taal(Voorstel::Regels { regels, uitleg }) => Melding::vraag(regel, format!("Dit is een verzoek, geen zin van de taal. Ik begrijp: {}", uitleg)).met_voorstel(
+            format!("Zal ik deze regel vervangen door: {}?", regels.join(" / ")),
+            Wijziging::VervangRegel { regel, nieuw: regels.join("\n") },
+        ),
+        Antwoord::Taal(Voorstel::Vraag(v)) => Melding::vraag(regel, format!("Dit is een verzoek, maar ik mis nog iets. {}", v)),
+        Antwoord::Taal(Voorstel::Uitleg(u)) => Melding::vraag(regel, format!("Dit is een vraag aan het programma, geen zin van de taal. Antwoord: {}", u))
+            .met_voorstel("Zal ik deze vraag uit je programma weghalen?", Wijziging::HaalWeg { regel }),
+        Antwoord::Taal(Voorstel::NogNiet(n)) => Melding::vraag(regel, n),
+        Antwoord::Editor(Begrip::Doe { functie, extra }) => {
+            let a = actie(functie);
+            let opdracht = if extra.is_empty() { format!("{:?}", functie) } else { format!("{:?}|{}", functie, extra) };
+            Melding::vraag(regel, format!("Dit is een opdracht voor de editor: {}.", a.naam))
+                .met_voorstel("Zal ik deze regel weghalen en het nu doen?", Wijziging::HaalWeg { regel })
+                .met_opdracht(opdracht)
+        }
+        Antwoord::Editor(Begrip::BedoelJe { zin: beter, functie }) => Melding::vraag(regel, format!("Bedoel je de opdracht: {}? ({})", beter, actie(functie).naam))
+            .met_voorstel("Zal ik deze regel weghalen en het nu doen?", Wijziging::HaalWeg { regel })
+            .met_opdracht(format!("{:?}", functie)),
+        _ => return None,
+    })
+}
+
 pub fn actie(f: Functie) -> &'static Actie {
     ACTIES.iter().find(|a| a.functie == f).expect("elke functie staat in de lijst")
 }

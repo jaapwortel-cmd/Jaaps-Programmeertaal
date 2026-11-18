@@ -439,6 +439,26 @@ fn functie(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
             }
             Ok(W::T(tekst(0).replace(zoek.as_str(), &tekst(2))))
         }
+        33 | 34 => {
+            let opslaan = wat == 34;
+            if let Ok(t) = std::env::var("JAAPTAAL_KIES") {
+                println!("[{}] {}", if opslaan { "kies plek om op te slaan" } else { "kies bestand" }, t);
+                return Ok(W::T(t));
+            }
+            #[cfg(windows)]
+            return Ok(W::T(win::kies_bestand(opslaan).unwrap_or_default()));
+            #[cfg(not(windows))]
+            Ok(W::T(String::new()))
+        }
+        30 => Ok(W::L(ZENDERLIJST.iter().map(|(n, _, _)| W::T(n.to_string())).collect())),
+        31 => zenders_van_land(&tekst(0)).map(W::L).or_else(|e| fout(r, e)),
+        32 => {
+            let t = tekst(0);
+            if t.starts_with("http") {
+                return Ok(W::T(t));
+            }
+            zender_adres(&t).map(W::T).ok_or(()).or_else(|_| fout(r, format!("Het adres van de radiozender {} kan ik niet vinden.", t)))
+        }
         29 => {
             let pad = volledig_pad(&invoer[0]);
             let data = std::fs::read(&pad).or_else(|e| fout(r, format!("Ik kan het bestand {} niet lezen. Reden: {}", pad.display(), e)))?;
@@ -722,6 +742,92 @@ fn maak_qr(waarde: W, pad: W, r: usize) -> R<()> {
         let _ = std::fs::create_dir_all(m);
     }
     std::fs::write(&p, qr_png(&rooster, 8)).or_else(|e| fout(r, format!("Ik kan {} niet schrijven: {}", p.display(), e)))
+}
+
+thread_local! {
+    /// Zenders die je programma op internet heeft gevonden (naam, adres).
+    static GEVONDEN: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn schoon_naam(t: &str) -> String {
+    let t: String = t.to_lowercase().chars().map(|c| if c.is_alphanumeric() || c == '%' { c } else { ' ' }).collect();
+    t.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Het adres van een zender: uit de ingebouwde lijst, uit wat al gevonden is, of van internet.
+fn zender_adres(naam: &str) -> Option<String> {
+    lokaal_adres(naam).or_else(|| zoek_zender(naam))
+}
+
+/// Het adres uit de ingebouwde lijst of uit wat je programma al op internet vond.
+fn lokaal_adres(naam: &str) -> Option<String> {
+    let n = schoon_naam(naam);
+    if let Some((_, u, _)) = ZENDERLIJST.iter().find(|(z, _, a)| schoon_naam(z) == n || a.split(',').any(|x| schoon_naam(x) == n)) {
+        return Some(u.to_string());
+    }
+    GEVONDEN.with(|g| g.borrow().iter().find(|(z, _)| schoon_naam(z) == n).map(|x| x.1.clone()))
+}
+
+/// Een JSON-tekst na "sleutel": lezen (met \u00e9 en \/).
+fn json_tekst(t: &str) -> String {
+    let mut uit = String::new();
+    let mut c = t.chars();
+    while let Some(x) = c.next() {
+        match x {
+            '"' => break,
+            '\\' => match c.next() {
+                Some('u') => {
+                    let h: String = c.by_ref().take(4).collect();
+                    if let Some(ch) = u32::from_str_radix(&h, 16).ok().and_then(char::from_u32) {
+                        uit.push(ch);
+                    }
+                }
+                Some('n') => uit.push(' '),
+                Some(y) => uit.push(y),
+                None => break,
+            },
+            x => uit.push(x),
+        }
+    }
+    uit
+}
+
+/// De radiozenders van een land (de 100 meest beluisterde), van radio-browser.info.
+fn zenders_van_land(land: &str) -> Result<Vec<W>, String> {
+    const LANDEN: &[(&str, &str)] = &[
+        ("nederland", "NL"), ("belgië", "BE"), ("belgie", "BE"), ("vlaanderen", "BE"), ("duitsland", "DE"), ("engeland", "GB"),
+        ("groot-brittannië", "GB"), ("verenigd koninkrijk", "GB"), ("frankrijk", "FR"), ("spanje", "ES"), ("italië", "IT"), ("italie", "IT"),
+        ("oostenrijk", "AT"), ("zwitserland", "CH"), ("denemarken", "DK"), ("noorwegen", "NO"), ("zweden", "SE"), ("ierland", "IE"),
+        ("portugal", "PT"), ("polen", "PL"), ("turkije", "TR"), ("suriname", "SR"), ("curaçao", "CW"), ("griekenland", "GR"),
+        ("amerika", "US"), ("verenigde staten", "US"), ("canada", "CA"), ("australië", "AU"), ("marokko", "MA"), ("finland", "FI"),
+    ];
+    let l = land.trim().to_lowercase();
+    let code = LANDEN.iter().find(|(n, _)| *n == l).map(|x| x.1.to_string()).or_else(|| (l.len() == 2).then(|| l.to_uppercase()));
+    let Some(code) = code else {
+        return Err(format!("Het land {} ken ik niet. Schrijf het in het Nederlands, bijvoorbeeld Nederland, België of Duitsland.", land));
+    };
+    for server in ["https://de1.api.radio-browser.info", "https://nl1.api.radio-browser.info", "https://at1.api.radio-browser.info"] {
+        let adres = format!("{}/json/stations/bycountrycodeexact/{}?hidebroken=true&order=clickcount&reverse=true&limit=100", server, code);
+        let Ok(data) = internet("GET", &adres, None) else { continue };
+        let tekst = String::from_utf8_lossy(&data).to_string();
+        let mut namen: Vec<String> = Vec::new();
+        for stuk in tekst.split("\"changeuuid\"").skip(1) {
+            let (Some(n), Some(u)) = (stuk.find("\"name\":\""), stuk.find("\"url_resolved\":\"")) else { continue };
+            let naam = json_tekst(&stuk[n + 8..]).trim().to_string();
+            let url = json_tekst(&stuk[u + 16..]);
+            if naam.is_empty() || !url.starts_with("http") {
+                continue;
+            }
+            GEVONDEN.with(|g| g.borrow_mut().push((naam.clone(), url)));
+            if !namen.contains(&naam) {
+                namen.push(naam);
+            }
+        }
+        if !namen.is_empty() {
+            return Ok(namen.into_iter().map(W::T).collect());
+        }
+    }
+    Err(format!("Ik kan de radiozenders van {} niet ophalen. Is er internet?", land))
 }
 
 /// Een radiozender opzoeken bij radio-browser.info (de meest beluisterde met deze naam).
@@ -1779,6 +1885,17 @@ impl Staat {
         self.scherm.zet_tekst(i, &w.tekst());
         Ok(())
     }
+    fn vul_keuzelijst(&mut self, naam: &str, w: W, r: usize) -> R<()> {
+        match w {
+            W::L(l) => {
+                for x in l {
+                    self.voeg_keuze(naam, x, r)?;
+                }
+                Ok(())
+            }
+            ander => self.voeg_keuze(naam, ander, r),
+        }
+    }
     fn voeg_keuze(&mut self, naam: &str, w: W, r: usize) -> R<()> {
         let i = self.zoek(naam, r)?;
         if !matches!(self.scherm.onderdelen[i].soort, 4 | 5) {
@@ -1857,13 +1974,25 @@ impl Staat {
             }
             return Ok(());
         };
-        let mut adres = a.tekst();
-        if let Some(naam) = adres.strip_prefix("zoek:").map(|x| x.to_string()) {
-            if self.scherm.tekststand && std::env::var("JAAPTAAL_NIET_ZOEKEN").is_ok() {
-                println!("[radio zoeken] {}", naam);
+        let mut adres = a.tekst().trim().to_string();
+        if adres.is_empty() {
+            return fout(r, "Er is geen radiozender gekozen.".to_string());
+        }
+        if !adres.starts_with("http") && !adres.starts_with("zoek:") {
+            adres = format!("zoek:{}", adres);
+        }
+        let gekozen = adres.strip_prefix("zoek:").map(|x| x.to_string());
+        let toon_naam = if naam.is_empty() { gekozen.clone().unwrap_or_default() } else { naam.to_string() };
+        let naam = toon_naam.as_str();
+        if let Some(gekozen) = gekozen {
+            if let Some(u) = lokaal_adres(&gekozen) {
+                adres = u;
+            } else if self.scherm.tekststand && std::env::var("JAAPTAAL_NIET_ZOEKEN").is_ok() {
+                println!("[radio zoeken] {}", gekozen);
                 return Ok(());
+            } else {
+                adres = zender_adres(&gekozen).ok_or(()).or_else(|_| fout(r, format!("De zender {} kan ik niet vinden op internet (radio-browser.info). Klopt de naam? Of gebruik het adres: Speel de radiozender met het adres https://...", gekozen)))?;
             }
-            adres = zoek_zender(&naam).ok_or(()).or_else(|_| fout(r, format!("De zender {} kan ik niet vinden op internet (radio-browser.info). Klopt de naam? Of gebruik het adres: Speel de radiozender met het adres https://...", naam)))?;
         }
         if !adres.starts_with("http://") && !adres.starts_with("https://") {
             return fout(r, format!("{} is geen internetadres van een radiozender.", adres));
@@ -3412,6 +3541,79 @@ mod win {
                 }
             }
         }
+    }
+
+    #[repr(C)]
+    struct OPENFILENAMEW {
+        grootte: u32,
+        eigenaar: HWND,
+        inst: HANDLE,
+        filter: *const u16,
+        eigen_filter: *mut u16,
+        eigen_max: u32,
+        filter_nr: u32,
+        bestand: *mut u16,
+        max: u32,
+        titel_bestand: *mut u16,
+        titel_max: u32,
+        begin_map: *const u16,
+        titel: *const u16,
+        vlaggen: u32,
+        offset: u16,
+        ext_offset: u16,
+        standaard_ext: *const u16,
+        data: isize,
+        haak: *mut c_void,
+        sjabloon: *const u16,
+        reserve: *mut c_void,
+        reserve2: u32,
+        vlaggen_ex: u32,
+    }
+
+    #[link(name = "comdlg32")]
+    extern "system" {
+        fn GetOpenFileNameW(o: *mut OPENFILENAMEW) -> i32;
+        fn GetSaveFileNameW(o: *mut OPENFILENAMEW) -> i32;
+    }
+
+    /// Het gewone Openen- of Opslaan als-venster van Windows. None als je annuleert.
+    pub(super) fn kies_bestand(opslaan: bool) -> Option<String> {
+        let mut buf = vec![0u16; 1024];
+        let filter: Vec<u16> = "Tekstbestanden (*.txt)\0*.txt\0Alle bestanden (*.*)\0*.*\0\0".encode_utf16().collect();
+        let ext = w("txt");
+        let titel = w(if opslaan { "Opslaan als" } else { "Openen" });
+        let mut o = OPENFILENAMEW {
+            grootte: std::mem::size_of::<OPENFILENAMEW>() as u32,
+            eigenaar: unsafe { GetForegroundWindow() },
+            inst: null_mut(),
+            filter: filter.as_ptr(),
+            eigen_filter: null_mut(),
+            eigen_max: 0,
+            filter_nr: 1,
+            bestand: buf.as_mut_ptr(),
+            max: buf.len() as u32,
+            titel_bestand: null_mut(),
+            titel_max: 0,
+            begin_map: null(),
+            titel: titel.as_ptr(),
+            // OFN_EXPLORER | OFN_NOCHANGEDIR | (opslaan: OFN_OVERWRITEPROMPT, openen: OFN_FILEMUSTEXIST)
+            vlaggen: 0x0008_0000 | 0x8 | if opslaan { 0x2 } else { 0x1000 },
+            offset: 0,
+            ext_offset: 0,
+            standaard_ext: ext.as_ptr(),
+            data: 0,
+            haak: null_mut(),
+            sjabloon: null(),
+            reserve: null_mut(),
+            reserve2: 0,
+            vlaggen_ex: 0,
+        };
+        let gelukt = unsafe { if opslaan { GetSaveFileNameW(&mut o) } else { GetOpenFileNameW(&mut o) } };
+        if gelukt == 0 {
+            return None;
+        }
+        let n = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Some(String::from_utf16_lossy(&buf[..n]))
     }
 
     pub(super) fn vraag_ja_nee(tekst: &str) -> bool {

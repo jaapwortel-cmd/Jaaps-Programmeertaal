@@ -133,7 +133,8 @@ impl<'a> Controle<'a> {
                     }
                     Ingebouwd::AlsGetal | Ingebouwd::Lengte => Type::Getal,
                     Ingebouwd::AlsTekst | Ingebouwd::Hoofdletters | Ingebouwd::KleineLetters | Ingebouwd::EersteTekens | Ingebouwd::LaatsteTekens
-                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst => Type::Tekst,
+                    | Ingebouwd::Samengevoegd | Ingebouwd::Vervangen | Ingebouwd::ZonderSpaties | Ingebouwd::DocumentTekst | Ingebouwd::ZenderAdres | Ingebouwd::KiesBestand | Ingebouwd::KiesOpslaan => Type::Tekst,
+                    Ingebouwd::Radiozenders | Ingebouwd::RadiozendersLand => Type::Lijst,
                     Ingebouwd::Woorden | Ingebouwd::Gesplitst => Type::Lijst,
                     Ingebouwd::Willekeurig => {
                         for i in invoer {
@@ -502,6 +503,11 @@ impl<'a> Controle<'a> {
                 }
                 Soort::Venstergedrag(_) => {}
                 Soort::Radio(_) => {}
+                Soort::VulKeuzelijst { waarde, .. } => {
+                    let mut namen = Vec::new();
+                    waarde.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                }
                 Soort::Reservekopie(p) => {
                     let mut namen = Vec::new();
                     p.namen(&mut namen);

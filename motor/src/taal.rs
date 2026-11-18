@@ -185,6 +185,16 @@ pub enum Ingebouwd {
     ZonderSpaties,
     /// De tekst uit een Word- of PDF-bestand.
     DocumentTekst,
+    /// De namen van alle radiozenders die het programma kent (een lijst).
+    Radiozenders,
+    /// De radiozenders van een land, van internet (radio-browser.info).
+    RadiozendersLand,
+    /// Het streamadres van een radiozender.
+    ZenderAdres,
+    /// Een bestand dat je kiest in het gewone Openen-venster van Windows.
+    KiesBestand,
+    /// Een plek om op te slaan, gekozen in het gewone Opslaan als-venster.
+    KiesOpslaan,
 }
 
 impl Ingebouwd {
@@ -329,6 +339,8 @@ pub enum Soort {
     Opdrachtvak,
     /// Hoe het venster zich gedraagt: schermvullend, vraag bij afsluiten, maar één keer open, tip bij een knop.
     Venstergedrag(Gedrag),
+    /// Een keuzelijst vullen met alles uit een lijst.
+    VulKeuzelijst { lijst: String, waarde: Uitdrukking },
     /// Een internetradiozender spelen (naam, adres), of stoppen (None).
     Radio(Option<(String, Uitdrukking)>),
     /// Een reservekopie van een bestand (de laatste 10 blijven bewaard).
@@ -535,6 +547,7 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
+            Soort::VulKeuzelijst { waarde, .. } => vec![waarde],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
@@ -577,6 +590,7 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
+            Soort::VulKeuzelijst { waarde, .. } => vec![waarde],
             Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],

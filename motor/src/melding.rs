@@ -34,15 +34,22 @@ pub struct Melding {
     pub soort: Soort,
     pub tekst: String,
     pub voorstel: Option<Voorstel>,
+    /// Een opdracht voor de editor die na "ja" wordt uitgevoerd (zoals "BouwExe", of "Openen|Begroeting").
+    pub opdracht: Option<String>,
 }
 
 impl Melding {
     pub fn fout(regel: usize, tekst: impl Into<String>) -> Self {
-        Melding { regel, soort: Soort::Fout, tekst: tekst.into(), voorstel: None }
+        Melding { regel, soort: Soort::Fout, tekst: tekst.into(), voorstel: None, opdracht: None }
     }
 
     pub fn vraag(regel: usize, tekst: impl Into<String>) -> Self {
-        Melding { regel, soort: Soort::Vraag, tekst: tekst.into(), voorstel: None }
+        Melding { regel, soort: Soort::Vraag, tekst: tekst.into(), voorstel: None, opdracht: None }
+    }
+
+    pub fn met_opdracht(mut self, opdracht: impl Into<String>) -> Self {
+        self.opdracht = Some(opdracht.into());
+        self
     }
 
     pub fn met_voorstel(mut self, vraag: impl Into<String>, wijziging: Wijziging) -> Self {
@@ -84,8 +91,10 @@ pub fn pas_toe(bron: &str, wijziging: &Wijziging) -> String {
     match wijziging {
         Wijziging::VervangRegel { regel, nieuw } => {
             if *regel >= 1 && *regel <= regels.len() {
+                // Eén regel kan ook door meer regels worden vervangen.
                 let insp = inspringing(&regels, *regel);
-                regels[regel - 1] = format!("{}{}", insp, nieuw.trim_start());
+                let nieuwe: Vec<String> = nieuw.lines().map(|r| format!("{}{}", insp, r.trim_start())).collect();
+                regels.splice(regel - 1..*regel, nieuwe);
             }
         }
         Wijziging::VoegInVoor { regel, nieuw } => {

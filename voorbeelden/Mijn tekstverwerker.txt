@@ -1,0 +1,43 @@
+Opmerking: Mijn tekstverwerker. Ctrl+N nieuw, Ctrl+O openen, Ctrl+S opslaan.
+Maak een venster met als titel Mijn tekstverwerker
+Vraag bij afsluiten "Heb je je tekst opgeslagen? Wil je stoppen?"
+Maak een menu met als naam Bestand
+Maak een menuregel met als naam Nieuw
+Maak een menuregel met als naam Openen
+Maak een menuregel met als naam Opslaan
+Maak een menuregel met als naam Opslaan als
+Geef de menuregel Nieuw de sneltoets Ctrl+N
+Geef de menuregel Openen de sneltoets Ctrl+O
+Geef de menuregel Opslaan de sneltoets Ctrl+S
+Maak een groot tekstvak met als naam Tekst
+Onthoud bestand is ""
+Als ik de menuregel Nieuw kies
+Maak het tekstvak Tekst leeg
+Verander bestand naar ""
+Zeg "Nieuwe tekst"
+Einde van de knop
+Als ik de menuregel Openen kies
+Onthoud gekozen is een bestand dat ik kies
+Als gekozen is niet ""
+Verander bestand naar gekozen
+Zet de inhoud van het bestand met de naam bestand in het tekstvak Tekst
+Zeg "Geopend"
+Einde als
+Einde van de knop
+Als ik de menuregel Opslaan als kies
+Onthoud plek is de plek die ik kies om op te slaan
+Als plek is niet ""
+Verander bestand naar plek
+Schrijf de tekst in het tekstvak Tekst in het bestand met de naam bestand
+Zeg "Opgeslagen"
+Einde als
+Einde van de knop
+Als ik de menuregel Opslaan kies
+Als bestand is ""
+Verander bestand naar de plek die ik kies om op te slaan
+Einde als
+Als bestand is niet ""
+Schrijf de tekst in het tekstvak Tekst in het bestand met de naam bestand
+Zeg "Opgeslagen"
+Einde als
+Einde van de knop
