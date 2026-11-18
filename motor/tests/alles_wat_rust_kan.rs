@@ -489,3 +489,16 @@ fn lang_verzoek_in_gewone_taal() {
     assert!(regels.iter().any(|r| r.contains("de tijd")), "{:?}", regels);
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn omschrijving_uit_kladblok_wordt_programma() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../voorbeelden/omschrijvingen");
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let tekst = motor::bestand::lees_txt(&e.path()).unwrap();
+        let (programma, _) = motor::omschrijving_naar_programma(&tekst).unwrap_or_else(|| panic!("geen programma van {}", e.path().display()));
+        assert!(lees(&programma).is_goed(), "{}\n{}\n{:#?}", e.path().display(), programma, lees(&programma).meldingen);
+        assert!(!programma.contains("dit begreep ik niet"), "{}", programma);
+    }
+    // Een gewoon programma is geen omschrijving.
+    assert!(motor::omschrijving_naar_programma("Maak een venster met als titel A\nToon 1\n").is_none());
+}

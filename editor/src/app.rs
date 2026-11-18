@@ -38,6 +38,7 @@ const ID_EIGEN_OPDRACHTEN: u16 = 215;
 const ID_WENSEN: u16 = 216;
 const ID_VERSIE_OMHOOG: u16 = 217;
 const ID_MOTOREN: u16 = 218;
+const ID_OMSCHRIJVING: u16 = 219;
 /// Onlangs geopend: 121 tot en met 129.
 const ID_ONLANGS: u16 = 121;
 const ID_WELKE_REGEL: u16 = 301;
@@ -504,9 +505,38 @@ fn open_bestand(pad: &Path) {
     open_gewoon(pad);
 }
 
+/// De omschrijving wordt een programma; de omschrijving zelf blijft bovenaan als opmerking.
+fn omschrijving_vervangen(omschrijving: &str, programma: &str) {
+    let mut t = String::from("Opmerking: Dit programma is gemaakt van deze omschrijving:\n");
+    for r in omschrijving.lines().filter(|r| !r.trim().is_empty()) {
+        t.push_str(&format!("Opmerking: {}\n", r.trim().trim_start_matches("Opmerking:").trim()));
+    }
+    t.push('\n');
+    t.push_str(programma);
+    vervang_editor_tekst(&t);
+    ga_naar_regel(1);
+    zet_meldingen("Je omschrijving is een programma geworden. Druk F7 om te controleren en F5 om het te proberen.");
+}
+
 fn open_gewoon(pad: &Path) {
     match motor::bestand::lees_txt(pad) {
         Ok(tekst) => {
+            // Een omschrijving in gewone taal (bijvoorbeeld uit Kladblok)? Eerst vragen of het een programma moet worden.
+            if let Some((programma, uitleg)) = motor::omschrijving_naar_programma(&tekst) {
+                let vraag = format!(
+                    "{} is een omschrijving in gewone taal, geen programma.\n\n{}\n\nZal ik er een programma van maken? Ja: het programma komt in de editor (je bestand blijft zoals het is). Nee: gewoon openen.",
+                    pad.display(),
+                    uitleg
+                );
+                if melding(&vraag, MB_YESNO | MB_ICONQUESTION) == IDYES {
+                    zet_tekst(v().editor, "");
+                    omschrijving_vervangen(&tekst, &programma);
+                    let naam = pad.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    PAD.with(|p| *p.borrow_mut() = Some(mijn_programmas().join(format!("{} programma.txt", naam))));
+                    zet_titel();
+                    return;
+                }
+            }
             zet_tekst(v().editor, &tekst);
             unsafe {
                 SendMessageW(v().editor, EM_SETMODIFY, 0, 0);
@@ -1076,6 +1106,20 @@ fn opdracht(id: u16) {
         ),
         ID_WENSEN => open_in_kladblok(&wensen_pad(), "Mijn wensen voor Jaap's Programmeertaal (wat de taal nog niet kan):\n"),
         ID_VERSIE_OMHOOG => versie_omhoog(),
+        ID_OMSCHRIJVING => {
+            let tekst = editor_tekst();
+            match motor::samengesteld::omschrijving(&tekst) {
+                Some((regels, uitleg)) => {
+                    let vraag = format!("{}\n\nZal ik je omschrijving vervangen door dit programma? Je omschrijving blijft bovenaan staan als opmerking.\n\n{}", uitleg, regels.join("\n"));
+                    if melding(&vraag, MB_YESNO | MB_ICONQUESTION) == IDYES {
+                        omschrijving_vervangen(&tekst, &regels.join("\n"));
+                    }
+                }
+                None => {
+                    melding("In deze tekst vind ik geen programma om te maken. Schrijf bijvoorbeeld: Ik wil een programma dat Adressen heet. Er moet een tekstvak Naam in en een knop Opslaan. Als ik op Opslaan druk, moet de naam in adressen.txt worden bewaard.", MB_ICONINFORMATION);
+                }
+            }
+        }
         ID_MOTOREN => {
             let map = motor::motoren::map();
             let _ = std::fs::create_dir_all(&map);
@@ -1283,6 +1327,7 @@ fn maak_menu() -> HANDLE {
         let prog = CreatePopupMenu();
         voeg(prog, ID_OPDRACHT, "&Opdracht geven in gewone zinnen...\tCtrl+E");
         voeg(prog, ID_ZOEK_OPDRACHT, "&Zoeken in wat je kunt zeggen...\tCtrl+F");
+        voeg(prog, ID_OMSCHRIJVING, "Maak een programma van deze &omschrijving\tCtrl+Shift+E");
         streep(prog);
         voeg(prog, ID_CONTROLEER, "&Controleren (testen)\tF7");
         voeg(prog, ID_UITVOEREN, "&Uitvoeren\tF5");
@@ -1325,6 +1370,7 @@ fn maak_sneltoetsen() -> HANDLE {
         toets(FCONTROL | FSHIFT, b'S' as u16, ID_OPSLAAN_ALS),
         toets(FCONTROL, b'L' as u16, ID_WELKE_REGEL),
         toets(FCONTROL, b'E' as u16, ID_OPDRACHT),
+        toets(FCONTROL | FSHIFT, b'E' as u16, ID_OMSCHRIJVING),
         toets(FCONTROL, b'F' as u16, ID_ZOEK_OPDRACHT),
         toets(0, VK_F1, ID_HANDLEIDING),
         toets(0, VK_F1 + 3, ID_NAAR_MELDINGEN),
@@ -1781,6 +1827,7 @@ fn voer_functie_uit(f: motor::opdrachten::Functie, extra: String) {
         Wensenlijst => ID_WENSEN,
         VersieOmhoog => ID_VERSIE_OMHOOG,
         Over => ID_OVER,
+        Omschrijving => ID_OMSCHRIJVING,
         WatKanIkZeggen => ID_ZOEK_OPDRACHT,
         Openen => {
             if extra.is_empty() {

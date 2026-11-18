@@ -73,6 +73,19 @@ fn main() {
                 println!("{}", m);
             }
         }
+        "omschrijving" => {
+            // jaaptaal omschrijving omschrijving.txt: maakt een programma van een omschrijving in gewone taal.
+            match motor::samengesteld::omschrijving(&bron) {
+                Some((regels, uitleg)) => {
+                    eprintln!("{}", uitleg);
+                    println!("{}", regels.join("\n"));
+                }
+                None => {
+                    println!("In deze tekst vind ik geen programma om te maken.");
+                    exit(1);
+                }
+            }
+        }
         "website" => {
             // jaaptaal website programma.txt map
             let (w, meldingen) = motor::website::lees(&bron);

@@ -44,7 +44,7 @@ const SOORTEN: &[(&str, &str)] = &[
 const STOP: &[&str] = &[
     "en", "met", "een", "de", "het", "als", "dan", "daarna", "erbij", "erin", "eronder", "bovenaan", "onderaan", "voor", "die", "dat",
     "waarin", "waarmee", "om", "in", "op", "naast", "inbouwen", "maken", "toevoegen", "bouwen", "hebben", "komen", "nodig", "graag",
-    "erop", "zetten", "ook", "moet", "moeten", "wil",
+    "erop", "zetten", "ook", "moet", "moeten", "wil", ",", "heet", "heten", "zijn", "is", "staan", "komt", "komen",
 ];
 
 fn hoofdletter(t: &str) -> String {
@@ -75,6 +75,9 @@ fn woorden(t: &str) -> Vec<String> {
         } else if c.is_whitespace() || c == ',' || c == ';' {
             if !huidig.is_empty() {
                 uit.push(std::mem::take(&mut huidig));
+            }
+            if c == ',' {
+                uit.push(",".to_string());
             }
         } else {
             huidig.push(c);
@@ -128,7 +131,8 @@ fn namen_na(w: &[String], i: usize, meervoud: bool) -> Vec<String> {
 
 /// Eén actie (wat er moet gebeuren) in een zin van de taal. Geeft None als het niet lukt.
 fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
-    let t = t.trim().trim_end_matches(['.', '!']).trim();
+    let gewoon = gewone_actie(t);
+    let t = gewoon.trim().trim_end_matches(['.', '!']).trim();
     if t.is_empty() {
         return Some(Vec::new());
     }
@@ -139,7 +143,15 @@ fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
     // Het onderdeel dat met een naam wordt bedoeld ("de naam" = het tekstvak Naam).
     let onderdeel = |naam: &str| -> Option<&(String, String)> {
         let n = naam.trim().trim_start_matches("de ").trim_start_matches("het ").trim_start_matches("tekst in het tekstvak ").trim().to_lowercase();
-        onderdelen.iter().find(|(_, o)| o.to_lowercase() == n)
+        onderdelen.iter().find(|(soort, o)| o.to_lowercase() == n && matches!(soort.as_str(), "tekstvak" | "groot tekstvak" | "label" | "keuzelijst" | "uitklaplijst"))
+    };
+    // Wat er in het onderdeel staat: de tekst, of de keuze in een keuzelijst.
+    let inhoud = |soort: &str, naam: &str| -> String {
+        if soort == "keuzelijst" || soort == "uitklaplijst" {
+            format!("de keuze in de {} {}", soort, naam)
+        } else {
+            format!("de tekst in het {} {}", soort, naam)
+        }
     };
     match laag.as_str() {
         "zeg hoe laat het is" | "zeg de tijd" | "vertel hoe laat het is" => return Some(vec!["Zeg \"Het is\" en dan de tijd".into()]),
@@ -152,7 +164,7 @@ fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
         if laag.starts_with(b) {
             let x = rest(b);
             return Some(vec![match onderdeel(&x) {
-                Some((soort, naam)) => format!("Zeg de tekst in het {} {}", soort, naam),
+                Some((soort, naam)) => format!("Zeg {}", inhoud(soort, naam)),
                 None => format!("Zeg {}", aanhalen(&x)),
             }]);
         }
@@ -161,7 +173,7 @@ fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
         if laag.starts_with(b) {
             let x = rest(b);
             return Some(vec![match onderdeel(&x) {
-                Some((soort, naam)) => format!("Toon de tekst in het {} {}", soort, naam),
+                Some((soort, naam)) => format!("Toon {}", inhoud(soort, naam)),
                 None => format!("Toon {}", aanhalen(&x)),
             }]);
         }
@@ -169,7 +181,7 @@ fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
     if laag.starts_with("lees ") && laag.ends_with(" voor") {
         let x = t[5..t.len() - 5].trim();
         return Some(vec![match onderdeel(x) {
-            Some((soort, naam)) => format!("Lees de tekst in het {} {} voor", soort, naam),
+            Some((soort, naam)) => format!("Lees {} voor", inhoud(soort, naam)),
             None => format!("Lees voor {}", aanhalen(x)),
         }]);
     }
@@ -186,7 +198,7 @@ fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
                 }
                 if !bestand.is_empty() {
                     let waarde = match onderdeel(&wat) {
-                        Some((soort, naam)) => format!("de tekst in het {} {}", soort, naam),
+                        Some((soort, naam)) => inhoud(soort, naam),
                         None if wat.is_empty() || wat.to_lowercase() == "alles" => continue,
                         None => aanhalen(&wat),
                     };
@@ -242,6 +254,88 @@ fn actie(t: &str, onderdelen: &[(String, String)]) -> Option<Vec<String>> {
     None
 }
 
+/// Een actie zoals je die in een omschrijving schrijft, omzetten naar een opdracht:
+/// "moet hij opgeslagen zeggen" -> "zeg opgeslagen", "moet de naam in adressen.txt worden bewaard"
+/// -> "schrijf de naam in adressen.txt".
+fn gewone_actie(t: &str) -> String {
+    let mut a = t.trim().trim_end_matches(['.', '!', ',']).trim().to_string();
+    loop {
+        let l = a.to_lowercase();
+        let voor = [
+            "dan moet het programma ", "dan moet hij ", "dan moet het ", "moet het programma ", "moet hij ", "moet het ", "moet er ", "moet ",
+            "wil ik dat het programma ", "wil ik dat hij ", "het programma moet ", "hij moet ", "dan ", "en dan ", "daarna ", "graag ",
+            "het programma ", "hij ", "ik wil dat ",
+        ];
+        match voor.iter().find(|v| l.starts_with(**v)) {
+            Some(v) => a = a[v.len()..].trim().to_string(),
+            None => break,
+        }
+    }
+    let l = a.to_lowercase();
+    // "de naam moet in x worden bewaard" -> zonder "moet"
+    let a2 = a.replace(" moet ", " ").replace(" moeten ", " ");
+    let l2 = a2.to_lowercase();
+    for eind in [" worden bewaard", " worden opgeslagen", " worden geschreven", " bewaren", " opslaan", " schrijven", " wegschrijven", " bewaard", " opgeslagen"] {
+        if l2.ends_with(eind) && (l2.contains(" in ") || l2.contains(" naar ")) {
+            return format!("schrijf {}", &a2[..a2.len() - eind.len()]);
+        }
+    }
+    let werkwoorden: &[(&str, &str)] = &[(" zeggen", "zeg "), (" melden", "zeg "), (" laten horen", "zeg "), (" tonen", "toon "), (" laten zien", "toon "), (" zien", "toon "),
+        (" stoppen", "stop "), (" uitzetten", "stop "), (" afspelen", "speel "), (" spelen", "speel "), (" openen", "open "), (" starten", "start ")];
+    for (eind, begin) in werkwoorden {
+        if l.ends_with(eind) {
+            return format!("{}{}", begin, &a[..a.len() - eind.len()]);
+        }
+    }
+    if l.ends_with(" voorlezen") {
+        return format!("lees {} voor", &a[..a.len() - " voorlezen".len()]);
+    }
+    if l.ends_with(" leegmaken") {
+        return format!("maak {} leeg", &a[..a.len() - " leegmaken".len()]);
+    }
+    a
+}
+
+/// Een omschrijving van een programma, met meer zinnen (bijvoorbeeld uit Kladblok), omzetten in een
+/// programma. Eerst wat erin staat, dan wat er gebeurt.
+pub fn omschrijving(tekst: &str) -> Option<(Vec<String>, String)> {
+    let mut zinnen: Vec<String> = Vec::new();
+    let mut huidig = String::new();
+    let mut in_tekst = false;
+    let tekens: Vec<char> = tekst.chars().collect();
+    for (i, &c) in tekens.iter().enumerate() {
+        if c == '"' {
+            in_tekst = !in_tekst;
+        }
+        // Een punt is alleen het einde van een zin als er een spatie of nieuwe regel achter staat (niet in adressen.txt).
+        let einde_zin = matches!(c, '.' | '!' | '?') && tekens.get(i + 1).map_or(true, |n| n.is_whitespace());
+        if !in_tekst && (c == '\n' || c == '\r' || einde_zin) {
+            if !huidig.trim().is_empty() {
+                zinnen.push(std::mem::take(&mut huidig));
+            } else {
+                huidig.clear();
+            }
+            continue;
+        }
+        huidig.push(c);
+    }
+    if !huidig.trim().is_empty() {
+        zinnen.push(huidig);
+    }
+    // Opmerkingen en de kop "Dit is een omschrijving voor ..." overslaan.
+    let zinnen: Vec<String> = zinnen
+        .into_iter()
+        .map(|z| z.trim().to_string())
+        .filter(|z| {
+            let l = z.to_lowercase();
+            !l.starts_with("opmerking") && !l.starts_with("dit is een omschrijving") && !l.starts_with("dit is code")
+        })
+        .collect();
+    let (handelingen, opbouw): (Vec<String>, Vec<String>) = zinnen.into_iter().partition(|z| z.to_lowercase().contains("als ik "));
+    let samen = format!("{} {}", opbouw.join(", "), handelingen.join(" "));
+    vertaal(&samen)
+}
+
 /// Knipt de acties: "schrijf ... en zeg opgeslagen" -> ["schrijf ...", "zeg opgeslagen"].
 fn acties_los(t: &str) -> Vec<String> {
     let mut stukken = vec![t.to_string()];
@@ -292,8 +386,8 @@ pub fn vertaal(zin: &str) -> Option<(Vec<String>, String)> {
         let mut j = v + 1;
         if matches!(wl.get(j).map(|s| s.as_str()), Some("met")) && matches!(wl.get(j + 1).map(|s| s.as_str()), Some("de" | "als")) && wl.get(j + 2).map_or(false, |s| s == "titel" || s == "naam") {
             j += 3;
-        } else if matches!(wl.get(j).map(|s| s.as_str()), Some("genaamd" | "dat" | "die")) {
-            j += if wl.get(j) == Some(&"genaamd".to_string()) { 1 } else { 2 };
+        } else if matches!(wl.get(j).map(|s| s.as_str()), Some("genaamd" | "dat" | "die" | "met")) && !matches!(wl.get(j + 1).map(|s| s.as_str()), Some("een" | "de" | "het")) || matches!(wl.get(j).map(|s| s.as_str()), Some("dat" | "die")) {
+            j += 1;
         } else {
             j = usize::MAX;
         }
@@ -450,5 +544,20 @@ mod tests {
         let (regels, uitleg) = vertaal("maak een venster met een knop Dansen, als ik op Dansen druk laat de computer dansen").unwrap();
         assert!(regels.iter().any(|r| r.starts_with("Opmerking: dit begreep ik niet")));
         assert!(uitleg.contains("begreep ik niet"));
+    }
+}
+
+#[cfg(test)]
+mod omschrijving_tests {
+    use super::*;
+
+    #[test]
+    fn omschrijving_uit_kladblok() {
+        let tekst = "Ik wil een programma dat Adressen heet.\nEr moet een tekstvak Naam in en een knop Opslaan.\nAls ik op Opslaan druk, moet de naam in adressen.txt worden bewaard en moet hij opgeslagen zeggen.\n";
+        let (regels, _) = omschrijving(tekst).expect("programma");
+        let t = regels.join("\n") + "\n";
+        assert!(crate::lees(&t).is_goed(), "{}\n{:#?}", t, crate::lees(&t).meldingen);
+        assert!(t.starts_with("Maak een venster met als titel Adressen\n"), "{}", t);
+        assert!(t.contains("Schrijf de tekst in het tekstvak Naam in het bestand adressen.txt\nZeg \"opgeslagen\""), "{}", t);
     }
 }

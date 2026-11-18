@@ -1,0 +1,3 @@
+Ik wil een programma dat Adressen heet.
+Er moet een tekstvak Naam in, een tekstvak Telefoon en een knop Opslaan.
+Als ik op Opslaan druk, moet de naam in adressen.txt worden bewaard en moet hij opgeslagen zeggen.

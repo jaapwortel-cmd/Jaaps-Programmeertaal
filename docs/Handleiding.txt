@@ -1086,3 +1086,21 @@ zonder iets privé (vul zelf je eigen adressen en links in):
 - Mijn brievenlezer (zoals Paper Pilot): een PDF of Word-brief openen en voorlezen.
 - Mijn bestandsbrug (zoals Bestandsbrug): programma's downloaden uit een lijst.
 - Mijn radio, Mijn tekstverwerker, Mijn radiosite en Jaap Wortel Producties (website).
+
+
+18. Een omschrijving in Kladblok
+--------------------------------
+
+Je kunt in Kladblok (of op je telefoon) in gewone woorden opschrijven wat je programma moet doen.
+Bijvoorbeeld:
+
+Ik wil een programma dat Adressen heet.
+Er moet een tekstvak Naam in, een tekstvak Telefoon en een knop Opslaan.
+Als ik op Opslaan druk, moet de naam in adressen.txt worden bewaard en moet hij opgeslagen zeggen.
+
+Open dat bestand met Ctrl+O. Het programma ziet dat het een omschrijving is, vertelt wat het gaat
+maken en vraagt of het er een programma van moet maken. Bij Ja staat het programma in de editor;
+je omschrijving staat bovenaan als opmerking, en je eigen bestand blijft zoals het was.
+Staat je omschrijving al in de editor? Druk dan Ctrl+Shift+E (menu Programma).
+Wat het niet begreep, staat als opmerking in het programma.
+Voorbeelden staan in de map voorbeelden\omschrijvingen.

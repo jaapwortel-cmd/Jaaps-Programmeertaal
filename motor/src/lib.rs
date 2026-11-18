@@ -125,6 +125,23 @@ pub fn zinnen_uit_programma(inhoud: &[u8]) -> Option<String> {
     String::from_utf8(inhoud[b..e].to_vec()).ok()
 }
 
+/// Is dit een omschrijving in gewone taal (zoals uit Kladblok), en geen programma? Dan het programma
+/// dat ervan gemaakt kan worden, met een uitleg.
+pub fn omschrijving_naar_programma(tekst: &str) -> Option<(String, String)> {
+    let regels: Vec<&str> = tekst.lines().filter(|r| !r.trim().is_empty() && !r.trim().to_lowercase().starts_with("opmerking")).collect();
+    if regels.is_empty() || website::is_website(tekst) {
+        return None;
+    }
+    let u = lees(tekst);
+    let met_melding: std::collections::BTreeSet<usize> = u.meldingen.iter().map(|m| m.regel).collect();
+    // Meer dan de helft van de regels is geen zin van de taal.
+    if met_melding.len() * 2 < regels.len() {
+        return None;
+    }
+    let (r, uitleg) = samengesteld::omschrijving(tekst)?;
+    Some((r.join("\n") + "\n", uitleg))
+}
+
 /// Een korte samenvatting om voor te lezen.
 pub fn samenvatting(uitslag: &Uitslag) -> String {
     let aantal = uitslag.meldingen.len();

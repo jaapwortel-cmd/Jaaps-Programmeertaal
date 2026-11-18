@@ -1,0 +1,5 @@
+Ik wil een programma dat Mijn radio heet.
+Er moeten knoppen Radio 1, Radio 2 en Stop in komen.
+Als ik op Radio 1 druk, moet hij de radiozender NPO Radio 1 spelen en Radio 1 zeggen.
+Als ik op Radio 2 druk, speel de radiozender NPO Radio 2.
+Als ik op Stop druk, moet de radio stoppen.
