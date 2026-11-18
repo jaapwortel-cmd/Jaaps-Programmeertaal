@@ -310,11 +310,16 @@ thread_local! {
 
 /// De tekst op het klembord.
 fn klembord_lezen() -> String {
+    // In de tekststand (proeven) het proefklembord, niet het echte klembord van Windows.
+    let proef = KLEMBORD_PROEF.with(|k| k.borrow().clone());
+    if !proef.is_empty() {
+        return proef;
+    }
     #[cfg(windows)]
     if let Some(t) = win::klembord_lees() {
         return t;
     }
-    KLEMBORD_PROEF.with(|k| k.borrow().clone())
+    proef
 }
 
 fn ingebouwd(wat: u8, invoer: Vec<W>, r: usize) -> R<W> {
