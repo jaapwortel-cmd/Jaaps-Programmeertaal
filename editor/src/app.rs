@@ -39,6 +39,7 @@ const ID_WENSEN: u16 = 216;
 const ID_VERSIE_OMHOOG: u16 = 217;
 const ID_MOTOREN: u16 = 218;
 const ID_OMSCHRIJVING: u16 = 219;
+const ID_GESPREK: u16 = 220;
 /// Onlangs geopend: 121 tot en met 129.
 const ID_ONLANGS: u16 = 121;
 const ID_WELKE_REGEL: u16 = 301;
@@ -69,6 +70,10 @@ thread_local! {
     static ONLANGS_MENU: Cell<HANDLE> = const { Cell::new(null_mut()) };
     static OPDRACHTVENSTER: Cell<Option<Opdrachtvenster>> = const { Cell::new(None) };
     static KEUZES: RefCell<Vec<Keuze>> = const { RefCell::new(Vec::new()) };
+    static PRAATVENSTER: Cell<Option<Praatvenster>> = const { Cell::new(None) };
+    static GESPREK: RefCell<Option<motor::gesprek::Gesprek>> = const { RefCell::new(None) };
+    /// Het programma dat het gesprek het laatst in de editor zette.
+    static GESPREK_PROGRAMMA: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 /// Wat een achtergrondklus (bouwen) teruggeeft.
@@ -1099,6 +1104,7 @@ fn opdracht(id: u16) {
             }
         }
         ID_OPDRACHT => open_opdrachtvenster(false),
+        ID_GESPREK => open_praatvenster(),
         ID_ZOEK_OPDRACHT => open_opdrachtvenster(true),
         ID_EIGEN_OPDRACHTEN => open_in_kladblok(
             &eigen_opdrachten_pad(),
@@ -1327,6 +1333,7 @@ fn maak_menu() -> HANDLE {
         let prog = CreatePopupMenu();
         voeg(prog, ID_OPDRACHT, "&Opdracht geven in gewone zinnen...\tCtrl+E");
         voeg(prog, ID_ZOEK_OPDRACHT, "&Zoeken in wat je kunt zeggen...\tCtrl+F");
+        voeg(prog, ID_GESPREK, "&Gesprek met de assistent...\tCtrl+G");
         voeg(prog, ID_OMSCHRIJVING, "Maak een programma van deze &omschrijving\tCtrl+Shift+E");
         streep(prog);
         voeg(prog, ID_CONTROLEER, "&Controleren (testen)\tF7");
@@ -1370,6 +1377,7 @@ fn maak_sneltoetsen() -> HANDLE {
         toets(FCONTROL | FSHIFT, b'S' as u16, ID_OPSLAAN_ALS),
         toets(FCONTROL, b'L' as u16, ID_WELKE_REGEL),
         toets(FCONTROL, b'E' as u16, ID_OPDRACHT),
+        toets(FCONTROL, b'G' as u16, ID_GESPREK),
         toets(FCONTROL | FSHIFT, b'E' as u16, ID_OMSCHRIJVING),
         toets(FCONTROL, b'F' as u16, ID_ZOEK_OPDRACHT),
         toets(0, VK_F1, ID_HANDLEIDING),
@@ -1414,6 +1422,7 @@ pub fn start() {
     registreer("JaapsProgrammeertaalEditor", hoofd_proc);
     registreer("JaapsTekstVenster", tekstvenster_proc);
     registreer("JaapsOpdrachtVenster", opdrachtvenster_proc);
+    registreer("JaapsPraatVenster", praatvenster_proc);
 
     unsafe {
         let inst = GetModuleHandleW(null());
@@ -1472,7 +1481,7 @@ pub fn start() {
 
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
-            if opdrachtvenster_toets(&msg) {
+            if opdrachtvenster_toets(&msg) || praatvenster_toets(&msg) {
                 continue;
             }
             let vv = v();
@@ -1999,6 +2008,204 @@ fn opdrachtvenster_toets(msg: &MSG) -> bool {
             }
             VK_TAB => {
                 SetFocus(if GetFocus() == o.vak { o.lijst } else { o.vak });
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+// ------------------------------------------------------------------ gesprek met de assistent (proefstap 0.2)
+//
+// Een venster om in gewone zinnen te praten. De motor (motor::gesprek) begrijpt de zinnen met vaste regels,
+// zonder AI. Weet de assistent precies wat je wilt, dan zet het venster het programma in de editor en start het
+// (F5). Een opdracht voor de editor (zoals een exe bouwen) wordt ook uitgevoerd.
+
+#[derive(Clone, Copy)]
+struct Praatvenster {
+    venster: HWND,
+    vak: HWND,
+    gesprek: HWND,
+}
+
+fn open_praatvenster() {
+    if let Some(p) = PRAATVENSTER.with(|p| p.get()) {
+        unsafe {
+            SetForegroundWindow(p.venster);
+            SetFocus(p.vak);
+        }
+        return;
+    }
+    let vv = v();
+    unsafe {
+        let inst = GetModuleHandleW(null());
+        let h = CreateWindowExW(
+            0,
+            w("JaapsPraatVenster").as_ptr(),
+            w("Gesprek met de assistent - Escape sluit").as_ptr(),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            900,
+            600,
+            vv.hoofd,
+            null_mut(),
+            inst,
+            null_mut(),
+        );
+        let kind = |klasse: &str, tekst: &str, stijl: u32, ex: u32| {
+            let k = CreateWindowExW(ex, w(klasse).as_ptr(), w(tekst).as_ptr(), WS_CHILD | WS_VISIBLE | stijl, 0, 0, 10, 10, h, null_mut(), inst, null_mut());
+            SendMessageW(k, WM_SETFONT, vv.letter as usize, 1);
+            k
+        };
+        let _label1 = kind("STATIC", "Wat wil je zeggen? Typ of dicteer het, en druk Enter:", 0, 0);
+        let vak = kind("EDIT", "", WS_TABSTOP | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
+        let _label2 = kind("STATIC", "Het gesprek (het nieuwste staat onderaan):", 0, 0);
+        let gesprek = kind("EDIT", "", WS_TABSTOP | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY, WS_EX_CLIENTEDGE);
+        PRAATVENSTER.with(|p| p.set(Some(Praatvenster { venster: h, vak, gesprek })));
+        indeling_opdrachtvenster(h);
+        toon_gesprek();
+        SetFocus(vak);
+    }
+    zeg_hardop("Gesprek met de assistent. Vertel wat voor programma je wilt. Als ik precies weet wat je bedoelt, maak ik het en start ik het. Typ of dicteer, en druk Enter.");
+}
+
+/// Zet het hele gesprek in het vak en gaat naar het eind.
+fn toon_gesprek() {
+    let Some(p) = PRAATVENSTER.with(|p| p.get()) else { return };
+    let tekst = GESPREK.with(|g| g.borrow().as_ref().map(|g| g.als_tekst()).unwrap_or_default());
+    zet_tekst(p.gesprek, &tekst);
+    unsafe {
+        SendMessageW(p.gesprek, EM_SETSEL, usize::MAX >> 1, (usize::MAX >> 1) as isize);
+        SendMessageW(p.gesprek, EM_SCROLLCARET, 0, 0);
+    }
+}
+
+fn praatvenster_enter() {
+    let Some(p) = PRAATVENSTER.with(|p| p.get()) else { return };
+    let zin = lees_tekst(p.vak);
+    if zin.trim().is_empty() {
+        zeg_hardop("Typ of dicteer eerst wat je wilt zeggen. Bijvoorbeeld: maak een klein programma waar ik tekst in kan typen.");
+        return;
+    }
+    let antwoord = GESPREK.with(|g| g.borrow_mut().get_or_insert_with(motor::gesprek::Gesprek::nieuw).zeg(&zin));
+    zet_tekst(p.vak, "");
+    toon_gesprek();
+    zeg_hardop(&antwoord.tekst);
+    if let Some(bron) = antwoord.maak {
+        zet_gesprek_programma(&bron);
+    }
+    if let Some(f) = antwoord.doe {
+        voer_functie_uit(f, String::new());
+    }
+}
+
+/// Zet het programma uit het gesprek in de editor en start het (zoals F5).
+/// Staan er andere zinnen in de editor, dan wordt eerst gevraagd of je die wilt opslaan; het wordt een nieuw programma.
+fn zet_gesprek_programma(bron: &str) {
+    let nu = editor_tekst().replace("\r\n", "\n");
+    let van_gesprek = GESPREK_PROGRAMMA.with(|g| g.borrow().as_deref().map(|b| b.replace("\r\n", "\n")) == Some(nu.clone()));
+    if !nu.trim().is_empty() && !van_gesprek {
+        if !mag_doorgaan() {
+            zeg_hardop("Goed, ik heb je zinnen in de editor laten staan. Het programma is niet gemaakt.");
+            return;
+        }
+        PAD.with(|p| *p.borrow_mut() = None);
+        zet_titel();
+    }
+    vervang_editor_tekst(bron);
+    GESPREK_PROGRAMMA.with(|g| *g.borrow_mut() = Some(editor_tekst()));
+    zet_meldingen("Het programma uit het gesprek staat in het vak Opdrachten. Het wordt nu gebouwd en gestart.");
+    uitvoeren();
+}
+
+/// Laat de schermlezer een tekst voorlezen (UI Automation-melding, voor JAWS, NVDA en Verteller).
+/// De functies worden pas bij gebruik opgezocht: werkt het niet, dan staat de tekst nog in het vak Het gesprek.
+fn zeg_hardop(tekst: &str) {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LoadLibraryW(naam: *const u16) -> HANDLE;
+        fn GetProcAddress(m: HANDLE, naam: *const u8) -> *const core::ffi::c_void;
+    }
+    type Gastheer = unsafe extern "system" fn(HWND, *mut *mut core::ffi::c_void) -> i32;
+    type Melding = unsafe extern "system" fn(*mut core::ffi::c_void, i32, i32, *mut u16, *mut u16) -> i32;
+    type Maak = unsafe extern "system" fn(*const u16) -> *mut u16;
+    type Vrij = unsafe extern "system" fn(*mut u16);
+    let Some(p) = PRAATVENSTER.with(|p| p.get()) else { return };
+    unsafe {
+        let uia = LoadLibraryW(w("uiautomationcore.dll").as_ptr());
+        let ole = LoadLibraryW(w("oleaut32.dll").as_ptr());
+        if uia.is_null() || ole.is_null() {
+            return;
+        }
+        let gastheer = GetProcAddress(uia, b"UiaHostProviderFromHwnd\0".as_ptr());
+        let melding = GetProcAddress(uia, b"UiaRaiseNotificationEvent\0".as_ptr());
+        let maak = GetProcAddress(ole, b"SysAllocString\0".as_ptr());
+        let vrij = GetProcAddress(ole, b"SysFreeString\0".as_ptr());
+        if gastheer.is_null() || melding.is_null() || maak.is_null() || vrij.is_null() {
+            return;
+        }
+        let gastheer: Gastheer = std::mem::transmute(gastheer);
+        let melding: Melding = std::mem::transmute(melding);
+        let maak: Maak = std::mem::transmute(maak);
+        let vrij: Vrij = std::mem::transmute(vrij);
+        let mut leverancier: *mut core::ffi::c_void = null_mut();
+        if gastheer(p.vak, &mut leverancier) < 0 || leverancier.is_null() {
+            return;
+        }
+        let tekst_b = maak(w(tekst).as_ptr());
+        let id_b = maak(w("JaapsProgrammeertaalGesprek").as_ptr());
+        // Soort: Other (4). Verwerking: ImportantMostRecent (1), zodat een nieuw antwoord het oude onderbreekt.
+        melding(leverancier, 4, 1, tekst_b, id_b);
+        vrij(tekst_b);
+        vrij(id_b);
+        // IUnknown::Release (plek 2 in de tabel).
+        let tabel = *(leverancier as *const *const usize);
+        let release: unsafe extern "system" fn(*mut core::ffi::c_void) -> u32 = std::mem::transmute(*tabel.add(2));
+        release(leverancier);
+    }
+}
+
+unsafe extern "system" fn praatvenster_proc(h: HWND, m: u32, wp: usize, lp: isize) -> isize {
+    match m {
+        WM_SIZE => {
+            indeling_opdrachtvenster(h);
+            0
+        }
+        WM_DESTROY => {
+            PRAATVENSTER.with(|p| {
+                if p.get().map_or(false, |x| x.venster == h) {
+                    p.set(None);
+                }
+            });
+            0
+        }
+        _ => DefWindowProcW(h, m, wp, lp),
+    }
+}
+
+/// Toetsen in het praatvenster: Enter, Escape en Tab. Geeft true als de toets is afgehandeld.
+fn praatvenster_toets(msg: &MSG) -> bool {
+    let Some(p) = PRAATVENSTER.with(|p| p.get()) else { return false };
+    if msg.message != WM_KEYDOWN {
+        return false;
+    }
+    unsafe {
+        if GetAncestor(msg.hwnd, GA_ROOT) != p.venster {
+            return false;
+        }
+        match msg.wParam {
+            VK_ESCAPE => {
+                DestroyWindow(p.venster);
+                SetFocus(v().editor);
+                true
+            }
+            VK_RETURN if GetFocus() == p.vak => {
+                praatvenster_enter();
+                true
+            }
+            VK_TAB => {
+                SetFocus(if GetFocus() == p.vak { p.gesprek } else { p.vak });
                 true
             }
             _ => false,

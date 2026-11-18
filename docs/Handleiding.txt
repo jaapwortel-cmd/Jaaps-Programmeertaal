@@ -49,6 +49,7 @@ Ctrl+F6         Vertel wat er op het scherm komt: vensters, onderdelen, kleuren,
 Ctrl+F8         Bouw een installatiebestand voor je programma (met licentie, als je die beschrijft)
 Ctrl+E          Opdracht geven in gewone zinnen, zoals "maak er een exe van" (zie hoofdstuk 14)
 Ctrl+F          Zoeken in alles wat je kunt zeggen (zie hoofdstuk 14)
+Ctrl+G          Gesprek met de assistent: gewoon praten over wat je wilt maken; hij maakt en start het (hoofdstuk 19)
 Ctrl+L          Op welke regel sta ik? Het programma zegt het regelnummer en wat er op die regel staat.
 F4              Naar het vak Meldingen
 Tab             Wisselen tussen het vak Opdrachten en het vak Meldingen
@@ -1110,3 +1111,55 @@ je omschrijving staat bovenaan als opmerking, en je eigen bestand blijft zoals h
 Staat je omschrijving al in de editor? Druk dan Ctrl+Shift+E (menu Programma).
 Wat het niet begreep, staat als opmerking in het programma.
 Voorbeelden staan in de map voorbeelden\omschrijvingen.
+
+19. Gesprek met de assistent (Ctrl+G)
+-------------------------------------
+
+Met Ctrl+G (menu Programma, Gesprek met de assistent) praat je in gewone zinnen over het programma
+dat je wilt maken. Net zoals tegen een helper. Je hoeft geen vaste zinnen te leren.
+Er zit geen AI in: het werkt met vaste regels, net als de rest van het programma.
+
+Zo werkt het venster:
+1. Typ of dicteer wat je wilt, en druk op Enter.
+2. Je schermlezer leest het antwoord voor.
+3. Met Tab ga je naar het vak Het gesprek. Daar staat alles wat er gezegd is; het nieuwste staat onderaan.
+4. Met Tab ga je weer terug. Escape sluit het venster. Het gesprek blijft bewaard zolang het programma open is.
+
+Wanneer maakt de assistent het programma?
+- Eerst vertelt hij wat hij denkt dat je wilt, en vraagt: Klopt dat?
+- Zeg je ja (of: ga maar verder), dan weet hij precies wat je wilt. Dan schrijft hij de zinnen in het
+  vak Opdrachten en start hij het programma meteen, net als met F5.
+- Zet je er daarna iets bij of verander je iets, dan maakt hij het opnieuw en start hij het weer.
+- Stonden er al andere zinnen in de editor? Dan vraagt hij eerst of je die wilt opslaan.
+  Het gemaakte programma is een nieuw programma; sla het op met Ctrl+S.
+- Wat de taal nog niet kan (bijvoorbeeld pauzeren, of een knop groter maken), zegt hij eerlijk.
+  Het staat dan als opmerking bovenaan het programma.
+- Een opdracht voor de editor, zoals "maak er een exe van", voert hij ook uit.
+
+Wat de assistent verder doet:
+- Hij ziet het verschil tussen een vraag, een idee, een uitleg en een opdracht.
+  Een idee ("misschien is een donkere stand handig") zet hij niet zomaar in je opdracht: hij vraagt het eerst.
+  Een vraag ("wat is een tekstvak?") beantwoordt hij alleen; hij maakt dan niets.
+- Hij onthoudt wat je hebt verteld. "Zet er ook een knop Opslaan bij" hoort bij hetzelfde programma.
+- Hij begrijpt "die knop", "maak dat groter" en "ga maar verder".
+- Bij "maak dat anders" vraagt hij eerst welk onderdeel je bedoelt. Hij kiest niet zelf.
+- Hij herstelt dicteerfouten zoals "tekstpak" (tekstvak) en zegt dat erbij. Weet hij het niet zeker, dan vraagt hij het.
+- Hij stelt één vraag tegelijk, en vraagt niet opnieuw wat je al hebt gezegd.
+- Hij zegt eerlijk als hij iets niet begrijpt. Hij gokt niet.
+
+Knoppen die hij al kan maken: Opslaan, Openen, Voorlezen, Wissen, Tijd, Optellen, en voor muziek
+Kies, Speel en Stop. Bij een andere knop maakt hij de knop wel, maar zegt hij dat je nog moet vertellen wat
+die knop moet doen.
+
+Een voorbeeld:
+Jij: Kun je een klein programma maken waar ik tekst in kan typen?
+Assistent: Je wilt dus een klein programma met een tekstvak om tekst in te typen. Klopt dat?
+Jij: Ja, en zet er ook een knop Opslaan bij.
+Assistent: Dan komt er ook een knop Opslaan bij. Ik begrijp je opdracht nu als: een klein programma
+met een tekstvak om tekst in te typen en een knop Opslaan. Ik maak het programma nu en start het.
+
+Handig om te zeggen:
+- Waar waren we?  De assistent vertelt wat er is afgesproken.
+- Wat is een tekstvak?  Een korte uitleg.
+- Haal de knop weg.  De knop hoort er niet meer bij (en hij maakt het programma opnieuw).
+- Begin opnieuw.  De assistent vergeet het gesprek.
