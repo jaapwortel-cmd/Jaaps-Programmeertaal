@@ -16,6 +16,8 @@ struct Venster {
     tabs: Vec<(String, Vec<(String, String)>)>,
     /// Menubalk: menu, en de regels erin.
     menus: Vec<(String, Vec<String>)>,
+    /// Een zelf gekozen Tab-volgorde.
+    tabvolgorde: Vec<String>,
 }
 
 impl Venster {
@@ -47,7 +49,13 @@ fn verzamel(lijst: &[Opdracht], wanneer: &str, vensters: &mut Vec<Venster>) {
                 sneltoetsen: Vec::new(),
                 tabs: Vec::new(),
                 menus: Vec::new(),
+                tabvolgorde: Vec::new(),
             }),
+            Soort::Venstergedrag(Gedrag::TabVolgorde(n)) => {
+                if let Some(v) = vensters.last_mut() {
+                    v.tabvolgorde = n.clone();
+                }
+            }
             Soort::MaakKnop { naam } => {
                 if let Some(v) = vensters.last_mut() {
                     v.voeg_toe("knop", naam);
@@ -219,7 +227,14 @@ pub fn beschrijf_scherm(p: &Programma) -> String {
                     .unwrap_or_default();
                 uit.push(format!("  {}. {} {}{}{}", j + 1, lidwoord(soort), naam, extra, toets));
             }
-            let tab: Vec<String> = v.onderdelen.iter().filter(|o| o.0 != "label" && o.0 != "afbeelding").map(|o| o.1.clone()).collect();
+            let mut tab: Vec<String> = v.onderdelen.iter().filter(|o| o.0 != "label" && o.0 != "afbeelding").map(|o| o.1.clone()).collect();
+            if !v.tabvolgorde.is_empty() {
+                // Eerst de zelf gekozen volgorde, dan de rest zoals ze in het venster staan.
+                let mut nieuw: Vec<String> = v.tabvolgorde.iter().filter_map(|n| tab.iter().find(|t| t.to_lowercase() == n.to_lowercase()).cloned()).collect();
+                let rest: Vec<String> = tab.iter().filter(|t| !nieuw.contains(t)).cloned().collect();
+                nieuw.extend(rest);
+                tab = nieuw;
+            }
             if !tab.is_empty() {
                 uit.push(format!("Met Tab ga je in deze volgorde langs: {}.", tab.join(", ")));
                 uit.push(format!("Bij de start staat de focus op: {}.", tab[0]));

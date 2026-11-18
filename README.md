@@ -288,11 +288,11 @@ Dit staat op je wensenlijst, maar zit nog **niet** in deze versie. Schrijf je zo
 
 **Geluid**: OGG en FLAC, stereo/3D, een microfoon kiezen, muziekspelers, audio-editor. (Wel gebouwd: piep, WAV en MP3 afspelen.)
 
-**Beeld**: 3D, QR-codes en streepjescodes.
+**Beeld**: 3D, QR-codes en streepjescodes lezen. (Wel gebouwd: QR-codes en streepjescodes maken.)
 
 **Bestanden**: DOCX en PDF lezen (ZIP inpakken en uitpakken werkt wel) (RAR: alleen uitpakken is technisch netjes mogelijk, inpakken valt onder de licentie van RAR), 32-bits programma's, een handleiding in je eigen programma (F1).
 
-**Netwerk**: verbinding met een andere computer, PHP en CSS.
+**Netwerk**: verbinding met een andere computer, eigen PHP-scripts. (Wel gebouwd: contactformulier in PHP en eigen CSS op een website.)
 
 **Spraak en toegankelijkheid**: braille, spraakherkenning, voorlezen, hardware, Whisper en taalmodellen als onderdeel van jouw programma's (niet van de taal zelf).
 

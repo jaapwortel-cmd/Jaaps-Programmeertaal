@@ -79,7 +79,7 @@ const WOORDENLIJST: &[&str] = &[
 
 /// Onderdelen die op de wensenlijst staan maar nog niet gebouwd zijn.
 const NOG_NIET: &[&str] = &[
-    "streepjescode",
+    "qr-lezer",
 ];
 
 fn klein(s: &[Stuk], i: usize) -> String {
@@ -990,6 +990,17 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
         }
         return Ok(Vorm::Los(Soort::Installatie(InstallatieZin::PrivacyRegel(tekst))));
     }
+    // De brailleleesregel.
+    for b in ["toon op de brailleleesregel", "zet op de brailleleesregel", "toon op de leesregel", "zet op de leesregel", "toon in braille"] {
+        if laag.starts_with(b) {
+            let rest = norm[b.len()..].trim();
+            if rest.is_empty() {
+                return Err(fout("Wat moet er op de leesregel? Schrijf bijvoorbeeld: Toon op de brailleleesregel \"Opgeslagen\"."));
+            }
+            let st = tekst::splits(rest).map_err(fout)?;
+            return Ok(Vorm::Los(Soort::Braille(spreektekst(&st)?)));
+        }
+    }
     // Internetradio.
     if laag == "stop de radio" || laag == "zet de radio uit" || laag == "stop de radiozender" {
         return Ok(Vorm::Los(Soort::Radio(None)));
@@ -1043,6 +1054,24 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     };
     if (laag.contains("schermvullend") || laag.contains("gemaximaliseerd") || laag.contains("maximaal groot")) && laag.contains("venster") {
         return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::Schermvullend)));
+    }
+    for b in ["de tab-volgorde is", "de tabvolgorde is", "de volgorde met tab is"] {
+        if let Some(rest) = laag.starts_with(b).then(|| norm[b.len()..].trim_start_matches([':', ' ']).trim_end_matches('.')) {
+            let namen: Vec<String> = rest.split(',').flat_map(|d| d.split(" en ")).map(|n| n.trim().trim_matches('"').to_string()).filter(|n| !n.is_empty()).collect();
+            if namen.len() < 2 {
+                return Err(fout("Noem minstens twee onderdelen. Schrijf bijvoorbeeld: De Tab-volgorde is Naam, Leeftijd en Opslaan."));
+            }
+            return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::TabVolgorde(namen))));
+        }
+    }
+    if laag.starts_with("zet de knop ") && laag.contains(" naast de knop ") {
+        let p = laag.find(" naast de knop ").unwrap();
+        let knop = norm["zet de knop ".len()..p].trim().to_string();
+        let naast = norm[p + " naast de knop ".len()..].trim().trim_end_matches('.').to_string();
+        if knop.is_empty() || naast.is_empty() {
+            return Err(fout("Schrijf het zo: Zet de knop Annuleren naast de knop Opslaan."));
+        }
+        return Ok(Vorm::Los(Soort::Venstergedrag(Gedrag::Naast(knop, naast))));
     }
     if laag.starts_with("vraag bij afsluiten") || laag.starts_with("vraag bij het afsluiten") || laag.starts_with("vraag als ik afsluit") {
         let vraag = tussen_aanhalingstekens(norm).unwrap_or_else(|| "Weet je zeker dat je wilt afsluiten?".to_string());
@@ -1238,7 +1267,8 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             }
             Ok(Vorm::Los(Soort::VulKeuzelijst { lijst: rest_tekst(&s[l + 1..m]), waarde: u(&s[m + 1..])? }))
         }
-        "maak" if matches!(klein(&s, 2).as_str(), "qr-code" | "qrcode") || (klein(&s, 2) == "qr" && klein(&s, 3) == "code") => {
+        "maak" if matches!(klein(&s, 2).as_str(), "qr-code" | "qrcode" | "streepjescode" | "barcode") || (klein(&s, 2) == "qr" && klein(&s, 3) == "code") => {
+            let streepjes = matches!(klein(&s, 2).as_str(), "streepjescode" | "barcode");
             // Maak een QR-code van "https://..." in het bestand link.png
             let vb = "Schrijf het zo: Maak een QR-code van \"https://www.voorbeeld.nl\" in het bestand link.png";
             let b = if klein(&s, 2) == "qr" { 4 } else { 3 };
@@ -1253,7 +1283,7 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             if tot <= b + 1 || p + 1 >= s.len() {
                 return Err(fout(vb));
             }
-            Ok(Vorm::Los(Soort::QrCode { waarde: tekst_of_uitdrukking(&s[b + 1..tot]).map_err(fout)?, pad: pad(&s[p + 1..]).map_err(fout)? }))
+            Ok(Vorm::Los(Soort::QrCode { waarde: tekst_of_uitdrukking(&s[b + 1..tot]).map_err(fout)?, pad: pad(&s[p + 1..]).map_err(fout)?, streepjes }))
         }
         "maak" if zoek(&s, &["werkbalk"], 1).is_some_and(|p| p <= 2) => {
             // Maak een werkbalk met de knoppen Nieuw, Openen en Opslaan

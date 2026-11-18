@@ -356,3 +356,31 @@ fn tekstverwerker_met_openen_en_opslaan() {
     assert!(u.meldingen[0].voorstel.is_some(), "{:#?}", u.meldingen);
     let _ = std::fs::remove_dir_all(&m);
 }
+
+#[test]
+fn streepjescode_tabvolgorde_braille() {
+    let m = map("lijst2");
+    let bron = "Maak een venster met als titel A\nMaak een tekstvak met als naam Naam\nMaak een knop met als naam Opslaan\nMaak een knop met als naam Annuleren\nZet de knop Annuleren naast de knop Opslaan\nDe Tab-volgorde is Opslaan, Naam en Annuleren\nToon op de brailleleesregel \"Klaar\"\nMaak een streepjescode van \"12345\" in het bestand code.png\n";
+    assert!(lees(bron).is_goed(), "{:#?}", lees(bron).meldingen);
+    let uit = voer_uit(bron, &m);
+    assert!(uit.contains("[naast] Annuleren naast Opslaan\n[tab-volgorde] Opslaan, Naam, Annuleren\n[braille] Klaar\n"), "{}", uit);
+    let png = std::fs::read(m.join("code.png")).unwrap();
+    assert!(png.starts_with(b"\x89PNG"));
+    assert!(motor::scherm::beschrijf_scherm(&lees(bron).programma).contains("in deze volgorde langs: Opslaan, Naam, Annuleren"));
+    assert!(!lees("Maak een venster met als titel A\nDe Tab-volgorde is Weg en Nergens\n").is_goed());
+    let _ = std::fs::remove_dir_all(&m);
+}
+
+#[test]
+fn website_met_css_en_contactformulier() {
+    let m = map("site");
+    let bron = "Maak een website met als titel Test\nGebruik het lettertype Verdana\nVoeg CSS toe: \"h1 { color: darkred; }\"\nZet een contactformulier met het e-mailadres info@voorbeeld.nl\n";
+    let (w, meldingen) = motor::website::lees(bron);
+    assert!(meldingen.is_empty(), "{:#?}", meldingen);
+    motor::website::maak(&w, &m, None).unwrap();
+    assert!(std::fs::read_to_string(m.join("stijl.css")).unwrap().contains("h1 { color: darkred; }"));
+    let index = std::fs::read_to_string(m.join("index.html")).unwrap();
+    assert!(index.contains("<label for=\"bericht\">Je bericht</label>"));
+    assert!(std::fs::read_to_string(m.join("contact.php")).unwrap().contains("mail('info@voorbeeld.nl'"));
+    let _ = std::fs::remove_dir_all(&m);
+}

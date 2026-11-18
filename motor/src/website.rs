@@ -27,6 +27,8 @@ pub enum Blok {
     Lijst(Vec<String>),
     Radio { naam: String, adres: String },
     Email(String),
+    /// Een contactformulier dat een e-mail stuurt naar dit adres (via contact.php).
+    Contact(String),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -39,6 +41,10 @@ pub struct Pagina {
 pub struct Website {
     pub titel: String,
     pub kleur: Option<(String, (u8, u8, u8))>,
+    /// Eigen CSS, letterype en grotere letters.
+    pub css: Vec<String>,
+    pub lettertype: Option<String>,
+    pub groter: bool,
     pub paginas: Vec<Pagina>,
 }
 
@@ -156,6 +162,21 @@ pub fn lees(bron: &str) -> (Website, Vec<Melding>) {
                 continue;
             }
             pagina(&mut w).blokken.push(Blok::Email(a));
+        } else if let Some(t) = na(norm, &laag, "zet een contactformulier met het e-mailadres").or_else(|| na(norm, &laag, "zet een contactformulier naar")) {
+            let a = waarde(t);
+            if !a.contains('@') {
+                meldingen.push(Melding::fout(r, format!("{} is geen e-mailadres.", a)));
+                continue;
+            }
+            pagina(&mut w).blokken.push(Blok::Contact(a));
+        } else if laag.starts_with("zet een contactformulier") {
+            meldingen.push(Melding::fout(r, "Naar welk e-mailadres moeten de berichten? Schrijf bijvoorbeeld: Zet een contactformulier met het e-mailadres info@voorbeeld.nl"));
+        } else if let Some(t) = na(norm, &laag, "voeg css toe:").or_else(|| na(norm, &laag, "voeg css toe")).or_else(|| na(norm, &laag, "gebruik de css")) {
+            w.css.push(waarde(t));
+        } else if let Some(t) = na(norm, &laag, "gebruik het lettertype") {
+            w.lettertype = Some(waarde(t));
+        } else if laag.starts_with("maak de letters groter") || laag.starts_with("maak de letters van de website groter") {
+            w.groter = true;
         } else if let Some(t) = na(norm, &laag, "geef de website de kleur") {
             let k = waarde(t).to_lowercase();
             match crate::taal::KLEUREN.iter().find(|x| x.0 == k) {
@@ -219,6 +240,7 @@ pub fn beschrijf(w: &Website) -> String {
                 Blok::Lijst(l) => format!("  Een lijst: {}", l.join(", ")),
                 Blok::Radio { naam, .. } => format!("  Een radiospeler voor {} met een knop Afspelen en een knop Stoppen", naam),
                 Blok::Email(a) => format!("  Een e-mailadres: {}", a),
+                Blok::Contact(a) => format!("  Een contactformulier (naam, e-mail, bericht) dat mailt naar {}. Dit werkt alleen op een webruimte met PHP.", a),
             });
         }
     }
@@ -251,7 +273,36 @@ img {{ max-width: 100%; height: auto; }}\n\
 button {{ font-size: 1.1rem; padding: .5rem 1rem; margin-right: .5rem; }}\n\
 @media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; }} }}\n"
     );
+    let mut css = css;
+    if let Some(l) = &w.lettertype {
+        css.push_str(&format!("body {{ font-family: \"{}\", Segoe UI, Arial, sans-serif; }}\n", l.replace('"', "")));
+    }
+    if w.groter {
+        css.push_str("body { font-size: 1.45rem; }\n");
+    }
+    for c in &w.css {
+        css.push_str(&format!("/* Eigen CSS */\n{}\n", c));
+    }
     std::fs::write(map.join("stijl.css"), css).map_err(|e| e.to_string())?;
+    // Een contactformulier: contact.php verstuurt het bericht (alleen op een webruimte met PHP).
+    if let Some(adres) = w.paginas.iter().flat_map(|p| p.blokken.iter()).find_map(|b| if let Blok::Contact(a) = b { Some(a.clone()) } else { None }) {
+        let php = format!(
+            "<?php\n// Gemaakt met Jaap's Programmeertaal. Stuurt het contactformulier naar {adres}.\n\
+$naam = trim(strip_tags($_POST['naam'] ?? ''));\n$van = filter_var(trim($_POST['email'] ?? ''), FILTER_VALIDATE_EMAIL);\n\
+$bericht = trim(strip_tags($_POST['bericht'] ?? ''));\n$gelukt = false;\n\
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $naam !== '' && $van && $bericht !== '' && empty($_POST['website'])) {{\n\
+    $kop = 'From: {adres}' . \"\\r\\nReply-To: \" . $van . \"\\r\\nContent-Type: text/plain; charset=utf-8\";\n\
+    $gelukt = mail('{adres}', 'Bericht via de website van ' . str_replace([\"\\r\", \"\\n\"], ' ', $naam), $bericht, $kop);\n}}\n?>\n\
+<!DOCTYPE html>\n<html lang=\"nl\">\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
+<title>Bericht verstuurd - {titel}</title><link rel=\"stylesheet\" href=\"stijl.css\"></head>\n<body><main id=\"inhoud\">\n\
+<h1><?php echo $gelukt ? 'Bedankt, je bericht is verstuurd.' : 'Je bericht is niet verstuurd. Vul alles in en probeer het opnieuw.'; ?></h1>\n\
+<p><a href=\"index.html\">Terug naar de website</a></p>\n</main></body></html>\n",
+            adres = adres.replace('\'', ""),
+            titel = html(&w.titel)
+        );
+        std::fs::write(map.join("contact.php"), php).map_err(|e| e.to_string())?;
+        waarschuwingen.push("Het contactformulier werkt alleen op een webruimte met PHP (de meeste webhosts hebben dat). In Firefox op je eigen computer kun je het wel zien, maar niet versturen.".into());
+    }
     let titels: Vec<(String, String)> = (0..w.paginas.len()).map(|i| (w.paginas[i].naam.clone(), bestandsnaam(w, i))).collect();
     for (i, p) in w.paginas.iter().enumerate() {
         let mut h = String::new();
@@ -319,6 +370,14 @@ button {{ font-size: 1.1rem; padding: .5rem 1rem; margin-right: .5rem; }}\n\
                     ));
                 }
                 Blok::Email(a) => h.push_str(&format!("<p>E-mail: <a href=\"mailto:{0}\">{0}</a></p>\n", html(a))),
+                Blok::Contact(_) => h.push_str(
+                    "<form action=\"contact.php\" method=\"post\" aria-label=\"Contactformulier\">\n\
+<p><label for=\"naam\">Je naam</label><br><input id=\"naam\" name=\"naam\" autocomplete=\"name\" required></p>\n\
+<p><label for=\"email\">Je e-mailadres</label><br><input id=\"email\" name=\"email\" type=\"email\" autocomplete=\"email\" required></p>\n\
+<p><label for=\"bericht\">Je bericht</label><br><textarea id=\"bericht\" name=\"bericht\" rows=\"6\" required></textarea></p>\n\
+<p hidden><label for=\"website\">Laat dit leeg</label><input id=\"website\" name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></p>\n\
+<p><button type=\"submit\">Versturen</button></p>\n</form>\n",
+                ),
             }
         }
         h.push_str(&format!("</main>\n<footer><p>{}</p></footer>\n</body>\n</html>\n", html(&w.titel)));

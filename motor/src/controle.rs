@@ -501,8 +501,33 @@ impl<'a> Controle<'a> {
                         self.meld(Melding::vraag(r, format!("Er is geen knop met de naam {}. Welke knop moet deze tip krijgen?", knop)));
                     }
                 }
+                Soort::Venstergedrag(Gedrag::TabVolgorde(namen)) => {
+                    for n in namen {
+                        let bestaat = self.programma.alle().iter().any(|o| match &o.soort {
+                            Soort::MaakKnop { naam } | Soort::MaakOnderdeel { naam, .. } => naam.to_lowercase() == n.to_lowercase(),
+                            Soort::Werkbalk(w) => w.iter().any(|x| x.to_lowercase() == n.to_lowercase()),
+                            _ => false,
+                        });
+                        if !bestaat {
+                            self.meld(Melding::vraag(r, format!("In de Tab-volgorde staat {}, maar er is geen knop of onderdeel met die naam. Welke bedoel je?", n)));
+                        }
+                    }
+                }
+                Soort::Venstergedrag(Gedrag::Naast(k, n)) => {
+                    for x in [k, n] {
+                        let bestaat = self.programma.alle().iter().any(|o| matches!(&o.soort, Soort::MaakKnop { naam } if naam.to_lowercase() == x.to_lowercase()));
+                        if !bestaat {
+                            self.meld(Melding::vraag(r, format!("Er is geen knop met de naam {}. Welke knop bedoel je?", x)));
+                        }
+                    }
+                }
                 Soort::Venstergedrag(_) => {}
                 Soort::Radio(_) => {}
+                Soort::Braille(u) => {
+                    let mut namen = Vec::new();
+                    u.namen(&mut namen);
+                    self.controleer_namen(r, namen, in_knop, None);
+                }
                 Soort::VulKeuzelijst { waarde, .. } => {
                     let mut namen = Vec::new();
                     waarde.namen(&mut namen);
@@ -513,7 +538,7 @@ impl<'a> Controle<'a> {
                     p.namen(&mut namen);
                     self.controleer_namen(r, namen, in_knop, None);
                 }
-                Soort::QrCode { waarde, pad } => {
+                Soort::QrCode { waarde, pad, .. } => {
                     for u in [waarde, pad] {
                         let mut namen = Vec::new();
                         u.namen(&mut namen);

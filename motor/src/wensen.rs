@@ -51,7 +51,6 @@ const NOG_NIET: &[(&[&str], &str)] = &[
     (&["mailen", "e-mail versturen", "mail versturen", "smtp", "outlook"], "E-mail versturen vanuit je programma"),
     (&["netwerk", "andere computer", "op afstand"], "Verbinding tussen computers"),
     (&["rar"], "RAR-bestanden (zip kan wel)"),
-    (&["braille", "brailleleesregel"], "Braille rechtstreeks aansturen (je schermlezer doet dat al)"),
     (&["edge", "webview"], "Edge of WebView2: dat wil je niet, en het zit er niet in. Webpagina's openen gaat met je eigen browser"),
 ];
 
@@ -197,6 +196,21 @@ pub fn begrijp(zin: &str) -> Option<Voorstel> {
             Some(b) => Voorstel::Regels { regels: vec![format!("Maak een reservekopie van het bestand {}", b)], uitleg: "Er komt een reservekopie in de map Reservekopieën; de laatste 10 blijven.".into() },
             None => Voorstel::Vraag("Van welk bestand moet ik een reservekopie maken? Zeg bijvoorbeeld: maak een reservekopie van notities.txt.".into()),
         });
+    }
+    if heeft(&t, "streepjescode") || heeft(&t, "barcode") || heeft(&t, "streepjescodes") {
+        return Some(Voorstel::Uitleg("Een streepjescode (Code 128) maak je zo: Maak een streepjescode van \"12345\" in het bestand code.png. Streepjescodes lezen kan nog niet.".into()));
+    }
+    if heeft(&t, "braille") || heeft(&t, "brailleleesregel") || heeft(&t, "leesregel") {
+        if let Some(tekst) = zin.split('"').nth(1) {
+            return Some(Voorstel::Regels { regels: vec![format!("Toon op de brailleleesregel \"{}\"", tekst)], uitleg: "Dit komt op de brailleleesregel.".into() });
+        }
+        return Some(Voorstel::Uitleg("Tekst op de brailleleesregel zet je zo: Toon op de brailleleesregel \"Opgeslagen\". Met JAWS gaat dat rechtstreeks; met NVDA als korte melding.".into()));
+    }
+    if (heeft(&t, "tab-volgorde") || heeft(&t, "tabvolgorde") || (heeft(&t, "volgorde") && heeft(&t, "tab"))) && !zin.contains(',') {
+        return Some(Voorstel::Uitleg("De Tab-volgorde kies je zo: De Tab-volgorde is Naam, Leeftijd en Opslaan. Knoppen naast elkaar: Zet de knop Annuleren naast de knop Opslaan.".into()));
+    }
+    if heeft(&t, "contactformulier") || heeft(&t, "php") || heeft(&t, "css") {
+        return Some(Voorstel::Uitleg("Op een website: Zet een contactformulier met het e-mailadres info@voorbeeld.nl (werkt met PHP op je webruimte). Eigen opmaak: Voeg CSS toe: \"h1 { color: darkred; }\", Gebruik het lettertype Verdana, of: Maak de letters groter.".into()));
     }
     if heeft(&t, "qr-code") || heeft(&t, "qr") || heeft(&t, "qrcode") {
         return Some(Voorstel::Uitleg("Een QR-code maak je zo: Maak een QR-code van \"https://www.voorbeeld.nl\" in het bestand qr.png. Daarna kun je hem tonen: Maak een afbeelding van het bestand qr.png met de beschrijving QR-code naar mijn website. QR-codes lezen kan nog niet.".into()));

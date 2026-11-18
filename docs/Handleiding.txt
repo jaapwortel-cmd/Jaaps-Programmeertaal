@@ -664,6 +664,20 @@ Mijn programma mag maar één keer open zijn
 Geef de knop Opslaan de tip "Bewaart je werk"     (zichtbaar als je met de muis op de knop staat)
 Maak een reservekopie van het bestand notities.txt   (in de map Reservekopieën; de laatste 10 blijven)
 
+4.7y Streepjescodes
+
+Maak een streepjescode van "12345" in het bestand code.png
+Een streepjescode van het soort Code 128 (letters, cijfers en tekens, zonder é of €).
+Getest met een echte streepjescode-lezer. Lezen kan nog niet.
+
+4.7z Tab-volgorde, knoppen naast elkaar en braille
+
+De Tab-volgorde is Naam, Leeftijd en Opslaan       (het eerste krijgt bij de start de focus)
+Zet de knop Annuleren naast de knop Opslaan        (de twee knoppen worden elk half zo breed)
+Toon op de brailleleesregel "Opgeslagen"
+Met JAWS gaat de tekst rechtstreeks naar de brailleleesregel. Met NVDA en Verteller wordt het een
+korte melding, die NVDA ook op de leesregel laat zien. Eerlijk: nog niet getest met een echte leesregel.
+
 4.8 Blokken sluiten
 
 Einde als                 sluit een keuze
@@ -964,6 +978,16 @@ Zet een lijst met "Radio", "Programma's" en "Muziek"
 Zet een e-mailadres info@voorbeeld.nl
 Maak een pagina met als naam Over mij
 Geef de website de kleur donkerblauw
+
+Zet een contactformulier met het e-mailadres info@voorbeeld.nl
+Gebruik het lettertype Verdana
+Maak de letters groter
+Voeg CSS toe: "h1 { color: darkred; }"          (eigen opmaak in CSS, voor als je dat kent)
+
+Een contactformulier heeft de vakken Je naam, Je e-mailadres en Je bericht, en een knop Versturen.
+Het bericht gaat via het bestand contact.php naar jouw e-mailadres. Dat werkt alleen op een
+webruimte met PHP (de meeste webhosts hebben dat), niet als je de website op je eigen computer opent.
+Getest met een PHP-webserver: het bericht kwam goed aan.
 
 F5: de website gaat open in Firefox (niet in Edge).
 F8: de website komt in Documenten\Jaaps Programmeertaal\<titel> website. Die map kun je op

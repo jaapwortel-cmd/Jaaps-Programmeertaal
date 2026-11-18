@@ -54,4 +54,7 @@ Versie 0.1.0 (proefversie, 17 november 2026)
 - Zelf een radio bouwen: de radiozenders (ook per land, van internet), Vul de keuzelijst ... met ...,
   Speel de radiozender die gekozen is in de keuzelijst ..., het adres van de radiozender ...
 - Een bestand kiezen met het gewone Openen- en Opslaan als-venster. Voorbeeld: Mijn tekstverwerker.
+- Streepjescodes maken (Code 128). Zelf de Tab-volgorde kiezen, knoppen naast elkaar zetten.
+- Tekst op de brailleleesregel (JAWS rechtstreeks, NVDA als melding).
+- Websites: een contactformulier (PHP), eigen CSS, een lettertype en grotere letters.
 - Geen AI: alleen vaste, ingebouwde regels.

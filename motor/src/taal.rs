@@ -339,6 +339,8 @@ pub enum Soort {
     Opdrachtvak,
     /// Hoe het venster zich gedraagt: schermvullend, vraag bij afsluiten, maar één keer open, tip bij een knop.
     Venstergedrag(Gedrag),
+    /// Tekst op de brailleleesregel zetten (JAWS of NVDA).
+    Braille(Uitdrukking),
     /// Een keuzelijst vullen met alles uit een lijst.
     VulKeuzelijst { lijst: String, waarde: Uitdrukking },
     /// Een internetradiozender spelen (naam, adres), of stoppen (None).
@@ -346,7 +348,7 @@ pub enum Soort {
     /// Een reservekopie van een bestand (de laatste 10 blijven bewaard).
     Reservekopie(Uitdrukking),
     /// Een QR-code als PNG-afbeelding.
-    QrCode { waarde: Uitdrukking, pad: Uitdrukking },
+    QrCode { waarde: Uitdrukking, pad: Uitdrukking, streepjes: bool },
     /// Een werkbalk: knoppen naast elkaar bovenaan het venster.
     Werkbalk(Vec<String>),
     /// Een ander programma starten.
@@ -547,8 +549,8 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
-            Soort::VulKeuzelijst { waarde, .. } => vec![waarde],
-            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
+            Soort::VulKeuzelijst { waarde, .. } | Soort::Braille(waarde) => vec![waarde],
+            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
             Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter_mut().collect(),
@@ -590,8 +592,8 @@ impl Soort {
         match self {
             Soort::Toon(u) | Soort::Zeg(u) | Soort::LeesVoor(u) | Soort::Volume(u) | Soort::Doe(u) | Soort::GeefUitkomst(u) | Soort::MaakMap(u) | Soort::Logboek(u) => vec![u],
             Soort::Wacht(u) | Soort::StartProgramma(u) | Soort::OpenBestand(u) | Soort::Reservekopie(u) | Soort::Radio(Some((_, u))) => vec![u],
-            Soort::VulKeuzelijst { waarde, .. } => vec![waarde],
-            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad } => vec![waarde, pad],
+            Soort::VulKeuzelijst { waarde, .. } | Soort::Braille(waarde) => vec![waarde],
+            Soort::SchrijfBestand { waarde, pad, .. } | Soort::Document { waarde, pad, .. } | Soort::QrCode { waarde, pad, .. } => vec![waarde, pad],
             Soort::Verstuur { waarde, adres } => vec![waarde, adres],
             Soort::StopOpname(p) => vec![p],
             Soort::Tabel { actie: TabelActie::Rij(w), .. } => w.iter().collect(),
@@ -750,6 +752,10 @@ pub fn zender(naam: &str) -> Option<(&'static str, &'static str)> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Gedrag {
+    /// De Tab-volgorde zelf kiezen (namen van onderdelen en knoppen).
+    TabVolgorde(Vec<String>),
+    /// Een knop rechts naast een andere knop zetten (knop, naast).
+    Naast(String, String),
     Schermvullend,
     VraagBijAfsluiten(String),
     MaarEenKeerOpen,

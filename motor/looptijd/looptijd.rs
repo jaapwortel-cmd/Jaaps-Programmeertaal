@@ -729,6 +729,101 @@ fn qr_png(rooster: &[Vec<bool>], vak: usize) -> Vec<u8> {
     png
 }
 
+/// De patronen van Code 128 (waarde 0 tot en met 105), uit de norm (via python-barcode).
+const CODE128: [u16; 106] = [0b11011001100, 0b11001101100, 0b11001100110, 0b10010011000, 0b10010001100, 0b10001001100, 0b10011001000, 0b10011000100, 0b10001100100, 0b11001001000, 0b11001000100, 0b11000100100, 0b10110011100, 0b10011011100, 0b10011001110, 0b10111001100, 0b10011101100, 0b10011100110, 0b11001110010, 0b11001011100, 0b11001001110, 0b11011100100, 0b11001110100, 0b11101101110, 0b11101001100, 0b11100101100, 0b11100100110, 0b11101100100, 0b11100110100, 0b11100110010, 0b11011011000, 0b11011000110, 0b11000110110, 0b10100011000, 0b10001011000, 0b10001000110, 0b10110001000, 0b10001101000, 0b10001100010, 0b11010001000, 0b11000101000, 0b11000100010, 0b10110111000, 0b10110001110, 0b10001101110, 0b10111011000, 0b10111000110, 0b10001110110, 0b11101110110, 0b11010001110, 0b11000101110, 0b11011101000, 0b11011100010, 0b11011101110, 0b11101011000, 0b11101000110, 0b11100010110, 0b11101101000, 0b11101100010, 0b11100011010, 0b11101111010, 0b11001000010, 0b11110001010, 0b10100110000, 0b10100001100, 0b10010110000, 0b10010000110, 0b10000101100, 0b10000100110, 0b10110010000, 0b10110000100, 0b10011010000, 0b10011000010, 0b10000110100, 0b10000110010, 0b11000010010, 0b11001010000, 0b11110111010, 0b11000010100, 0b10001111010, 0b10100111100, 0b10010111100, 0b10010011110, 0b10111100100, 0b10011110100, 0b10011110010, 0b11110100100, 0b11110010100, 0b11110010010, 0b11011011110, 0b11011110110, 0b11110110110, 0b10101111000, 0b10100011110, 0b10001011110, 0b10111101000, 0b10111100010, 0b11110101000, 0b11110100010, 0b10111011110, 0b10111101110, 0b11101011110, 0b11110101110, 0b11010000100, 0b11010010000, 0b11010011100];
+
+/// Een streepjescode (Code 128, soort B: letters, cijfers en tekens). Geeft de strepen: true = zwart.
+fn code128(tekst: &str) -> Option<Vec<bool>> {
+    let mut waarden = vec![104u32];
+    for c in tekst.chars() {
+        let n = c as u32;
+        if !(32..=126).contains(&n) {
+            return None;
+        }
+        waarden.push(n - 32);
+    }
+    let som: u32 = waarden.iter().enumerate().map(|(i, v)| if i == 0 { *v } else { i as u32 * v }).sum();
+    waarden.push(som % 103);
+    let mut uit = Vec::new();
+    for v in waarden {
+        let p = CODE128[v as usize];
+        for i in (0..11).rev() {
+            uit.push((p >> i) & 1 == 1);
+        }
+    }
+    // Stopteken (13 strepen).
+    for b in "1100011101011".chars() {
+        uit.push(b == '1');
+    }
+    Some(uit)
+}
+
+/// Een grijs PNG-bestand (zonder compressie): `beeld` is breedte x hoogte, 0 = zwart, 255 = wit.
+fn png_grijs(breedte: usize, hoogte: usize, beeld: &[u8]) -> Vec<u8> {
+    let mut ruw = Vec::with_capacity((breedte + 1) * hoogte);
+    for y in 0..hoogte {
+        ruw.push(0u8);
+        ruw.extend_from_slice(&beeld[y * breedte..(y + 1) * breedte]);
+    }
+    let mut z = vec![0x78u8, 0x01];
+    let stukken: Vec<&[u8]> = ruw.chunks(65535).collect();
+    for (k, stuk) in stukken.iter().enumerate() {
+        z.push((k + 1 == stukken.len()) as u8);
+        z.extend_from_slice(&(stuk.len() as u16).to_le_bytes());
+        z.extend_from_slice(&(!(stuk.len() as u16)).to_le_bytes());
+        z.extend_from_slice(stuk);
+    }
+    let (mut a, mut b) = (1u32, 0u32);
+    for &x in &ruw {
+        a = (a + x as u32) % 65521;
+        b = (b + a) % 65521;
+    }
+    z.extend_from_slice(&((b << 16) | a).to_be_bytes());
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    let mut stuk = |soort: &[u8], data: &[u8], png: &mut Vec<u8>| {
+        png.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        let mut c = soort.to_vec();
+        c.extend_from_slice(data);
+        png.extend_from_slice(&c);
+        png.extend_from_slice(&crc32(&c).to_be_bytes());
+    };
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&(breedte as u32).to_be_bytes());
+    ihdr.extend_from_slice(&(hoogte as u32).to_be_bytes());
+    ihdr.extend_from_slice(&[8, 0, 0, 0, 0]);
+    stuk(b"IHDR", &ihdr, &mut png);
+    stuk(b"IDAT", &z, &mut png);
+    stuk(b"IEND", &[], &mut png);
+    png
+}
+
+fn maak_streepjescode(waarde: W, pad: W, r: usize) -> R<()> {
+    let t = waarde.tekst();
+    if t.is_empty() {
+        return fout(r, "Een streepjescode van lege tekst kan niet.".to_string());
+    }
+    let Some(strepen) = code128(&t) else {
+        return fout(r, "In een streepjescode kunnen alleen gewone letters, cijfers en tekens (geen é, ü of euroteken).".to_string());
+    };
+    let (vak, rand, hoogte) = (3usize, 10usize, 120usize);
+    let breedte = (strepen.len() + 2 * rand) * vak;
+    let mut beeld = vec![255u8; breedte * hoogte];
+    for y in 10..hoogte - 10 {
+        for (i, &z) in strepen.iter().enumerate() {
+            if z {
+                for k in 0..vak {
+                    beeld[y * breedte + (rand + i) * vak + k] = 0;
+                }
+            }
+        }
+    }
+    let p = volledig_pad(&pad);
+    if let Some(m) = p.parent() {
+        let _ = std::fs::create_dir_all(m);
+    }
+    std::fs::write(&p, png_grijs(breedte, hoogte, &beeld)).or_else(|e| fout(r, format!("Ik kan {} niet schrijven: {}", p.display(), e)))
+}
+
 fn maak_qr(waarde: W, pad: W, r: usize) -> R<()> {
     let t = waarde.tekst();
     if t.is_empty() {
@@ -2028,6 +2123,8 @@ impl Staat {
         if self.scherm.tekststand {
             match soort {
                 0 => println!("[schermvullend]"),
+                4 => println!("[tab-volgorde] {}", a.replace('\u{1}', ", ")),
+                5 => println!("[naast] {} naast {}", a, b),
                 1 => println!("[vraag bij afsluiten] {}", a),
                 2 => println!("[maar één keer open]"),
                 _ => println!("[tip bij {}] {}", a, b),
@@ -2035,7 +2132,13 @@ impl Staat {
             return;
         }
         #[cfg(windows)]
-        self.scherm.win.gedrag(soort, a, b);
+        if soort >= 4 {
+            let onderdelen = std::mem::take(&mut self.scherm.onderdelen);
+            self.scherm.win.plaatsing(soort, a, b, &onderdelen);
+            self.scherm.onderdelen = onderdelen;
+        } else {
+            self.scherm.win.gedrag(soort, a, b);
+        }
     }
     /// Een werkbalk: knoppen naast elkaar.
     fn werkbalk(&mut self, namen: &[&str]) {
@@ -2155,6 +2258,35 @@ impl Staat {
             }
         }
         Ok(())
+    }
+    /// Tekst op de brailleleesregel. JAWS: via zijn eigen COM-koppeling (BrailleMessage). Anders
+    /// een melding via UI Automation; NVDA toont die ook kort op de leesregel.
+    fn braille(&mut self, w: W) {
+        let t = w.tekst();
+        if self.scherm.tekststand {
+            println!("[braille] {}", t);
+            return;
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let jaws = std::process::Command::new("tasklist")
+                .args(["/FI", "IMAGENAME eq jfw.exe", "/NH"])
+                .creation_flags(0x0800_0000)
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).to_lowercase().contains("jfw.exe"))
+                .unwrap_or(false);
+            if jaws {
+                let veilig = t.replace('\'', "''").replace('"', "\\\"");
+                let script = format!("$j=New-Object -ComObject FreedomSci.JawsApi; [void]$j.RunFunction('BrailleMessage(\"{}\", 0, 5000)')", veilig);
+                let _ = std::process::Command::new("powershell.exe")
+                    .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script])
+                    .creation_flags(0x0800_0000)
+                    .spawn();
+                return;
+            }
+        }
+        self.zeg(W::T(t));
     }
     fn zeg(&mut self, w: W) {
         let t = w.tekst();
@@ -2862,6 +2994,7 @@ mod win {
     }
 
     #[repr(C)]
+    #[derive(Clone, Copy)]
     struct RECT {
         left: i32,
         top: i32,
@@ -2883,6 +3016,8 @@ mod win {
         fn MessageBoxW(h: HWND, text: *const u16, title: *const u16, kind: u32) -> i32;
         fn GetForegroundWindow() -> HWND;
         fn IsZoomed(h: HWND) -> i32;
+        fn GetWindowRect(h: HWND, r: *mut RECT) -> i32;
+        fn MapWindowPoints(van: HWND, naar: HWND, punten: *mut i32, aantal: u32) -> i32;
         fn SendMessageW(h: HWND, m: u32, w: usize, l: isize) -> isize;
         fn PostMessageW(h: HWND, m: u32, w: usize, l: isize) -> i32;
         fn SetFocus(h: HWND) -> HWND;
@@ -3483,6 +3618,80 @@ mod win {
     }
 
     impl WinScherm {
+        /// Een knop of onderdeel bij zijn naam (de tekst op de knop, of het onderdeel zelf).
+        fn h_van(&self, naam: &str, onderdelen: &[super::Ond]) -> Option<HWND> {
+            let n = naam.to_lowercase();
+            if let Some(o) = onderdelen.iter().find(|o| o.naam.to_lowercase() == n) {
+                return Some(o.h as HWND);
+            }
+            KNOP_HWNDS.with(|k| {
+                k.borrow().iter().copied().find(|&h| {
+                    let mut buf = [0u16; 256];
+                    let l = unsafe { GetWindowTextW(h, buf.as_mut_ptr(), 256) };
+                    let t = String::from_utf16_lossy(&buf[..l.max(0) as usize]).to_lowercase();
+                    t == n || t.starts_with(&format!("{} (", n))
+                })
+            })
+        }
+
+        /// 4: de Tab-volgorde (Windows volgt de volgorde van de onderdelen: elk komt na het vorige).
+        /// 5: een knop rechts naast een andere knop.
+        pub(super) fn plaatsing(&mut self, soort: u8, a: &str, b: &str, onderdelen: &[super::Ond]) {
+            unsafe {
+                if soort == 4 {
+                    let mut vorige: Option<HWND> = None;
+                    for naam in a.split('\u{1}') {
+                        let Some(h) = self.h_van(naam, onderdelen) else { continue };
+                        if let Some(v) = vorige {
+                            SetWindowPos(h, v, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+                        }
+                        vorige = Some(h);
+                    }
+                    if let Some(eerste) = a.split('\u{1}').next().and_then(|n| self.h_van(n, onderdelen)) {
+                        SetFocus(eerste);
+                    }
+                    return;
+                }
+                let (Some(knop), Some(naast), Some(&venster)) = (self.h_van(a, onderdelen), self.h_van(b, onderdelen), self.vensters.last()) else { return };
+                let mut rk = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                let mut rn = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                GetWindowRect(knop, &mut rk);
+                GetWindowRect(naast, &mut rn);
+                let mut punten = [rk, rn];
+                MapWindowPoints(null_mut(), venster, punten.as_mut_ptr() as *mut i32, 4);
+                let (rk, rn) = (punten[0], punten[1]);
+                // Een brede knop wordt half zo breed, zodat twee knoppen naast elkaar in het venster passen.
+                let mut breedte = rk.right - rk.left;
+                let mut rechts = rn.right;
+                if rn.right - rn.left > self.s(200) {
+                    breedte = (rn.right - rn.left - self.s(10)) / 2;
+                    MoveWindow(naast, rn.left, rn.top, breedte, rn.bottom - rn.top, 1);
+                    rechts = rn.left + breedte;
+                }
+                let x = rechts + self.s(10);
+                MoveWindow(knop, x, rn.top, breedte, rk.bottom - rk.top, 1);
+                // Stond de knop als laatste? Dan komt het volgende onderdeel weer op zijn oude plek.
+                RedrawWindow(venster, null(), null_mut(), 0x0001 | 0x0004 | 0x0080);
+                let marge = self.s(12);
+                if let Some(y) = self.volgende_y.last_mut() {
+                    if (*y - (rk.bottom + marge)).abs() <= 2 {
+                        *y = rk.top;
+                    }
+                }
+                let nodig = x + breedte + self.s(40);
+                let huidig = self.breedte.iter().find(|w| w.0 == venster).map_or(0, |w| w.1);
+                if nodig > huidig {
+                    self.breedte.retain(|w| w.0 != venster);
+                    self.breedte.push((venster, nodig));
+                    let mut rv = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    GetWindowRect(venster, &mut rv);
+                    if IsZoomed(venster) == 0 {
+                        SetWindowPos(venster, null_mut(), 0, 0, nodig.max(rv.right - rv.left), rv.bottom - rv.top, 0x0002 | 0x0004);
+                    }
+                }
+            }
+        }
+
         /// 0 schermvullend, 1 vraag bij afsluiten, 2 maar één keer open, 3 tip bij een knop.
         pub(super) fn gedrag(&mut self, soort: u8, a: &str, b: &str) {
             unsafe {

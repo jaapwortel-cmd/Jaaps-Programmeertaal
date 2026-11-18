@@ -192,6 +192,11 @@ impl<'a> Maker<'a> {
                     self.opmerking(diepte, r);
                     self.regel(diepte, &format!("s.onderdeel({}, {});", soort.nummer(), rust_tekst(naam)));
                 }
+                Soort::Braille(u) => {
+                    self.opmerking(diepte, r);
+                    let w = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.braille(w); }}", w));
+                }
                 Soort::VulKeuzelijst { lijst, waarde } => {
                     self.opmerking(diepte, r);
                     let u = self.uitdrukking(waarde, r);
@@ -382,6 +387,8 @@ impl<'a> Maker<'a> {
                     self.opmerking(diepte, r);
                     let regel = match g {
                         Gedrag::Schermvullend => "s.scherm_gedrag(0, \"\", \"\");".to_string(),
+                        Gedrag::TabVolgorde(n) => format!("s.scherm_gedrag(4, {}, \"\");", rust_tekst(&n.join("\u{1}"))),
+                        Gedrag::Naast(k, n) => format!("s.scherm_gedrag(5, {}, {});", rust_tekst(k), rust_tekst(n)),
                         Gedrag::VraagBijAfsluiten(v) => format!("s.scherm_gedrag(1, {}, \"\");", rust_tekst(v)),
                         Gedrag::MaarEenKeerOpen => "s.scherm_gedrag(2, \"\", \"\");".to_string(),
                         Gedrag::Tip { knop, tekst } => format!("s.scherm_gedrag(3, {}, {});", rust_tekst(knop), rust_tekst(tekst)),
@@ -404,11 +411,12 @@ impl<'a> Maker<'a> {
                     let p = self.uitdrukking(p, r);
                     self.regel(diepte, &format!("{{ let p = {}; reservekopie(p, {})?; }}", p, r));
                 }
-                Soort::QrCode { waarde, pad } => {
+                Soort::QrCode { waarde, pad, streepjes } => {
                     self.opmerking(diepte, r);
                     let w = self.uitdrukking(waarde, r);
                     let p = self.uitdrukking(pad, r);
-                    self.regel(diepte, &format!("{{ let w = {}; let p = {}; maak_qr(w, p, {})?; }}", w, p, r));
+                    let f = if *streepjes { "maak_streepjescode" } else { "maak_qr" };
+                    self.regel(diepte, &format!("{{ let w = {}; let p = {}; {}(w, p, {})?; }}", w, p, f, r));
                 }
                 Soort::Werkbalk(namen) => {
                     self.opmerking(diepte, r);
