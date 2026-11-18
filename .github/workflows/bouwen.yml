@@ -100,9 +100,9 @@ jobs:
           # Een programma met een Rust-pakket van crates.io, gebouwd met de ingebouwde Cargo.
           & $j bouw 'voorbeelden\Rust-pakket gebruiken.txt' 'Pakket.exe' --snel | Write-Host
           if (-not (Test-Path 'Pakket.exe')) { throw 'Het programma met een Rust-pakket is niet gemaakt.' }
-          $uitp = & '.\Pakket.exe' --tekst
-          $uitp | Write-Host
-          if (($uitp -join "`n") -notmatch 'Dobbelsteen') { throw 'Het programma met een Rust-pakket werkt niet.' }
+          $p = Start-Process -FilePath '.\Pakket.exe' -ArgumentList '--tekst' -RedirectStandardOutput 'pakket-uit.txt' -PassThru -Wait
+          Get-Content 'pakket-uit.txt' | Write-Host
+          if (-not (Select-String -Path 'pakket-uit.txt' -Pattern 'Dobbelsteen' -Quiet)) { throw 'Het programma met een Rust-pakket werkt niet.' }
           if (-not (Test-Path 'Begroeting.exe')) { throw 'Begroeting.exe is niet gemaakt.' }
           $p = Start-Process -FilePath '.\Begroeting.exe' -ArgumentList '--tekst', '--druk', 'Welkom' -RedirectStandardOutput 'begroeting-uit.txt' -PassThru -Wait
           Get-Content 'begroeting-uit.txt' | Write-Host
