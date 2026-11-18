@@ -217,7 +217,9 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
     let exe = programmamap.join(format!("{}.exe", bestandsnaam(&inst.naam)));
     bouwen::bouw(&code, &exe, rustc, Stand::Klein, &programmamap)?;
     let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
-    if let Some(naam) = &inst.onderteken {
+    // Zonder de zin Onderteken: met je eigen ingelezen certificaat, als je dat hebt.
+    let onderteken = inst.onderteken.clone().or_else(|| crate::ondertekenen::eigen().map(|e| e.1));
+    if let Some(naam) = &onderteken {
         crate::ondertekenen::onderteken(&exe, naam)?;
     }
 
@@ -240,7 +242,7 @@ pub fn bouw(bron: &str, bronmap: Option<&Path>, uit: &Path, rustc: &Path, werkma
             let _ = crate::bestand::schrijf_txt(&map.join(format!("{} versie.txt", bestandsnaam(&inst.naam))), &tekst);
         }
     }
-    if let Some(naam) = &inst.onderteken {
+    if let Some(naam) = &onderteken {
         let volledig = if uit.is_absolute() { uit.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(uit) };
         crate::ondertekenen::onderteken(&volledig, naam)?;
     }

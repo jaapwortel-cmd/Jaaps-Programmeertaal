@@ -392,6 +392,8 @@ Speel een piep van 440 hertz en 300 milliseconden
 Speel het geluid deurbel.wav                  (het programma gaat meteen verder)
 Speel het geluid deurbel.wav af en wacht       (het programma wacht tot het geluid klaar is)
 Stop het geluid
+Pauzeer het geluid                             (ook: Zet het geluid op pauze)
+Ga verder met het geluid                       (speelt verder waar het was gepauzeerd)
 
 Het geluid zoekt het programma eerst naast je programma, en dan in Documenten.
 Voeg het geluid toe aan je installatie, dan staat het naast het programma:
@@ -692,6 +694,24 @@ Toon op de brailleleesregel "Opgeslagen"
 Met JAWS gaat de tekst rechtstreeks naar de brailleleesregel. Met NVDA en Verteller wordt het een
 korte melding, die NVDA ook op de leesregel laat zien. Eerlijk: nog niet getest met een echte leesregel.
 
+4.7ab Kopiëren, plakken, afdrukken en zoeken
+
+Kopieer de tekst in het tekstvak Verhaal                      (zet de tekst op het klembord)
+Zet de tekst van het klembord in het tekstvak Verhaal         (plakken)
+Druk de tekst in het tekstvak Verhaal af                      (met de standaardprinter van Windows)
+Zoek de tekst in het tekstvak Zoekwoord in het tekstvak Verhaal
+Zoek "kat" in het tekstvak Verhaal
+Bij zoeken gaat de cursor naar het woord en zegt de schermlezer op welke regel het staat.
+Nog een keer zoeken: dan zoekt hij verder. Staat het er niet in, dan zegt hij dat ook.
+Afdrukken gaat via het programma dat Windows voor tekstbestanden gebruikt (meestal Kladblok).
+
+4.7ac Onderdelen groter of kleiner
+
+Maak de knop Opslaan groter                 (grotere letters en een hogere knop)
+Maak het tekstvak Naam kleiner
+Geef het label Uitleg grote letters         (ook: kleine letters)
+Wat eronder staat, schuift vanzelf mee.
+
 4.7aa Spraakherkenning, berichten tussen computers en apparaten
 
 Onthoud gezegd is wat ik zeg                 (spraakherkenning van Windows, hoogstens 10 seconden)
@@ -854,6 +874,12 @@ Onderteken het programma met mijn eigen certificaat op naam van Jaap Wortel
 Bij F8 en bij Ctrl+F8 wordt je programma dan ondertekend (bij een installatiebestand ook het
 installatiebestand zelf). De eerste keer vraagt het programma of het een eigen certificaat op jouw naam
 mag maken. Dat certificaat blijft op je eigen computer en is 5 jaar geldig. Er is geen internet voor nodig.
+
+Heb je al een eigen certificaat, met de geheime sleutel erin (een .pfx-bestand)? Lees het dan één keer in:
+menu Programma, Mijn eigen certificaat inlezen. Kies het .pfx-bestand (zonder wachtwoord), of datzelfde
+certificaat als tekstbestand (.txt). Het komt in Windows, alleen voor jou op deze computer.
+Daarna worden al je programma's (F8) en installatiebestanden (Ctrl+F8) daarmee ondertekend, ook als
+de regel Onderteken ... er niet in staat. De geheime sleutel staat nooit in Jaap's Programmeertaal zelf.
 
 Wil je dat je eigen computer je certificaat vertrouwt? Kies in het menu Programma:
 Mijn certificaat vertrouwen op deze computer. Windows vraagt daarna zelf nog om toestemming.
@@ -1132,7 +1158,7 @@ Wanneer maakt de assistent het programma?
 - Zet je er daarna iets bij of verander je iets, dan maakt hij het opnieuw en start hij het weer.
 - Stonden er al andere zinnen in de editor? Dan vraagt hij eerst of je die wilt opslaan.
   Het gemaakte programma is een nieuw programma; sla het op met Ctrl+S.
-- Wat de taal nog niet kan (bijvoorbeeld pauzeren, of een knop groter maken), zegt hij eerlijk.
+- Wat de taal nog niet kan (bijvoorbeeld vertalen, of één knop een eigen kleur geven), zegt hij eerlijk.
   Het staat dan als opmerking bovenaan het programma.
 - Een opdracht voor de editor, zoals "maak er een exe van", voert hij ook uit.
 
@@ -1147,8 +1173,9 @@ Wat de assistent verder doet:
 - Hij stelt één vraag tegelijk, en vraagt niet opnieuw wat je al hebt gezegd.
 - Hij zegt eerlijk als hij iets niet begrijpt. Hij gokt niet.
 
-Knoppen die hij al kan maken: Opslaan, Openen, Voorlezen, Wissen, Tijd, Optellen, en voor muziek
-Kies, Speel en Stop. Bij een andere knop maakt hij de knop wel, maar zegt hij dat je nog moet vertellen wat
+Knoppen die hij al kan maken: Opslaan, Openen, Voorlezen, Wissen, Tijd, Optellen, Afdrukken, Kopiëren,
+Plakken, Zoek (met een vak Zoekwoord), Opnemen en Stop opnemen, en voor muziek Kies, Speel, Pauze,
+Verder en Stop. "Maak de knop Opslaan groter" kan ook. Bij een andere knop maakt hij de knop wel, maar zegt hij dat je nog moet vertellen wat
 die knop moet doen.
 
 Een voorbeeld:

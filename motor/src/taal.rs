@@ -205,6 +205,8 @@ pub enum Ingebouwd {
     LeesQr,
     /// De tekst van een streepjescode in een afbeelding.
     LeesStreepjescode,
+    /// De tekst die op het klembord staat (plakken). Achteraan: de nummers ervoor mogen niet verschuiven.
+    Klembord,
 }
 
 impl Ingebouwd {
@@ -387,6 +389,14 @@ pub enum Soort {
     SpeelGeluid { pad: Uitdrukking, wachten: bool, richting: u8 },
     /// Het geluid stoppen.
     StopGeluid,
+    /// Het geluid pauzeren, of verder laten spelen waar het was.
+    PauzeGeluid { verder: bool },
+    /// Tekst op het klembord zetten (kopiëren). Plakken: "de tekst van het klembord".
+    Kopieer(Uitdrukking),
+    /// Tekst afdrukken op de printer.
+    DrukAf(Uitdrukking),
+    /// Een woord zoeken in een tekstvak: de cursor gaat naar het woord.
+    Zoek { onderdeel: String, wat: Uitdrukking },
     /// De schermlezer iets laten zeggen, zonder meldingsvenster.
     Zeg(Uitdrukking),
     /// Voorlezen met de stem van Windows (los van de schermlezer).
@@ -572,6 +582,7 @@ impl Soort {
             Soort::Download { adres, pad } => vec![adres, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
+            Soort::Kopieer(u) | Soort::DrukAf(u) | Soort::Zoek { wat: u, .. } => vec![u],
             Soort::Zip { map, zip, .. } => vec![map, zip],
             Soort::BestandActie { van, naar, .. } => {
                 let mut v = vec![van];
@@ -615,6 +626,7 @@ impl Soort {
             Soort::Download { adres, pad } => vec![adres, pad],
             Soort::Piep { hoogte, duur } => vec![hoogte, duur],
             Soort::SpeelGeluid { pad, .. } => vec![pad],
+            Soort::Kopieer(u) | Soort::DrukAf(u) | Soort::Zoek { wat: u, .. } => vec![u],
             Soort::Zip { map, zip, .. } => vec![map, zip],
             Soort::BestandActie { van, naar, .. } => {
                 let mut v = vec![van];
@@ -774,6 +786,8 @@ pub enum Gedrag {
     VraagBijAfsluiten(String),
     MaarEenKeerOpen,
     Tip { knop: String, tekst: String },
+    /// Een knop of onderdeel groter of kleiner maken (grotere of kleinere letters).
+    Grootte { naam: String, groter: bool },
 }
 
 /// Waar een geluid klinkt, in woorden. 0 = gewoon. Links/rechts (1, 2), achter/voor (×3), boven/onder (×9).

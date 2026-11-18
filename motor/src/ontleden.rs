@@ -355,6 +355,13 @@ fn ingebouwd(s: &[Stuk]) -> Result<Option<Uitdrukking>, String> {
     if begint(s, &["de", "tijd"]) && s.len() == 2 || begint(s, &["het", "tijdstip"]) && s.len() == 2 {
         return ib(Ingebouwd::Tijd, vec![]);
     }
+    if (begint(s, &["het", "klembord"]) && s.len() == 2)
+        || (begint(s, &["de", "tekst", "van", "het", "klembord"]) && s.len() == 5)
+        || (begint(s, &["de", "tekst", "op", "het", "klembord"]) && s.len() == 5)
+        || (begint(s, &["wat", "op", "het", "klembord", "staat"]) && s.len() == 5)
+    {
+        return ib(Ingebouwd::Klembord, vec![]);
+    }
     if begint(s, &["de", "datum"]) && s.len() == 2 || begint(s, &["de", "datum", "van", "vandaag"]) && s.len() == 4 {
         return ib(Ingebouwd::Datum, vec![]);
     }
@@ -967,6 +974,85 @@ fn installatie_zin(s: &[Stuk]) -> Result<Vorm, RegelFout> {
     Ok(Vorm::Los(Soort::Installatie(zin)))
 }
 
+/// Pauzeren, kopiëren, afdrukken, zoeken in een tekstvak en onderdelen groter of kleiner maken.
+fn nieuwe_zinnen(norm: &str, laag: &str) -> Option<Result<Vorm, RegelFout>> {
+    let l = laag.trim_end_matches(['.', '!']).trim();
+    let n = norm.trim_end_matches(['.', '!']).trim();
+    let los = |s: Soort| Some(Ok(Vorm::Los(s)));
+    // Geluid pauzeren en verder laten spelen.
+    if ["pauzeer het geluid", "pauzeer de muziek", "zet het geluid op pauze", "zet de muziek op pauze", "pauze het geluid"].contains(&l) {
+        return los(Soort::PauzeGeluid { verder: false });
+    }
+    if ["ga verder met het geluid", "speel het geluid verder", "laat het geluid verder spelen", "ga verder met de muziek", "speel de muziek verder"].contains(&l) {
+        return los(Soort::PauzeGeluid { verder: true });
+    }
+    // Een uitdrukking uit een stuk van de zin.
+    let uit = |t: &str| -> Result<Uitdrukking, RegelFout> {
+        let st = tekst::splits(t.trim()).map_err(fout)?;
+        if st.is_empty() {
+            return Err(fout("Wat? Schrijf bijvoorbeeld: Kopieer de tekst in het tekstvak Verhaal."));
+        }
+        uitdrukking(&st).map_err(fout)
+    };
+    // Kopiëren naar het klembord (niet: een bestand of map kopiëren).
+    if l.starts_with("kopieer ") && !l.contains(" het bestand") && !l.contains(" de map") && (!l.contains(" naar ") || l.ends_with(" naar het klembord")) {
+        let rest = n["kopieer ".len()..].trim();
+        let rest = rest.strip_suffix("naar het klembord").or_else(|| rest.strip_suffix("Naar het klembord")).unwrap_or(rest);
+        return Some(uit(rest).map(|u| Vorm::Los(Soort::Kopieer(u))));
+    }
+    if l.starts_with("zet ") && l.ends_with(" op het klembord") {
+        let rest = &n["zet ".len()..n.len() - " op het klembord".len()];
+        return Some(uit(rest).map(|u| Vorm::Los(Soort::Kopieer(u))));
+    }
+    // Afdrukken.
+    if l.starts_with("druk ") && l.ends_with(" af") && l.len() > "druk  af".len() {
+        let rest = &n["druk ".len()..n.len() - " af".len()];
+        return Some(uit(rest).map(|u| Vorm::Los(Soort::DrukAf(u))));
+    }
+    for b in ["print ", "drukaf "] {
+        if l.starts_with(b) {
+            return Some(uit(&n[b.len()..]).map(|u| Vorm::Los(Soort::DrukAf(u))));
+        }
+    }
+    // Zoeken in een tekstvak: "Zoek de tekst in het tekstvak Zoekwoord in het tekstvak Verhaal".
+    if l.starts_with("zoek ") {
+        for vak in [" in het grote tekstvak ", " in het tekstvak "] {
+            if let Some(p) = l.rfind(vak) {
+                let wat = &n["zoek ".len()..p];
+                let onderdeel = n[p + vak.len()..].trim().trim_matches('"').to_string();
+                if wat.trim().is_empty() || onderdeel.is_empty() {
+                    return Some(Err(fout("Schrijf het zo: Zoek de tekst in het tekstvak Zoekwoord in het tekstvak Verhaal.")));
+                }
+                return Some(uit(wat).map(|u| Vorm::Los(Soort::Zoek { onderdeel, wat: u })));
+            }
+        }
+    }
+    // Groter of kleiner: "Maak de knop Opslaan groter", "Geef het tekstvak Verhaal grote letters".
+    let soorten = ["de knop ", "het tekstvak ", "het grote tekstvak ", "het label ", "het selectievakje ", "de keuzelijst ", "de uitklaplijst ", "de tabel "];
+    for (begin, groter_woorden, kleiner_woorden) in [("maak ", [" groter", " groot"], [" kleiner", " klein"]), ("geef ", [" grote letters", " grotere letters"], [" kleine letters", " kleinere letters"])] {
+        if !l.starts_with(begin) {
+            continue;
+        }
+        for soort in soorten {
+            if !l[begin.len()..].starts_with(soort) {
+                continue;
+            }
+            for (woorden, groter) in [(groter_woorden, true), (kleiner_woorden, false)] {
+                for e in woorden {
+                    if l.ends_with(e) {
+                        let naam = n[begin.len() + soort.len()..n.len() - e.len()].trim().trim_matches('"').to_string();
+                        if naam.is_empty() {
+                            return Some(Err(fout("Welk onderdeel? Schrijf bijvoorbeeld: Maak de knop Opslaan groter.")));
+                        }
+                        return los(Soort::Venstergedrag(Gedrag::Grootte { naam, groter }));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Ontleedt één (genormaliseerde) regel.
 pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     let laag = norm.to_lowercase();
@@ -981,6 +1067,9 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
     }
     if laag.starts_with("//") || laag.starts_with('#') {
         return Ok(Vorm::Los(Soort::Opmerking(norm.trim_start_matches(['/', '#', ' ']).to_string())));
+    }
+    if let Some(v) = nieuwe_zinnen(norm, &laag) {
+        return v;
     }
 
     if laag.starts_with("in de handleiding staat") {
@@ -1970,6 +2059,10 @@ pub(crate) fn ontleed_regel(norm: &str) -> Result<Vorm, RegelFout> {
             }
             let naam = rest_tekst(&s[p + 3..]);
             let mut w = &s[1..p];
+            // "Zet de tekst van het klembord in ..." is plakken, geen letterlijke tekst.
+            if matches!(ingebouwd(w), Ok(Some(Uitdrukking::Ingebouwd { wat: Ingebouwd::Klembord, .. }))) {
+                return Ok(Vorm::Los(Soort::ZetIn { waarde: u(w)?, naam }));
+            }
             let letterlijk = if begint(w, &["de", "tekst"]) {
                 w = &w[2..];
                 true

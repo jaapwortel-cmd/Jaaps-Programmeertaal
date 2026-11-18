@@ -208,12 +208,43 @@ fn programmas_die_hij_kan_maken() {
         let u = motor::lees(&bron);
         assert!(u.is_goed(), "{}\n{:#?}", bron, u.meldingen);
     }
-    // Pauzeren kan de taal nog niet: eerlijk zeggen.
+    // Pauzeren kan nu ook.
     let mut g = Gesprek::nieuw();
     g.zeg("Ik wil dat het programma mijn geluidsbestanden kan afspelen en pauzeren.");
     let r = g.zeg("ja");
-    assert!(r.tekst.contains("pauzeren"), "{}", r.tekst);
-    assert!(r.maak.is_some());
+    let bron = r.maak.expect("programma");
+    assert!(bron.contains("Pauzeer het geluid") && bron.contains("Ga verder met het geluid"), "{}", bron);
+    assert!(!r.tekst.contains("kan de taal nog niet"), "{}", r.tekst);
+    assert!(motor::lees(&bron).is_goed(), "{}", bron);
+}
+
+#[test]
+fn nieuwe_mogelijkheden_in_het_gesprek() {
+    let mut g = Gesprek::nieuw();
+    g.zeg("Maak een programma voor mijn verhaal waarmee ik kan zoeken, afdrukken, kopiëren en plakken");
+    let r = g.zeg("ja");
+    let bron = r.maak.unwrap_or_else(|| panic!("{}", r.tekst));
+    for z in [
+        "Maak een tekstvak met als naam Zoekwoord",
+        "Zoek de tekst in het tekstvak Zoekwoord in het tekstvak Tekst",
+        "Druk de tekst in het tekstvak Tekst af",
+        "Kopieer de tekst in het tekstvak Tekst",
+        "Zet de tekst van het klembord in het tekstvak Tekst",
+    ] {
+        assert!(bron.contains(z), "{} ontbreekt:\n{}", z, bron);
+    }
+    assert!(motor::lees(&bron).is_goed(), "{}\n{:#?}", bron, motor::lees(&bron).meldingen);
+    // Groter maken wordt een echte zin.
+    let r = g.zeg("maak de knop Afdrukken groter");
+    let bron = r.maak.expect("opnieuw");
+    assert!(bron.contains("Maak de knop Afdrukken groter"), "{}", bron);
+    assert!(motor::lees(&bron).is_goed(), "{}", bron);
+    // Opnemen.
+    let mut g = Gesprek::nieuw();
+    g.zeg("maak een programma waarmee ik kan opnemen");
+    let bron = g.zeg("ja").maak.expect("programma");
+    assert!(bron.contains("Begin met opnemen") && bron.contains("Stop met opnemen"), "{}", bron);
+    assert!(motor::lees(&bron).is_goed(), "{}\n{:#?}", bron, motor::lees(&bron).meldingen);
 }
 
 #[test]

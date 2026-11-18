@@ -14,6 +14,13 @@ Gesprek met de assistent (18 november 2026)
 - Proeven: de vijf testvoorbeelden uit het ontwerp, en gemaakte programma's worden echt gebouwd (motor/tests/gesprek.rs).
 - Handleiding: hoofdstuk 19.
 
+Nieuwe zinnen en je eigen certificaat (18 november 2026)
+- Pauzeer het geluid / Ga verder met het geluid (ook WAV gaat nu via de geluidsonderdelen van Windows, zodat pauzeren werkt).
+- Kopieer de tekst in het tekstvak ..., plakken met "de tekst van het klembord", Druk ... af, Zoek ... in het tekstvak ...
+- Maak de knop ... groter / kleiner, Geef ... grote letters / kleine letters (wat eronder staat schuift mee).
+- De assistent gebruikt dit allemaal: knoppen Pauze, Verder, Afdrukken, Kopiëren, Plakken, Zoek, Opnemen en Stop opnemen.
+- Menu Programma, Mijn eigen certificaat inlezen (.pfx of als tekst): daarna wordt alles daarmee ondertekend.
+
 Versie 0.1.0 (proefversie, 17 november 2026)
 - Eerste versie.
 - Editor met nieuw, openen, opslaan, controleren (F7), uitvoeren (F5), een regel proberen (F9),

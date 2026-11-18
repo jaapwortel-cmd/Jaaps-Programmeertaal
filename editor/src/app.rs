@@ -40,6 +40,7 @@ const ID_VERSIE_OMHOOG: u16 = 217;
 const ID_MOTOREN: u16 = 218;
 const ID_OMSCHRIJVING: u16 = 219;
 const ID_GESPREK: u16 = 220;
+const ID_EIGEN_CERTIFICAAT: u16 = 221;
 /// Onlangs geopend: 121 tot en met 129.
 const ID_ONLANGS: u16 = 121;
 const ID_WELKE_REGEL: u16 = 301;
@@ -811,7 +812,9 @@ fn probeer() {
 /// Vraagt of er een eigen certificaat mag komen, als het programma wil ondertekenen en het er nog niet is.
 /// Geeft de naam terug als er ondertekend kan worden, of None om zonder te stoppen.
 fn certificaat_klaar(bron: &str) -> Result<Option<String>, ()> {
-    let Some(naam) = motor::installatie::uit_programma(&lees(bron).programma).and_then(|i| i.onderteken) else {
+    let zin = motor::installatie::uit_programma(&lees(bron).programma).and_then(|i| i.onderteken);
+    // Zonder de zin Onderteken: met je eigen ingelezen certificaat, als je dat hebt.
+    let Some(naam) = zin.or_else(|| motor::ondertekenen::eigen().map(|e| e.1)) else {
         return Ok(None);
     };
     match motor::ondertekenen::heeft_certificaat(&naam) {
@@ -1169,8 +1172,25 @@ fn opdracht(id: u16) {
                 melding(&format!("Ik kan Kladblok niet openen. Het bestand staat in {}.", pad.display()), MB_ICONERROR);
             }
         }
+        ID_EIGEN_CERTIFICAAT => {
+            let uitleg = "Kies je eigen certificaat: een .pfx-bestand met de geheime sleutel (zonder wachtwoord), of datzelfde certificaat als tekstbestand (.txt). Het komt in Windows, alleen voor jou op deze computer. Daarna onderteken ik al je programma's en installatiebestanden daarmee.";
+            if melding(uitleg, MB_OKCANCEL | MB_ICONINFORMATION) != IDOK {
+                return;
+            }
+            let Some(pad) = bestandskeuze(false, "", "Certificaat (*.pfx;*.p12;*.txt)|*.pfx;*.p12;*.txt", "pfx", "Kies je eigen certificaat") else { return };
+            match motor::ondertekenen::importeer(&pad, "") {
+                Ok(naam) => {
+                    let tekst = format!("Klaar. Je certificaat op naam van {} is ingelezen. Vanaf nu onderteken ik je programma's (F8) en installatiebestanden (Ctrl+F8) daarmee.\n\nEerlijk: op andere computers blijft Windows SmartScreen waarschuwen, want het is een zelfgemaakt certificaat.", naam);
+                    zet_meldingen(&tekst);
+                    melding(&tekst, MB_ICONINFORMATION);
+                }
+                Err(e) => {
+                    melding(&format!("{}\n\nHeeft het bestand een wachtwoord? Dat kan ik nog niet. Maak dan een .pfx zonder wachtwoord.", e), MB_ICONERROR);
+                }
+            }
+        }
         ID_VERTROUW => {
-            let naam = motor::installatie::uit_programma(&lees(&editor_tekst()).programma).and_then(|i| i.onderteken);
+            let naam = motor::installatie::uit_programma(&lees(&editor_tekst()).programma).and_then(|i| i.onderteken).or_else(|| motor::ondertekenen::eigen().map(|e| e.1));
             match naam {
                 None => {
                     melding(
@@ -1347,6 +1367,7 @@ fn maak_menu() -> HANDLE {
         streep(prog);
         voeg(prog, ID_BOUW_EXE, "Bouw een .&exe-bestand...\tF8");
         voeg(prog, ID_INSTALLATIE, "Bouw een &installatiebestand...\tCtrl+F8");
+        voeg(prog, ID_EIGEN_CERTIFICAAT, "Mijn eigen certificaat in&lezen (.pfx)...");
         voeg(prog, ID_VERTROUW, "Mijn certificaat &vertrouwen op deze computer...");
         AppendMenuW(balk, MF_POPUP, prog as usize, w("&Programma").as_ptr());
 

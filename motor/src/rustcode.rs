@@ -319,6 +319,25 @@ impl<'a> Maker<'a> {
                     self.opmerking(diepte, r);
                     self.regel(diepte, "s.stop_geluid();");
                 }
+                Soort::PauzeGeluid { verder } => {
+                    self.opmerking(diepte, r);
+                    self.regel(diepte, &format!("s.pauze_geluid({});", verder));
+                }
+                Soort::Kopieer(u) => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.kopieer(w, {})?; }}", u, r));
+                }
+                Soort::DrukAf(u) => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(u, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.druk_af(w, {})?; }}", u, r));
+                }
+                Soort::Zoek { onderdeel, wat } => {
+                    self.opmerking(diepte, r);
+                    let u = self.uitdrukking(wat, r);
+                    self.regel(diepte, &format!("{{ let w = {}; s.zoek_in({}, w, {})?; }}", u, rust_tekst(onderdeel), r));
+                }
                 Soort::Sneltoets { knop, toets } => {
                     self.opmerking(diepte, r);
                     self.regel(
@@ -401,6 +420,7 @@ impl<'a> Maker<'a> {
                         Gedrag::VraagBijAfsluiten(v) => format!("s.scherm_gedrag(1, {}, \"\");", rust_tekst(v)),
                         Gedrag::MaarEenKeerOpen => "s.scherm_gedrag(2, \"\", \"\");".to_string(),
                         Gedrag::Tip { knop, tekst } => format!("s.scherm_gedrag(3, {}, {});", rust_tekst(knop), rust_tekst(tekst)),
+                        Gedrag::Grootte { naam, groter } => format!("s.scherm_gedrag(6, {}, {});", rust_tekst(naam), if *groter { "\"groter\"" } else { "\"kleiner\"" }),
                     };
                     self.regel(diepte, &regel);
                 }
