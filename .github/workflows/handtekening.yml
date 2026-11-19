@@ -28,6 +28,7 @@ jobs:
           echo "$(cat handtekening/installatie.sha256)  $bestand" | sha256sum -c -
           naam="Jaaps Programmeertaal 0.1.0 installatie (ondertekend).exe"
           osslsigncode attach-signature -sigin handtekening/installatie.p7 -in "$bestand" -out "$naam" || true
-          osslsigncode verify -in "$naam" | tee controle.txt
+          openssl x509 -inform DER -in "Certificaat Jaap Wortel.cer" -out jaap.pem
+          osslsigncode verify -in "$naam" -CAfile jaap.pem | tee controle.txt
           grep -q "Signature verification: ok" controle.txt
           gh release upload proef "$naam" --clobber
